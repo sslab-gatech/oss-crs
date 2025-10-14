@@ -9,13 +9,13 @@
 # Worker definitions - specify available resources on each worker
 workers:
   local:
-    cpus: "0-15"  # Taskset CPU list
+    cpuset: "0-15"  # Taskset CPU list
     memory: "32G"
   server1:
-    cpus: "0-31"  # Taskset CPU list
+    cpuset: "0-31"  # Taskset CPU list
     memory: "64G"
   server2:
-    cpus: "0-63"  # Taskset CPU list
+    cpuset: "0-63"  # Taskset CPU list
     memory: "128G"
 
 # Global LLM configuration (applies to all CRSs combined)
@@ -39,10 +39,10 @@ crs:
     # If omitted, resources are divided evenly across specified workers
     resources:
       local:
-        cpus: "0-3"  # Taskset CPU list
+        cpuset: "0-3"  # Taskset CPU list
         memory: "4G"
       server1:
-        cpus: "0-7"  # Taskset CPU list
+        cpuset: "0-7"  # Taskset CPU list
         memory: "8G"
 
     # LLM resources for THIS specific CRS (optional)
@@ -59,22 +59,22 @@ crs:
 
     # Single resource spec applies to all workers
     resources:
-      cpus: "0-9"  # Taskset CPU list
-      memory: "8G"
+      cpuset: "0-9"  # Taskset CPU list
+      memory: "64G"
 
     # No LLM specified - will get even share of remaining global budget
 
   # Minimal configuration example
-  atlantis-python:
+  atlantis-java:
     workers:
       - local
       - server2
     # Resources specified for each worker
     resources:
       local:
-        cpus: "4-7"  # Taskset CPU list
+        cpuset: "4-7"  # Taskset CPU list
         memory: "4G"
       server2:
-        cpus: "10-13"  # Taskset CPU list
-        memory: "4G"
+        cpuset: "10-13"  # Taskset CPU list
+        memory: "64G"
     # No LLM specified - will get even share of remaining global budget
