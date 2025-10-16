@@ -65,6 +65,7 @@ services:
       - HELPER=True
       - CPUSET_CPUS={{ crs.cpuset }}
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
+      - CRS_TARGET={{ project }}
     networks:
       - {{ config_hash }}_crs_network
     cpuset: {{ crs.cpuset }}

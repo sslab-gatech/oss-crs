@@ -1,0 +1,10 @@
+# Ignore environment files with sensitive data
+.env
+
+# Ignore generated compose files
+compose-*.yaml
+
+# Ignore temporary files
+*.tmp
+*.swp
+*~

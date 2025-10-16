@@ -1,0 +1,4 @@
+atlantis-java-main:
+  models:
+    - gpt-5
+  ncpu: 1-all
