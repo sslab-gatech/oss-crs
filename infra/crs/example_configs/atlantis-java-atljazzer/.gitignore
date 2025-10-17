@@ -1,5 +1,7 @@
 # Ignore environment files with sensitive data
-.env
+# .env
+# Exception: Track .env in this example config directory
+!.env
 
 # Ignore generated compose files
 compose-*.yaml
