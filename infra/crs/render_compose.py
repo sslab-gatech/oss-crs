@@ -383,7 +383,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
                               template_path: Path, oss_fuzz_path: Path,
                               project: str, config_dir: Path, engine: str,
                               sanitizer: str, architecture: str, mode: str,
-                              config_hash: str, fuzzer_command: List[str] = None) -> str:
+                              config_hash: str, fuzzer_command: List[str] = None,
+                              source_path: str = None) -> str:
   """Render the compose template for a specific worker."""
   if not template_path.exists():
     raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -411,7 +412,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
     config_resource_path=str(config_resource_path),
     config_dir=str(config_dir_resolved),
     mode=mode,
-    config_hash=config_hash
+    config_hash=config_hash,
+    source_path=source_path
   )
 
   return rendered
@@ -490,6 +492,11 @@ def main():
     'fuzzer_command',
     nargs=argparse.REMAINDER,
     help='Fuzzer command and arguments (required in run mode, ignored in build mode)'
+  )
+  parser.add_argument(
+    '--source-path',
+    type=str,
+    help='Optional path to local source to mount at /local-source-mount in CRS builders'
   )
 
   args = parser.parse_args()
@@ -608,7 +615,8 @@ def main():
         architecture=args.architecture,
         mode='build',
         config_hash=args.config_hash,
-        fuzzer_command=None
+        fuzzer_command=None,
+        source_path=args.source_path
       )
     except FileNotFoundError as e:
       print(f"Error: {e}")
@@ -679,7 +687,8 @@ def main():
         architecture=args.architecture,
         mode='run',
         config_hash=args.config_hash,
-        fuzzer_command=args.fuzzer_command
+        fuzzer_command=args.fuzzer_command,
+        source_path=args.source_path
       )
     except FileNotFoundError as e:
       print(f"Error: {e}")

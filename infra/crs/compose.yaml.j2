@@ -51,12 +51,16 @@ services:
       - {{ oss_fuzz_path }}/build/out/{{ crs.name }}/{{ project }}:/out
       - {{ oss_fuzz_path }}/build/work/{{ crs.name }}/{{ project }}:/work
       - {{ config_hash }}_keys_data_{{ crs.name }}:/keys:ro
+{%- if source_path %}
+      - {{ source_path }}:/local-source-mount
+{%- endif %}
 {%- endif %}
 
 {%- if mode == 'run' %}
   # CRS Runner {{ loop.index }} - {{ crs.name }}
   {{ crs.name }}_runner:
     image: {{ crs.name }}_runner
+    privileged: true
     environment:
       - LITELLM_URL=http://crs-litellm-{{ config_hash }}-litellm-1:4000
       - FUZZING_ENGINE={{ engine }}
@@ -68,7 +72,6 @@ services:
       - CRS_TARGET={{ project }}
     networks:
       - {{ config_hash }}_crs_network
-    cpuset: {{ crs.cpuset }}
     build:
       context: {{ crs.path }}
       dockerfile: runner.Dockerfile
@@ -77,6 +80,7 @@ services:
     volumes:
       - {{ oss_fuzz_path }}/build/out/{{ crs.name }}/{{ project }}:/out
       - {{ config_hash }}_keys_data_{{ crs.name }}:/keys:ro
+    cpuset: {{ crs.cpuset }}
     deploy:
       resources:
         limits:
