@@ -33,7 +33,8 @@ def _get_command_string(command):
 def build_crs_impl(config_dir, project_name, oss_fuzz_dir, build_dir,
                    engine='libfuzzer', sanitizer='address',
                    architecture='x86_64', source_path=None,
-                   build_image_fn=None, check_project_fn=None):
+                   build_image_fn=None, check_project_fn=None,
+                   registry_dir=None):
     """
     Build CRS for a project using docker compose.
 
@@ -48,6 +49,7 @@ def build_crs_impl(config_dir, project_name, oss_fuzz_dir, build_dir,
         source_path: Optional path to local source
         build_image_fn: Optional function to build project image
         check_project_fn: Optional function to check if project exists
+        registry_dir: Optional path to local oss-crs-registry directory
 
     Returns:
         bool: True if successful, False otherwise
@@ -75,22 +77,31 @@ def build_crs_impl(config_dir, project_name, oss_fuzz_dir, build_dir,
     if build_image_fn:
         build_image_fn()
 
-    # Clone oss-crs-registry into the hash directory
-    oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
-    if not oss_crs_registry_path.exists():
-        logger.info('Cloning oss-crs-registry to: %s', oss_crs_registry_path)
-        try:
-            subprocess.check_call([
-                'git', 'clone',
-                'https://github.com/Team-Atlanta/oss-crs-registry',
-                '--depth', '1',
-                str(oss_crs_registry_path)
-            ])
-        except subprocess.CalledProcessError:
-            logger.error('Failed to clone oss-crs-registry')
+    # Determine oss-crs-registry location
+    if registry_dir:
+        # Use provided local registry directory
+        oss_crs_registry_path = Path(registry_dir).resolve()
+        if not oss_crs_registry_path.exists():
+            logger.error('Provided registry directory does not exist: %s', oss_crs_registry_path)
             return False
+        logger.info('Using local oss-crs-registry at: %s', oss_crs_registry_path)
     else:
-        logger.info('Using existing oss-crs-registry at: %s', oss_crs_registry_path)
+        # Clone oss-crs-registry into the hash directory
+        oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
+        if not oss_crs_registry_path.exists():
+            logger.info('Cloning oss-crs-registry to: %s', oss_crs_registry_path)
+            try:
+                subprocess.check_call([
+                    'git', 'clone',
+                    'https://github.com/Team-Atlanta/oss-crs-registry',
+                    '--depth', '1',
+                    str(oss_crs_registry_path)
+                ])
+            except subprocess.CalledProcessError:
+                logger.error('Failed to clone oss-crs-registry')
+                return False
+        else:
+            logger.info('Using existing oss-crs-registry at: %s', oss_crs_registry_path)
 
     # Compute source_tag for image versioning if source_path provided
     source_tag = None
@@ -111,7 +122,8 @@ def build_crs_impl(config_dir, project_name, oss_fuzz_dir, build_dir,
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            registry_parent_dir=str(crs_build_dir),
+            crs_build_dir=str(crs_build_dir),
+            registry_dir=str(oss_crs_registry_path),
             source_path=abs_source_path
         )
     except Exception as e:
@@ -278,7 +290,8 @@ def build_crs_impl(config_dir, project_name, oss_fuzz_dir, build_dir,
 def run_crs_impl(config_dir, project_name, fuzzer_name, fuzzer_args,
                  oss_fuzz_dir, build_dir, worker='local',
                  engine='libfuzzer', sanitizer='address',
-                 architecture='x86_64', check_project_fn=None):
+                 architecture='x86_64', check_project_fn=None,
+                 registry_dir=None):
     """
     Run CRS using docker compose.
 
@@ -294,6 +307,7 @@ def run_crs_impl(config_dir, project_name, fuzzer_name, fuzzer_args,
         sanitizer: Sanitizer to use (default: address)
         architecture: Architecture (default: x86_64)
         check_project_fn: Optional function to check if project exists
+        registry_dir: Optional path to local oss-crs-registry directory
 
     Returns:
         bool: True if successful, False otherwise
@@ -318,6 +332,22 @@ def run_crs_impl(config_dir, project_name, fuzzer_name, fuzzer_args,
         logger.error('CRS build directory not found: %s. Please run build_crs first.', crs_build_dir)
         return False
 
+    # Determine oss-crs-registry location (same logic as build_crs_impl)
+    if registry_dir:
+        # Use provided local registry directory
+        oss_crs_registry_path = Path(registry_dir).resolve()
+        if not oss_crs_registry_path.exists():
+            logger.error('Provided registry directory does not exist: %s', oss_crs_registry_path)
+            return False
+        logger.info('Using local oss-crs-registry at: %s', oss_crs_registry_path)
+    else:
+        # Use cloned registry from build directory
+        oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
+        if not oss_crs_registry_path.exists():
+            logger.error('oss-crs-registry not found at: %s. Please run build_crs first.', oss_crs_registry_path)
+            return False
+        logger.info('Using oss-crs-registry at: %s', oss_crs_registry_path)
+
     # Generate compose files using render_compose module
     logger.info('Generating compose-%s.yaml', worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
@@ -330,7 +360,8 @@ def run_crs_impl(config_dir, project_name, fuzzer_name, fuzzer_args,
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            registry_parent_dir=str(crs_build_dir),
+            crs_build_dir=str(crs_build_dir),
+            registry_dir=str(oss_crs_registry_path),
             worker=worker,
             fuzzer_command=fuzzer_command
         )

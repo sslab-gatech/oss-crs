@@ -29,6 +29,8 @@ def main():
                               help='Path to build directory')
     build_parser.add_argument('--oss-fuzz-dir', default=str(OSS_FUZZ_DIR),
                               help='Path to oss-fuzz directory')
+    build_parser.add_argument('--registry-dir',
+                              help='Path to local oss-crs-registry directory')
     build_parser.add_argument('--engine', default='libfuzzer',
                              help='Fuzzing engine (default: libfuzzer)')
     build_parser.add_argument('--sanitizer', default='address',
@@ -50,6 +52,8 @@ def main():
                            help='Path to build directory')
     run_parser.add_argument('--oss-fuzz-dir', default=str(OSS_FUZZ_DIR),
                            help='Path to oss-fuzz directory')
+    run_parser.add_argument('--registry-dir',
+                            help='Path to local oss-crs-registry directory')
     run_parser.add_argument('--engine', default='libfuzzer',
                            help='Fuzzing engine (default: libfuzzer)')
     run_parser.add_argument('--sanitizer', default='address',
@@ -74,7 +78,8 @@ def main():
             engine=args.engine,
             sanitizer=args.sanitizer,
             architecture=args.architecture,
-            source_path=args.source_path
+            source_path=args.source_path,
+            registry_dir=args.registry_dir
         )
     elif args.command == 'run':
         result = run_crs_impl(
@@ -87,7 +92,8 @@ def main():
             worker=args.worker,
             engine=args.engine,
             sanitizer=args.sanitizer,
-            architecture=args.architecture
+            architecture=args.architecture,
+            registry_dir=args.registry_dir
         )
     else:
         parser.print_help()

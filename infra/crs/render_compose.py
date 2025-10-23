@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Render Docker Compose files per worker from configuration directory.
 
@@ -17,7 +16,7 @@ import sys
 import yaml
 from pathlib import Path
 from jinja2 import Template
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -121,72 +120,86 @@ def format_memory(memory_mb: int) -> str:
     return f"{memory_mb}M"
 
 
-def clone_crs_if_needed(crs_name: str, registry_parent_dir: Path) -> bool:
+def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) -> Optional[Path]:
   """
-  Clone a CRS repository if it doesn't already exist.
+  Clone a CRS repository if needed, or return local path if specified.
 
   Args:
     crs_name: Name of the CRS to clone
-    registry_parent_dir: Parent directory containing oss-crs-registry and CRS repos
+    crs_build_dir: Directory where CRS repositories are cloned
+    registry_dir: Path to oss-crs-registry directory
 
   Returns:
-    True if successful, False otherwise
+    Path to the CRS directory (either cloned or local), or None on error
   """
-  crs_path = registry_parent_dir / crs_name
+  crs_path = crs_build_dir / crs_name
 
-  if crs_path.exists():
-    logging.info(f"CRS '{crs_name}' already exists at {crs_path}")
-    return True
-
-  # Parse oss-crs-registry to get CRS URL and ref
-  oss_crs_registry_path = registry_parent_dir / "oss-crs-registry"
-  crs_meta_path = oss_crs_registry_path / "crs" / crs_name / "pkg.yaml"
+  # Parse oss-crs-registry to get CRS metadata
+  crs_meta_path = registry_dir / "crs" / crs_name / "pkg.yaml"
 
   if not crs_meta_path.exists():
     print(f"ERROR: CRS metadata not found for '{crs_name}' at {crs_meta_path}")
-    return False
+    return None
 
-  # Parse pkg.yaml to get URL and ref
-  import re
-  url_regex = re.compile(r'\s*url\s*:\s*([^\s]+)')
-  ref_regex = re.compile(r'\s*ref\s*:\s*([^\s]+)')
-
-  crs_url = None
-  crs_ref = None
-
-  with open(crs_meta_path) as f:
-    for line in f:
-      url_match = url_regex.match(line)
-      if url_match:
-        crs_url = url_match.group(1)
-      ref_match = ref_regex.match(line)
-      if ref_match:
-        crs_ref = ref_match.group(1)
-
-  if not crs_url:
-    print(f"ERROR: Could not parse CRS URL from {crs_meta_path}")
-    return False
-
-  # Clone the CRS repository
-  logging.info(f"Cloning CRS '{crs_name}' from {crs_url}")
+  # Parse pkg.yaml using PyYAML
   try:
-    subprocess.check_call(['git', 'clone', crs_url, str(crs_path)], stdout=subprocess.DEVNULL)
+    with open(crs_meta_path) as f:
+      pkg_config = yaml.safe_load(f)
+  except yaml.YAMLError as e:
+    print(f"ERROR: Failed to parse {crs_meta_path}: {e}")
+    return None
 
-    if crs_ref:
-      subprocess.check_call(['git', '-C', str(crs_path), 'checkout', crs_ref], stdout=subprocess.DEVNULL)
-      subprocess.check_call(['git', '-C', str(crs_path), 'submodule', 'update',
-                             '--init', '--recursive', '--depth', '1'], stdout=subprocess.DEVNULL)
+  source_config = pkg_config.get('source', {})
+  local_path = source_config.get('local_path')
+  crs_url = source_config.get('url')
+  crs_ref = source_config.get('ref')
 
-    logging.info(f"Successfully cloned CRS '{crs_name}' to {crs_path}")
-    return True
+  # Priority: local_path takes precedence over url
+  if local_path:
+    # Resolve local_path relative to cwd (working directory), with ~ expansion
+    local_path_resolved = Path(local_path).expanduser().resolve()
 
-  except subprocess.CalledProcessError as e:
-    print(f"ERROR: Failed to clone CRS '{crs_name}': {e}")
-    return False
+    if not local_path_resolved.exists():
+      print(f"ERROR: Local CRS path does not exist: {local_path_resolved}")
+      return None
+
+    if not local_path_resolved.is_dir():
+      print(f"ERROR: Local CRS path is not a directory: {local_path_resolved}")
+      return None
+
+    # Return the local path directly without creating symlinks
+    logging.info(f"Using local CRS '{crs_name}' from {local_path_resolved}")
+    return local_path_resolved
+
+  elif crs_url:
+    if crs_path.exists():
+      logging.info(f"CRS '{crs_name}' already exists at {crs_path}")
+      return crs_path
+
+    # Clone the CRS repository from URL
+    logging.info(f"Cloning CRS '{crs_name}' from {crs_url}")
+    try:
+      subprocess.check_call(['git', 'clone', crs_url, str(crs_path)], stdout=subprocess.DEVNULL)
+
+      if crs_ref:
+        subprocess.check_call(['git', '-C', str(crs_path), 'checkout', crs_ref], stdout=subprocess.DEVNULL)
+        subprocess.check_call(['git', '-C', str(crs_path), 'submodule', 'update',
+                               '--init', '--recursive', '--depth', '1'], stdout=subprocess.DEVNULL)
+
+      logging.info(f"Successfully cloned CRS '{crs_name}' to {crs_path}")
+      return crs_path
+
+    except subprocess.CalledProcessError as e:
+      print(f"ERROR: Failed to clone CRS '{crs_name}': {e}")
+      return None
+
+  else:
+    print(f"ERROR: No local_path or url specified in {crs_meta_path}")
+    return None
 
 
 def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
-                       registry_parent_dir: Path) -> List[Dict[str, Any]]:
+                       crs_paths: Dict[str, str]) -> List[Dict[str, Any]]:
   """
   Extract CRS configurations for a specific worker.
 
@@ -196,7 +209,12 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
   3. Auto-division: No CRS resources specified, divide worker resources evenly
 
   Returns a list of CRS configurations with resource constraints applied.
-  Each CRS dict includes a 'path' field constructed from registry_parent_dir/crs_name.
+  Each CRS dict includes a 'path' field from the crs_paths mapping.
+
+  Args:
+    worker_name: Name of the worker
+    resource_config: Resource configuration dictionary
+    crs_paths: Mapping of crs_name -> actual filesystem path
 
   Exits with error if:
   - CPU cores conflict (two CRS trying to use same core)
@@ -277,7 +295,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
     result.append({
       'name': crs_name,
-      'path': str(registry_parent_dir / crs_name),
+      'path': crs_paths[crs_name],
       'cpuset': format_cpu_list(crs_cpus_list),
       'memory_limit': format_memory(crs_memory_mb),
       'suffix': 'runner'
@@ -328,7 +346,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
       result.append({
         'name': crs_name,
-        'path': str(registry_parent_dir / crs_name),
+        'path': crs_paths[crs_name],
         'cpuset': format_cpu_list(crs_cpus_list),
         'memory_limit': format_memory(crs_memory),
         'suffix': 'runner'
@@ -345,17 +363,15 @@ def get_project_language(oss_fuzz_path: Path, project: str) -> str:
     logging.info(f"No project.yaml found for {project}, assuming c++")
     return "c++"
 
-  import re
-  language_regex = re.compile(r'\s*language\s*:\s*([^\s]+)')
+  try:
+    with open(project_yaml_path) as f:
+      project_config = yaml.safe_load(f)
 
-  with open(project_yaml_path) as f:
-    for line in f:
-      match = language_regex.match(line)
-      if match:
-        return match.group(1)
-
-  logging.info(f"Language not specified in project.yaml for {project}, assuming c++")
-  return "c++"
+    language = project_config.get('language', 'c++')
+    return language
+  except (yaml.YAMLError, AttributeError, TypeError):
+    logging.info(f"Language not specified in project.yaml for {project}, assuming c++")
+    return "c++"
 
 
 def render_litellm_compose(template_path: Path, config_dir: Path,
@@ -429,7 +445,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
 
 def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
                          project: str, engine: str, sanitizer: str,
-                         architecture: str, registry_parent_dir: str,
+                         architecture: str, crs_build_dir: str,
+                         registry_dir: str,
                          source_path: str = None, env_file: str = None) -> List[str]:
   """
   Programmatic interface for build mode.
@@ -441,7 +458,8 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
   output_dir = Path(output_dir)
   template_path = SCRIPT_DIR / "compose.yaml.j2"
   litellm_template_path = SCRIPT_DIR / "compose-litellm.yaml.j2"
-  registry_parent_dir = Path(registry_parent_dir).resolve()
+  crs_build_dir = Path(crs_build_dir).resolve()
+  registry_dir = Path(registry_dir).resolve()
   oss_fuzz_path = Path(__file__).parent.parent.parent.resolve()
   env_file_path = Path(env_file).resolve() if env_file else None
 
@@ -463,11 +481,14 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
   if not workers:
     raise ValueError("No workers defined in config-resource.yaml")
 
-  # Clone all required CRS repositories
+  # Clone all required CRS repositories and build path mapping
   crs_configs = resource_config.get('crs', {})
+  crs_paths = {}
   for crs_name in crs_configs.keys():
-    if not clone_crs_if_needed(crs_name, registry_parent_dir):
+    crs_path = clone_crs_if_needed(crs_name, crs_build_dir, registry_dir)
+    if crs_path is None:
       raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
+    crs_paths[crs_name] = str(crs_path)
 
   # Check for .env file in config-dir if no explicit env-file was provided
   if not env_file_path:
@@ -481,7 +502,7 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
   all_build_profiles = []
 
   for worker_name in workers.keys():
-    crs_list = get_crs_for_worker(worker_name, resource_config, registry_parent_dir)
+    crs_list = get_crs_for_worker(worker_name, resource_config, crs_paths)
     if crs_list:
       all_crs_list.extend(crs_list)
       all_build_profiles.extend([f"{crs['name']}_builder" for crs in crs_list])
@@ -521,8 +542,8 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
 
 def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
                        project: str, engine: str, sanitizer: str,
-                       architecture: str, registry_parent_dir: str,
-                       worker: str, fuzzer_command: List[str],
+                       architecture: str, crs_build_dir: str,
+                       registry_dir: str, worker: str, fuzzer_command: List[str],
                        source_path: str = None, env_file: str = None) -> None:
   """
   Programmatic interface for run mode.
@@ -531,7 +552,8 @@ def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
   output_dir = Path(output_dir)
   template_path = SCRIPT_DIR / "compose.yaml.j2"
   litellm_template_path = SCRIPT_DIR / "compose-litellm.yaml.j2"
-  registry_parent_dir = Path(registry_parent_dir).resolve()
+  crs_build_dir = Path(crs_build_dir).resolve()
+  registry_dir = Path(registry_dir).resolve()
   oss_fuzz_path = Path(__file__).parent.parent.parent.resolve()
   env_file_path = Path(env_file).resolve() if env_file else None
 
@@ -553,11 +575,14 @@ def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
   if worker not in workers:
     raise ValueError(f"Worker '{worker}' not found in config-resource.yaml")
 
-  # Clone all required CRS repositories
+  # Clone all required CRS repositories and build path mapping
   crs_configs = resource_config.get('crs', {})
+  crs_paths = {}
   for crs_name in crs_configs.keys():
-    if not clone_crs_if_needed(crs_name, registry_parent_dir):
+    crs_path = clone_crs_if_needed(crs_name, crs_build_dir, registry_dir)
+    if crs_path is None:
       raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
+    crs_paths[crs_name] = str(crs_path)
 
   # Check for .env file in config-dir if no explicit env-file was provided
   if not env_file_path:
@@ -567,7 +592,7 @@ def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
       shutil.copy2(config_env_file, dest_env)
 
   # Get CRS list for this worker
-  crs_list = get_crs_for_worker(worker, resource_config, registry_parent_dir)
+  crs_list = get_crs_for_worker(worker, resource_config, crs_paths)
 
   if not crs_list:
     raise ValueError(f"No CRS instances configured for worker '{worker}'")
