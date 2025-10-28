@@ -450,8 +450,8 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
         oss_crs_registry_path = registry_dir_path
         logging.info(f'Using local oss-crs-registry at: {oss_crs_registry_path}')
     else:
-        # Use/clone oss-crs-registry in the hash directory
-        oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
+        # Use/clone oss-crs-registry in build_dir/crs
+        oss_crs_registry_path = build_dir / 'crs' / 'oss-crs-registry'
         if mode == 'build':
             if not oss_crs_registry_path.exists():
                 logging.info(f'Cloning oss-crs-registry to: {oss_crs_registry_path}')

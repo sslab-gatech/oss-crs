@@ -29,7 +29,7 @@ def main():
     build_parser.add_argument('--build-dir', default=str(Path.cwd() / 'build'),
                               help='Path to build directory (default: ./build)')
     build_parser.add_argument('--oss-fuzz-dir', default=None,
-                              help='Path to oss-fuzz directory (default: ${BUILD_DIR}/oss-fuzz)')
+                              help='Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)')
     build_parser.add_argument('--registry-dir',
                               help='Path to local oss-crs-registry directory')
     build_parser.add_argument('--engine', default='libfuzzer',
@@ -54,7 +54,7 @@ def main():
     run_parser.add_argument('--build-dir', default=str(Path.cwd() / 'build'),
                             help='Path to build directory (default: ./build)')
     run_parser.add_argument('--oss-fuzz-dir', default=None,
-                            help='Path to oss-fuzz directory (default: ${BUILD_DIR}/oss-fuzz)')
+                            help='Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)')
     run_parser.add_argument('--registry-dir',
                             help='Path to local oss-crs-registry directory')
     run_parser.add_argument('--engine', default='libfuzzer',
@@ -85,7 +85,7 @@ def main():
         
     # Ensure oss-fuzz directory exists
     if args.oss_fuzz_dir is None:
-        oss_fuzz_dir = Path(args.build_dir) / "oss-fuzz"
+        oss_fuzz_dir = Path(args.build_dir) / "crs" / "oss-fuzz"
     else:
         oss_fuzz_dir = Path(args.oss_fuzz_dir)
     if not oss_fuzz_dir.exists():
