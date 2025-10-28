@@ -18,7 +18,8 @@ from pathlib import Path
 from jinja2 import Template
 from typing import Dict, Any, List, Optional
 
-SCRIPT_DIR = Path(__file__).parent
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+DOCKER_DIR = Path(__file__).parent / "docker"
 
 # Configure logging (INFO level won't show by default)
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
@@ -424,6 +425,7 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
         crs_list=crs_list,
         worker_name=worker_name,
         oss_fuzz_path=str(oss_fuzz_path),
+        oss_crs_docker_path=str(DOCKER_DIR),
         project=project,
         project_language=project_language,
         engine=engine,
@@ -460,8 +462,8 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
     """
     config_dir = Path(config_dir)
     output_dir = Path(output_dir)
-    template_path = SCRIPT_DIR / "compose.yaml.j2"
-    litellm_template_path = SCRIPT_DIR / "compose-litellm.yaml.j2"
+    template_path = TEMPLATE_DIR / "compose.yaml.j2"
+    litellm_template_path = TEMPLATE_DIR / "compose-litellm.yaml.j2"
     crs_build_dir = Path(crs_build_dir).resolve()
     registry_dir = Path(registry_dir).resolve()
     oss_fuzz_path = Path(__file__).parent.parent.parent.resolve()
@@ -558,8 +560,8 @@ def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
     """
     config_dir = Path(config_dir)
     output_dir = Path(output_dir)
-    template_path = SCRIPT_DIR / "compose.yaml.j2"
-    litellm_template_path = SCRIPT_DIR / "compose-litellm.yaml.j2"
+    template_path = TEMPLATE_DIR / "compose.yaml.j2"
+    litellm_template_path = TEMPLATE_DIR / "compose-litellm.yaml.j2"
     crs_build_dir = Path(crs_build_dir).resolve()
     registry_dir = Path(registry_dir).resolve()
     oss_fuzz_path = Path(__file__).parent.parent.parent.resolve()

@@ -7,7 +7,7 @@ services:
     profiles:
       - {{ crs.name }}_builder
     build:
-      context: {{ oss_fuzz_path }}/infra/crs
+      context: {{ oss_crs_docker_path }}
       dockerfile: key_provisioner.Dockerfile
     environment:
 {%- if external_litellm %}

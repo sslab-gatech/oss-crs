@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-oss-crs = "infra.crs.__main__:main"
+oss-crs = "oss_crs.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -28,8 +28,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["infra.crs"]
-package-dir = {"infra.crs" = "."}
+packages = ["oss_crs"]
 
 [tool.setuptools.package-data]
-"infra.crs" = ["*.j2"]
+"oss_crs" = ["templates/*.j2", "docker/*"]
