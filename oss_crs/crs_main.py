@@ -18,9 +18,6 @@ from . import render_compose
 
 logger = logging.getLogger(__name__)
 
-# Compute OSS_FUZZ_DIR relative to this file
-OSS_FUZZ_DIR = Path(__file__).parent.parent.parent.resolve()
-BUILD_DIR = OSS_FUZZ_DIR / 'build'
 
 def _get_absolute_path(path):
     """Returns absolute path with user expansion."""
@@ -51,10 +48,10 @@ def _verify_external_litellm(config_dir):
 
 
 def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
-                   engine='libfuzzer', sanitizer='address',
-                   architecture='x86_64', source_path=None,
-                   build_image_fn=None, check_project_fn=None,
-                   registry_dir=None, external_litellm=False):
+              engine='libfuzzer', sanitizer='address',
+              architecture='x86_64', source_path=None,
+              build_image_fn=None, check_project_fn=None,
+              registry_dir=None, external_litellm=False):
     """
     Build CRS for a project using docker compose.
 
@@ -83,51 +80,15 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
     if external_litellm and not _verify_external_litellm(config_dir):
         logger.error("LITELLM_URL or LITELLM_KEY is not provided in the environment")
         return False
-    
-    # Read config-resource.yaml and compute hash
-    config_resource_path = Path(config_dir) / 'config-resource.yaml'
-    if not config_resource_path.exists():
-        logger.error('config-resource.yaml not found in config-dir: %s', config_dir)
-        return False
-
-    with open(config_resource_path, 'rb') as f:
-        config_content = f.read()
-    config_hash = hashlib.sha256(config_content).hexdigest()[:16]
-
-    # Create directory under build/crs using the hash
-    crs_build_dir = Path(build_dir) / 'crs' / config_hash
-    crs_build_dir.mkdir(parents=True, exist_ok=True)
-    logger.info('Using CRS build directory: %s', crs_build_dir)
 
     # Build project image if function provided
     if build_image_fn:
         build_image_fn()
 
-    # Determine oss-crs-registry location
+    # Resolve registry_dir if provided
+    oss_crs_registry_path = None
     if registry_dir:
-        # Use provided local registry directory
-        oss_crs_registry_path = Path(registry_dir).resolve()
-        if not oss_crs_registry_path.exists():
-            logger.error('Provided registry directory does not exist: %s', oss_crs_registry_path)
-            return False
-        logger.info('Using local oss-crs-registry at: %s', oss_crs_registry_path)
-    else:
-        # Clone oss-crs-registry into the hash directory
-        oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
-        if not oss_crs_registry_path.exists():
-            logger.info('Cloning oss-crs-registry to: %s', oss_crs_registry_path)
-            try:
-                subprocess.check_call([
-                    'git', 'clone',
-                    'https://github.com/Team-Atlanta/oss-crs-registry',
-                    '--depth', '1',
-                    str(oss_crs_registry_path)
-                ])
-            except subprocess.CalledProcessError:
-                logger.error('Failed to clone oss-crs-registry')
-                return False
-        else:
-            logger.info('Using existing oss-crs-registry at: %s', oss_crs_registry_path)
+        oss_crs_registry_path = str(Path(registry_dir).resolve())
 
     # Compute source_tag for image versioning if source_path provided
     source_tag = None
@@ -140,19 +101,19 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
     # Generate compose files using render_compose module
     logger.info('Generating compose-build.yaml')
     try:
-        build_profiles = render_compose.render_build_compose(
+        build_profiles, config_hash, crs_build_dir = render_compose.render_build_compose(
             config_dir=config_dir,
-            output_dir=str(crs_build_dir),
-            config_hash=config_hash,
+            build_dir=build_dir,
+            oss_fuzz_dir=oss_fuzz_dir,
             project=project_name,
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            crs_build_dir=str(crs_build_dir),
-            registry_dir=str(oss_crs_registry_path),
+            registry_dir=oss_crs_registry_path,
             source_path=abs_source_path,
             external_litellm=external_litellm
         )
+        crs_build_dir = Path(crs_build_dir)
     except Exception as e:
         logger.error('Failed to generate compose files: %s', e)
         return False
@@ -319,14 +280,14 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
 
 
 def run_crs(config_dir, project_name, fuzzer_name, fuzzer_args,
-                 oss_fuzz_dir, build_dir, worker='local',
-                 engine='libfuzzer', sanitizer='address',
-                 architecture='x86_64', check_project_fn=None,
-                 registry_dir=None,
-                 output_dir=None,
-                 hints_dir=None,
-                 harness_source=None,
-                 external_litellm=False):
+            oss_fuzz_dir, build_dir, worker='local',
+            engine='libfuzzer', sanitizer='address',
+            architecture='x86_64', check_project_fn=None,
+            registry_dir=None,
+            output_dir=None,
+            hints_dir=None,
+            harness_source=None,
+            external_litellm=False):
     """
     Run CRS using docker compose.
 
@@ -360,57 +321,30 @@ def run_crs(config_dir, project_name, fuzzer_name, fuzzer_args,
         logger.error("LITELLM_URL or LITELLM_KEY is not provided in the environment")
         return False
 
-    # Read config-resource.yaml and compute hash (same as build_crs)
-    config_resource_path = Path(config_dir) / 'config-resource.yaml'
-    if not config_resource_path.exists():
-        logger.error('config-resource.yaml not found in config-dir: %s', config_dir)
-        return False
-
-    with open(config_resource_path, 'rb') as f:
-        config_content = f.read()
-    config_hash = hashlib.sha256(config_content).hexdigest()[:16]
-
-    # Use the same hash directory as build_crs
-    crs_build_dir = Path(build_dir) / 'crs' / config_hash
-    if not crs_build_dir.exists():
-        logger.error('CRS build directory not found: %s. Please run build_crs first.', crs_build_dir)
-        return False
-
-    # Determine oss-crs-registry location (same logic as build_crs)
+    # Resolve registry_dir if provided
+    oss_crs_registry_path = None
     if registry_dir:
-        # Use provided local registry directory
-        oss_crs_registry_path = Path(registry_dir).resolve()
-        if not oss_crs_registry_path.exists():
-            logger.error('Provided registry directory does not exist: %s', oss_crs_registry_path)
-            return False
-        logger.info('Using local oss-crs-registry at: %s', oss_crs_registry_path)
-    else:
-        # Use cloned registry from build directory
-        oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
-        if not oss_crs_registry_path.exists():
-            logger.error('oss-crs-registry not found at: %s. Please run build_crs first.', oss_crs_registry_path)
-            return False
-        logger.info('Using oss-crs-registry at: %s', oss_crs_registry_path)
+        oss_crs_registry_path = str(Path(registry_dir).resolve())
 
     # Generate compose files using render_compose module
     logger.info('Generating compose-%s.yaml', worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
     try:
-        render_compose.render_run_compose(
+        config_hash, crs_build_dir = render_compose.render_run_compose(
             config_dir=config_dir,
-            output_dir=str(crs_build_dir),
-            config_hash=config_hash,
+            build_dir=build_dir,
+            oss_fuzz_dir=oss_fuzz_dir,
             project=project_name,
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            crs_build_dir=str(crs_build_dir),
-            registry_dir=str(oss_crs_registry_path),
+            registry_dir=oss_crs_registry_path,
             worker=worker,
             fuzzer_command=fuzzer_command,
             harness_source=harness_source,
             external_litellm=external_litellm
         )
+        crs_build_dir = Path(crs_build_dir)
     except Exception as e:
         logger.error('Failed to generate compose file: %s', e)
         return False

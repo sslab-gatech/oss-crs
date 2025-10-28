@@ -31,4 +31,4 @@ dev = [
 packages = ["oss_crs"]
 
 [tool.setuptools.package-data]
-"oss_crs" = ["templates/*.j2", "docker/*"]
+"oss_crs" = ["templates/*.j2", "key_provisioner/*"]

@@ -3,10 +3,11 @@
 
 import argparse
 import logging
+import subprocess
 import sys
 from pathlib import Path
 
-from .crs_main import build_crs, run_crs, OSS_FUZZ_DIR, BUILD_DIR
+from .crs_main import build_crs, run_crs
 
 
 def main():
@@ -25,10 +26,10 @@ def main():
     build_parser.add_argument('project', help='OSS-Fuzz project name')
     build_parser.add_argument('source_path', nargs='?',
                               help='Optional path to local source')
-    build_parser.add_argument('--build-dir', default=str(BUILD_DIR),
-                              help='Path to build directory')
-    build_parser.add_argument('--oss-fuzz-dir', default=str(OSS_FUZZ_DIR),
-                              help='Path to oss-fuzz directory')
+    build_parser.add_argument('--build-dir', default=str(Path.cwd() / 'build'),
+                              help='Path to build directory (default: ./build)')
+    build_parser.add_argument('--oss-fuzz-dir', default=None,
+                              help='Path to oss-fuzz directory (default: ${BUILD_DIR}/oss-fuzz)')
     build_parser.add_argument('--registry-dir',
                               help='Path to local oss-crs-registry directory')
     build_parser.add_argument('--engine', default='libfuzzer',
@@ -50,10 +51,10 @@ def main():
                             help='Arguments to pass to the fuzzer')
     run_parser.add_argument('--worker', default='local',
                             help='Worker name (default: local)')
-    run_parser.add_argument('--build-dir', default=str(BUILD_DIR),
-                            help='Path to build directory')
-    run_parser.add_argument('--oss-fuzz-dir', default=str(OSS_FUZZ_DIR),
-                            help='Path to oss-fuzz directory')
+    run_parser.add_argument('--build-dir', default=str(Path.cwd() / 'build'),
+                            help='Path to build directory (default: ./build)')
+    run_parser.add_argument('--oss-fuzz-dir', default=None,
+                            help='Path to oss-fuzz directory (default: ${BUILD_DIR}/oss-fuzz)')
     run_parser.add_argument('--registry-dir',
                             help='Path to local oss-crs-registry directory')
     run_parser.add_argument('--engine', default='libfuzzer',
@@ -77,7 +78,28 @@ def main():
         parser.print_help()
         return 1
 
-    # Convert paths to str for consistency
+    # Ensure build_dir exists
+    build_dir = Path(args.build_dir)
+    if not build_dir.exists():
+        logging.info(f"Creating build directory: {build_dir}")
+        build_dir.mkdir(parents=True, exist_ok=True)
+
+        
+    # Ensure oss-fuzz directory exists
+    if args.oss_fuzz_dir is None:
+        oss_fuzz_dir = Path(args.build_dir) / "oss-fuzz"
+    else:
+        oss_fuzz_dir = Path(args.oss_fuzz_dir)
+    if not oss_fuzz_dir.exists():
+        logging.info(f"Cloning oss-fuzz to: {oss_fuzz_dir}")
+        try:
+            subprocess.check_call([
+                'git', 'clone', 'https://github.com/google/oss-fuzz',
+                str(oss_fuzz_dir)
+            ])
+        except subprocess.CalledProcessError:
+            logging.error("Failed to clone oss-fuzz repository")
+            return 1
 
     # Validate paths for run command
     if args.command == 'run':
@@ -95,7 +117,7 @@ def main():
         result = build_crs(
             config_dir=args.config_dir,
             project_name=args.project,
-            oss_fuzz_dir=args.oss_fuzz_dir,
+            oss_fuzz_dir=str(oss_fuzz_dir),
             build_dir=args.build_dir,
             engine=args.engine,
             sanitizer=args.sanitizer,
@@ -110,7 +132,7 @@ def main():
             project_name=args.project,
             fuzzer_name=args.fuzzer_name,
             fuzzer_args=args.fuzzer_args,
-            oss_fuzz_dir=args.oss_fuzz_dir,
+            oss_fuzz_dir=str(oss_fuzz_dir),
             build_dir=args.build_dir,
             worker=args.worker,
             engine=args.engine,

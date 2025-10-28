@@ -14,15 +14,34 @@ import shutil
 import subprocess
 import sys
 import yaml
+from dataclasses import dataclass
 from pathlib import Path
 from jinja2 import Template
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
-DOCKER_DIR = Path(__file__).parent / "docker"
+KEY_PROVISIONER_DIR = Path(__file__).parent / "key_provisioner"
 
 # Configure logging (INFO level won't show by default)
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
+
+
+@dataclass
+class ComposeEnvironment:
+    """Environment data for compose rendering."""
+    config_dir: Path
+    build_dir: Path
+    template_path: Path
+    litellm_template_path: Path
+    oss_fuzz_path: Path
+    config_hash: str
+    crs_build_dir: Path
+    output_dir: Path
+    oss_crs_registry_path: Path
+    config: Dict[str, Any]
+    resource_config: Dict[str, Any]
+    crs_paths: Dict[str, str]
+
 
 def load_config(config_dir: Path) -> Dict[str, Any]:
     """Load all configuration files from the config directory."""
@@ -375,6 +394,126 @@ def get_project_language(oss_fuzz_path: Path, project: str) -> str:
         return "c++"
 
 
+def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: str,
+                               registry_dir: str, env_file: str = None,
+                               mode: str = 'build') -> ComposeEnvironment:
+    """
+    Common setup for render_build_compose and render_run_compose.
+
+    Args:
+        config_dir: Directory containing CRS configuration files
+        build_dir: Path to build directory
+        oss_fuzz_path: Path to oss-fuzz directory
+        registry_dir: Path to local oss-crs-registry directory (or None)
+        env_file: Optional path to environment file
+        mode: Either 'build' or 'run'
+
+    Returns:
+        ComposeEnvironment dataclass containing all environment setup data
+    """
+    # Convert strings to Path objects
+    config_dir = Path(config_dir)
+    build_dir = Path(build_dir)
+    oss_fuzz_path = Path(oss_fuzz_path)
+    template_path = TEMPLATE_DIR / "compose.yaml.j2"
+    litellm_template_path = TEMPLATE_DIR / "compose-litellm.yaml.j2"
+    registry_dir_path = Path(registry_dir).resolve() if registry_dir else None
+    env_file_path = Path(env_file).resolve() if env_file else None
+
+    # Compute config_hash from config-resource.yaml
+    config_resource_path = config_dir / 'config-resource.yaml'
+    if not config_resource_path.exists():
+        raise FileNotFoundError(f'config-resource.yaml not found in config-dir: {config_dir}')
+
+    with open(config_resource_path, 'rb') as f:
+        config_content = f.read()
+    config_hash = hashlib.sha256(config_content).hexdigest()[:16]
+
+    # Create/validate crs_build_dir
+    crs_build_dir = build_dir / 'crs' / config_hash
+    if mode == 'build':
+        crs_build_dir.mkdir(parents=True, exist_ok=True)
+        logging.info(f'Using CRS build directory: {crs_build_dir}')
+    else:  # mode == 'run'
+        if not crs_build_dir.exists():
+            raise FileNotFoundError(f'CRS build directory not found: {crs_build_dir}. Please run build first.')
+
+    # Output directory is the crs_build_dir
+    output_dir = crs_build_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine oss-crs-registry location
+    if registry_dir_path:
+        # Use provided local registry directory
+        if not registry_dir_path.exists():
+            raise FileNotFoundError(f'Provided registry directory does not exist: {registry_dir_path}')
+        oss_crs_registry_path = registry_dir_path
+        logging.info(f'Using local oss-crs-registry at: {oss_crs_registry_path}')
+    else:
+        # Use/clone oss-crs-registry in the hash directory
+        oss_crs_registry_path = crs_build_dir / 'oss-crs-registry'
+        if mode == 'build':
+            if not oss_crs_registry_path.exists():
+                logging.info(f'Cloning oss-crs-registry to: {oss_crs_registry_path}')
+                try:
+                    subprocess.check_call([
+                        'git', 'clone',
+                        'https://github.com/Team-Atlanta/oss-crs-registry',
+                        '--depth', '1',
+                        str(oss_crs_registry_path)
+                    ])
+                except subprocess.CalledProcessError:
+                    raise RuntimeError('Failed to clone oss-crs-registry')
+            else:
+                logging.info(f'Using existing oss-crs-registry at: {oss_crs_registry_path}')
+        else:  # mode == 'run'
+            if not oss_crs_registry_path.exists():
+                raise FileNotFoundError(f'oss-crs-registry not found at: {oss_crs_registry_path}. Please run build first.')
+            logging.info(f'Using oss-crs-registry at: {oss_crs_registry_path}')
+
+    # Copy env file to output directory as .env if provided
+    if env_file_path:
+        if not env_file_path.exists():
+            raise FileNotFoundError(f"Environment file not found: {env_file_path}")
+        dest_env = output_dir / ".env"
+        shutil.copy2(env_file_path, dest_env)
+
+    # Load configurations
+    config = load_config(config_dir)
+    resource_config = config['resource']
+
+    # Clone all required CRS repositories and build path mapping
+    crs_configs = resource_config.get('crs', {})
+    crs_paths = {}
+    for crs_name in crs_configs.keys():
+        crs_path = clone_crs_if_needed(crs_name, crs_build_dir, oss_crs_registry_path)
+        if crs_path is None:
+            raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
+        crs_paths[crs_name] = str(crs_path)
+
+    # Check for .env file in config-dir if no explicit env-file was provided
+    if not env_file_path:
+        config_env_file = config_dir / ".env"
+        if config_env_file.exists():
+            dest_env = output_dir / ".env"
+            shutil.copy2(config_env_file, dest_env)
+
+    return ComposeEnvironment(
+        config_dir=config_dir,
+        build_dir=build_dir,
+        template_path=template_path,
+        litellm_template_path=litellm_template_path,
+        oss_fuzz_path=oss_fuzz_path,
+        config_hash=config_hash,
+        crs_build_dir=crs_build_dir,
+        output_dir=output_dir,
+        oss_crs_registry_path=oss_crs_registry_path,
+        config=config,
+        resource_config=resource_config,
+        crs_paths=crs_paths,
+    )
+
+
 def render_litellm_compose(template_path: Path, config_dir: Path,
                            config_hash: str, crs_list: List[Dict[str, Any]]) -> str:
     """Render the compose-litellm.yaml template."""
@@ -397,9 +536,10 @@ def render_litellm_compose(template_path: Path, config_dir: Path,
 
 def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
                               template_path: Path, oss_fuzz_path: Path,
-                              project: str, config_dir: Path, engine: str,
-                              sanitizer: str, architecture: str, mode: str,
-                              config_hash: str, fuzzer_command: List[str] = None,
+                              build_dir: Path, project: str, config_dir: Path,
+                              engine: str, sanitizer: str, architecture: str,
+                              mode: str, config_hash: str,
+                              fuzzer_command: List[str] = None,
                               source_path: str = None, harness_source: str = None,
                               external_litellm: bool = False) -> str:
     """Render the compose template for a specific worker."""
@@ -412,6 +552,7 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
     # Resolve config paths
     config_resource_path = (config_dir / "config-resource.yaml").resolve()
     config_dir_resolved = config_dir.resolve()
+    build_dir_resolved = build_dir.resolve()
 
     # Get project language
     project_language = get_project_language(oss_fuzz_path, project)
@@ -425,7 +566,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
         crs_list=crs_list,
         worker_name=worker_name,
         oss_fuzz_path=str(oss_fuzz_path),
-        oss_crs_docker_path=str(DOCKER_DIR),
+        build_dir=str(build_dir_resolved),
+        key_provisioner_path=str(KEY_PROVISIONER_DIR),
         project=project,
         project_language=project_language,
         engine=engine,
@@ -448,60 +590,35 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
 
 
 
-def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
+def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
                          project: str, engine: str, sanitizer: str,
-                         architecture: str, crs_build_dir: str,
-                         registry_dir: str,
+                         architecture: str, registry_dir: str,
                          source_path: str = None, env_file: str = None,
-                         external_litellm: bool = False) -> List[str]:
+                         external_litellm: bool = False) -> Tuple[List[str], str, str]:
     """
     Programmatic interface for build mode.
 
     Returns:
-      List of build profile names
+      Tuple of (build_profile_names, config_hash, crs_build_dir)
     """
-    config_dir = Path(config_dir)
-    output_dir = Path(output_dir)
-    template_path = TEMPLATE_DIR / "compose.yaml.j2"
-    litellm_template_path = TEMPLATE_DIR / "compose-litellm.yaml.j2"
-    crs_build_dir = Path(crs_build_dir).resolve()
-    registry_dir = Path(registry_dir).resolve()
-    oss_fuzz_path = Path(__file__).parent.parent.parent.resolve()
-    env_file_path = Path(env_file).resolve() if env_file else None
+    # Common setup
+    env = _setup_compose_environment(config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode='build')
 
-    # Ensure output directory exists
-    output_dir.mkdir(parents=True, exist_ok=True)
+    config_dir = env.config_dir
+    build_dir = env.build_dir
+    template_path = env.template_path
+    litellm_template_path = env.litellm_template_path
+    oss_fuzz_path = env.oss_fuzz_path
+    config_hash = env.config_hash
+    crs_build_dir = env.crs_build_dir
+    output_dir = env.output_dir
+    resource_config = env.resource_config
+    crs_paths = env.crs_paths
 
-    # Copy env file to output directory as .env if provided
-    if env_file_path:
-        if not env_file_path.exists():
-            raise FileNotFoundError(f"Environment file not found: {env_file_path}")
-        dest_env = output_dir / ".env"
-        shutil.copy2(env_file_path, dest_env)
-
-    # Load configurations
-    config = load_config(config_dir)
-    resource_config = config['resource']
+    # Validate workers exist
     workers = resource_config.get('workers', {})
-
     if not workers:
         raise ValueError("No workers defined in config-resource.yaml")
-
-    # Clone all required CRS repositories and build path mapping
-    crs_configs = resource_config.get('crs', {})
-    crs_paths = {}
-    for crs_name in crs_configs.keys():
-        crs_path = clone_crs_if_needed(crs_name, crs_build_dir, registry_dir)
-        if crs_path is None:
-            raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
-        crs_paths[crs_name] = str(crs_path)
-
-    # Check for .env file in config-dir if no explicit env-file was provided
-    if not env_file_path:
-        config_env_file = config_dir / ".env"
-        if config_env_file.exists():
-            dest_env = output_dir / ".env"
-            shutil.copy2(config_env_file, dest_env)
 
     # Collect all CRS instances across all workers
     all_crs_list = []
@@ -530,6 +647,7 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
         crs_list=all_crs_list,
         template_path=template_path,
         oss_fuzz_path=oss_fuzz_path,
+        build_dir=build_dir,
         project=project,
         config_dir=config_dir,
         engine=engine,
@@ -545,61 +663,40 @@ def render_build_compose(config_dir: str, output_dir: str, config_hash: str,
     output_file = output_dir / "compose-build.yaml"
     output_file.write_text(rendered)
 
-    return all_build_profiles
+    return all_build_profiles, config_hash, str(crs_build_dir)
 
 
-def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
+def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
                        project: str, engine: str, sanitizer: str,
-                       architecture: str, crs_build_dir: str,
-                       registry_dir: str, worker: str, fuzzer_command: List[str],
+                       architecture: str, registry_dir: str,
+                       worker: str, fuzzer_command: List[str],
                        source_path: str = None, env_file: str = None,
                        harness_source: str = None,
-                       external_litellm: bool = False) -> None:
+                       external_litellm: bool = False) -> Tuple[str, str]:
     """
     Programmatic interface for run mode.
+
+    Returns:
+      Tuple of (config_hash, crs_build_dir)
     """
-    config_dir = Path(config_dir)
-    output_dir = Path(output_dir)
-    template_path = TEMPLATE_DIR / "compose.yaml.j2"
-    litellm_template_path = TEMPLATE_DIR / "compose-litellm.yaml.j2"
-    crs_build_dir = Path(crs_build_dir).resolve()
-    registry_dir = Path(registry_dir).resolve()
-    oss_fuzz_path = Path(__file__).parent.parent.parent.resolve()
-    env_file_path = Path(env_file).resolve() if env_file else None
+    # Common setup
+    env = _setup_compose_environment(config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode='run')
 
-    # Ensure output directory exists
-    output_dir.mkdir(parents=True, exist_ok=True)
+    config_dir = env.config_dir
+    build_dir = env.build_dir
+    template_path = env.template_path
+    litellm_template_path = env.litellm_template_path
+    oss_fuzz_path = env.oss_fuzz_path
+    config_hash = env.config_hash
+    crs_build_dir = env.crs_build_dir
+    output_dir = env.output_dir
+    resource_config = env.resource_config
+    crs_paths = env.crs_paths
 
-    # Copy env file to output directory as .env if provided
-    if env_file_path:
-        if not env_file_path.exists():
-            raise FileNotFoundError(f"Environment file not found: {env_file_path}")
-        dest_env = output_dir / ".env"
-        shutil.copy2(env_file_path, dest_env)
-
-    # Load configurations
-    config = load_config(config_dir)
-    resource_config = config['resource']
+    # Validate worker exists
     workers = resource_config.get('workers', {})
-
     if worker not in workers:
         raise ValueError(f"Worker '{worker}' not found in config-resource.yaml")
-
-    # Clone all required CRS repositories and build path mapping
-    crs_configs = resource_config.get('crs', {})
-    crs_paths = {}
-    for crs_name in crs_configs.keys():
-        crs_path = clone_crs_if_needed(crs_name, crs_build_dir, registry_dir)
-        if crs_path is None:
-            raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
-        crs_paths[crs_name] = str(crs_path)
-
-    # Check for .env file in config-dir if no explicit env-file was provided
-    if not env_file_path:
-        config_env_file = config_dir / ".env"
-        if config_env_file.exists():
-            dest_env = output_dir / ".env"
-            shutil.copy2(config_env_file, dest_env)
 
     # Get CRS list for this worker
     crs_list = get_crs_for_worker(worker, resource_config, crs_paths)
@@ -624,6 +721,7 @@ def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
         crs_list=crs_list,
         template_path=template_path,
         oss_fuzz_path=oss_fuzz_path,
+        build_dir=build_dir,
         project=project,
         config_dir=config_dir,
         engine=engine,
@@ -639,6 +737,8 @@ def render_run_compose(config_dir: str, output_dir: str, config_hash: str,
 
     output_file = output_dir / f"compose-{worker}.yaml"
     output_file.write_text(rendered)
+
+    return config_hash, str(crs_build_dir)
 
 
 # Note: This module is now used as a library.

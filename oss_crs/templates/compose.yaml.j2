@@ -7,8 +7,8 @@ services:
     profiles:
       - {{ crs.name }}_builder
     build:
-      context: {{ oss_crs_docker_path }}
-      dockerfile: key_provisioner.Dockerfile
+      context: {{ key_provisioner_path }}
+      dockerfile: Dockerfile
     environment:
 {%- if external_litellm %}
       - LITELLM_URL=${LITELLM_URL}
@@ -62,8 +62,8 @@ services:
         - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
         - parent_image=gcr.io/oss-fuzz/{{ project }}
     volumes:
-      - {{ oss_fuzz_path }}/build/out/{{ crs.name }}/{{ project }}:/out
-      - {{ oss_fuzz_path }}/build/work/{{ crs.name }}/{{ project }}:/work
+      - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
+      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}:/work
       - {{ config_hash }}_keys_data_{{ crs.name }}:/keys:ro
 {%- if source_path %}
       - {{ source_path }}:/local-source-mount
@@ -98,7 +98,7 @@ services:
       args:
         - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
     volumes:
-      - {{ oss_fuzz_path }}/build/out/{{ crs.name }}/{{ project }}:/out
+      - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
       - {{ config_hash }}_keys_data_{{ crs.name }}:/keys:ro
 {%- if harness_source %}
       - {{ harness_source }}:/harness-source:ro
