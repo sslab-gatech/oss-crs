@@ -47,11 +47,42 @@ def _verify_external_litellm(config_dir):
     return False
 
 
+def _build_project_image(project_name, oss_fuzz_dir, architecture):
+    build_image_cmd = [
+        'python3', 'infra/helper.py',
+        'build_image',
+        '--no-pull',
+        '--architecture', architecture,
+        project_name
+    ]
+    try:
+        subprocess.check_call(build_image_cmd, cwd=oss_fuzz_dir)
+    except subprocess.CalledProcessError:
+        logging.error(f"Failed to build image for {project_name}")
+        return False
+    return True
+
+
+def _clone_oss_fuzz_if_needed(oss_fuzz_dir):
+    if not Path(oss_fuzz_dir).exists():
+        logging.info(f"Cloning oss-fuzz to: {oss_fuzz_dir}")
+        try:
+            subprocess.check_call([
+                'git', 'clone', 'https://github.com/google/oss-fuzz',
+                str(oss_fuzz_dir)
+            ])
+        except subprocess.CalledProcessError:
+            logging.error("Failed to clone oss-fuzz repository")
+            return False
+    return True
+
+
 def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
               engine='libfuzzer', sanitizer='address',
               architecture='x86_64', source_path=None,
-              build_image_fn=None, check_project_fn=None,
-              registry_dir=None, external_litellm=False):
+              check_project_fn=None,
+              registry_dir=None, project_image_prefix='gcr.io/oss-fuzz',
+              external_litellm=False):
     """
     Build CRS for a project using docker compose.
 
@@ -64,9 +95,9 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
         sanitizer: Sanitizer to use (default: address)
         architecture: Architecture (default: x86_64)
         source_path: Optional path to local source
-        build_image_fn: Optional function to build project image
         check_project_fn: Optional function to check if project exists
         registry_dir: Optional path to local oss-crs-registry directory
+        project_image_prefix: Project image prefix (default: gcr.io/oss-fuzz)
         external_litellm: Use external LiteLLM instance (default: False)
 
     Returns:
@@ -81,9 +112,10 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
         logger.error("LITELLM_URL or LITELLM_KEY is not provided in the environment")
         return False
 
+    _clone_oss_fuzz_if_needed(oss_fuzz_dir)
+    
     # Build project image if function provided
-    if build_image_fn:
-        build_image_fn()
+    _build_project_image(project_name, oss_fuzz_dir, architecture)
 
     # Resolve registry_dir if provided
     oss_crs_registry_path = None
@@ -111,6 +143,7 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
             architecture=architecture,
             registry_dir=oss_crs_registry_path,
             source_path=abs_source_path,
+            project_image_prefix=project_image_prefix,
             external_litellm=external_litellm
         )
         crs_build_dir = Path(crs_build_dir)
@@ -318,6 +351,8 @@ def run_crs(config_dir, project_name, fuzzer_name, fuzzer_args,
     if external_litellm and not _verify_external_litellm(config_dir):
         logger.error("LITELLM_URL or LITELLM_KEY is not provided in the environment")
         return False
+
+    _clone_oss_fuzz_if_needed(oss_fuzz_dir)
 
     # Resolve registry_dir if provided
     oss_crs_registry_path = None

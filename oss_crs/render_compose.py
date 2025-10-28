@@ -541,6 +541,7 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
                               mode: str, config_hash: str,
                               fuzzer_command: List[str] = None,
                               source_path: str = None, harness_source: str = None,
+                              project_image_prefix: str = 'gcr.io/oss-fuzz',
                               external_litellm: bool = False) -> str:
     """Render the compose template for a specific worker."""
     if not template_path.exists():
@@ -581,6 +582,7 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
         source_path=source_path,
         source_tag=source_tag,
         harness_source=harness_source,
+        parent_image_prefix=project_image_prefix,
         external_litellm=external_litellm
     )
 
@@ -594,6 +596,7 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
                          project: str, engine: str, sanitizer: str,
                          architecture: str, registry_dir: str,
                          source_path: str = None, env_file: str = None,
+                         project_image_prefix: str = 'gcr.io/oss-fuzz',
                          external_litellm: bool = False) -> Tuple[List[str], str, str]:
     """
     Programmatic interface for build mode.
@@ -657,6 +660,7 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         config_hash=config_hash,
         fuzzer_command=None,
         source_path=source_path,
+        project_image_prefix=project_image_prefix,
         external_litellm=external_litellm
     )
 

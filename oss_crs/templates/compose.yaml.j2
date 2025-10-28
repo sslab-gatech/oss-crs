@@ -60,7 +60,7 @@ services:
       args:
         - CRS_TARGET={{ project }}
         - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
-        - parent_image=gcr.io/oss-fuzz/{{ project }}
+        - parent_image={{ parent_image_prefix }}/{{ project }}
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
       - {{ build_dir }}/work/{{ crs.name }}/{{ project }}:/work

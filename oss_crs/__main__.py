@@ -3,7 +3,6 @@
 
 import argparse
 import logging
-import subprocess
 import sys
 from pathlib import Path
 
@@ -38,6 +37,8 @@ def main():
                               help='Sanitizer (default: address)')
     build_parser.add_argument('--architecture', default='x86_64',
                               help='Architecture (default: x86_64)')
+    build_parser.add_argument('--project-image-prefix', default='gcr.io/oss-fuzz',
+                              help='Project image prefix (default: gcr.io/oss-fuzz)')
     build_parser.add_argument('--external-litellm', action='store_true',
                               help='Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)')
 
@@ -88,16 +89,6 @@ def main():
         oss_fuzz_dir = Path(args.build_dir) / "crs" / "oss-fuzz"
     else:
         oss_fuzz_dir = Path(args.oss_fuzz_dir)
-    if not oss_fuzz_dir.exists():
-        logging.info(f"Cloning oss-fuzz to: {oss_fuzz_dir}")
-        try:
-            subprocess.check_call([
-                'git', 'clone', 'https://github.com/google/oss-fuzz',
-                str(oss_fuzz_dir)
-            ])
-        except subprocess.CalledProcessError:
-            logging.error("Failed to clone oss-fuzz repository")
-            return 1
 
     # Validate paths for run command
     if args.command == 'run':
@@ -119,6 +110,7 @@ def main():
             architecture=args.architecture,
             source_path=args.source_path,
             registry_dir=args.registry_dir,
+            project_image_prefix=args.project_image_prefix,
             external_litellm=args.external_litellm
         )
     elif args.command == 'run':
