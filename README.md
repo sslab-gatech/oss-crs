@@ -122,6 +122,31 @@ uv run oss-crs build example_configs/atlantis-c-libafl \
 - Must contain `build.sh` or build instructions
 - Should follow OSS-Fuzz project structure conventions
 
+### Clone project source
+
+For custom projects that don't clone source in their Dockerfile, use `--clone` to automatically clone the repository specified in `main_repo` field of `project.yaml`.
+
+The source will be cloned to `build/src/` with depth 1 and recursive submodules.
+
+```bash
+# Clone source for custom project
+uv run oss-crs build --clone \
+                     --project-path ~/my-custom-project \
+                     example_configs/crs-libfuzzer \
+                     my-project
+
+# Clone is idempotent - skips if build/src/ already exists
+uv run oss-crs build --clone \
+                     --project-path ~/benchmarks/atlanta-binutils-delta-01 \
+                     example_configs/ensemble-c \
+                     atlanta-binutils-delta-01
+```
+
+**Note:**
+- `--clone` and `source_path` are mutually exclusive
+- Standard OSS-Fuzz projects already clone source in their Dockerfile, so `--clone` is not needed for them
+- The `project.yaml` must contain a `main_repo` field with a valid git URL
+
 ### Custom OSS-Fuzz directory
 
 Provide the path to the custom OSS-Fuzz repository with `--oss-fuzz-dir`.

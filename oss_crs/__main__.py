@@ -45,6 +45,8 @@ def main():
                               help='Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)')
     build_parser.add_argument('--overwrite', action='store_true',
                               help='Overwrite existing project in oss-fuzz/projects/ when using project_path')
+    build_parser.add_argument('--clone', action='store_true',
+                              help='Clone project source from main_repo in project.yaml (for custom projects)')
 
     # run_crs subcommand
     run_parser = subparsers.add_parser('run', help='Run CRS')
@@ -115,6 +117,7 @@ def main():
             source_path=args.source_path,
             project_path=args.project_path,
             overwrite=args.overwrite,
+            clone=args.clone,
             registry_dir=args.registry_dir,
             project_image_prefix=args.project_image_prefix,
             external_litellm=args.external_litellm

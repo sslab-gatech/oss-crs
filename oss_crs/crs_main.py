@@ -11,6 +11,7 @@ import logging
 import shlex
 import signal
 import uuid
+import yaml
 from pathlib import Path
 
 from dotenv import dotenv_values
@@ -78,10 +79,69 @@ def _clone_oss_fuzz_if_needed(oss_fuzz_dir):
     return True
 
 
+def _clone_project_source(project_name, oss_fuzz_dir, build_dir):
+    """
+    Clone project source based on main_repo in project.yaml.
+
+    Args:
+        project_name: Name of the project
+        oss_fuzz_dir: Path to OSS-Fuzz root directory
+        build_dir: Path to build directory
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    project_yaml_path = Path(oss_fuzz_dir) / 'projects' / project_name / 'project.yaml'
+
+    # Validate project.yaml exists
+    if not project_yaml_path.exists():
+        logger.error(f"project.yaml not found: {project_yaml_path}")
+        return False
+
+    # Read main_repo from project.yaml
+    try:
+        with open(project_yaml_path) as f:
+            project_config = yaml.safe_load(f)
+    except Exception as e:
+        logger.error(f"Failed to parse project.yaml: {e}")
+        return False
+
+    main_repo = project_config.get('main_repo')
+    if not main_repo:
+        logger.error(f"main_repo not found in {project_yaml_path}")
+        return False
+
+    # Clone to build/src/
+    clone_dest = Path(build_dir) / 'src'
+
+    if clone_dest.exists():
+        logger.info(f"Source already exists at {clone_dest}, skipping clone")
+        return True
+
+    # Create parent directory if needed
+    clone_dest.parent.mkdir(parents=True, exist_ok=True)
+
+    # Clone with depth 1 and recursive submodules
+    logger.info(f"Cloning {main_repo} to {clone_dest}")
+    try:
+        subprocess.check_call([
+            'git', 'clone',
+            '--depth', '1',
+            '--recursive',
+            main_repo,
+            str(clone_dest)
+        ])
+        logger.info(f"Successfully cloned source to {clone_dest}")
+        return True
+    except subprocess.CalledProcessError:
+        logger.error(f"Failed to clone repository: {main_repo}")
+        return False
+
+
 def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
               engine='libfuzzer', sanitizer='address',
               architecture='x86_64', source_path=None,
-              project_path=None, overwrite=False,
+              project_path=None, overwrite=False, clone=False,
               check_project_fn=None,
               registry_dir=None, project_image_prefix='gcr.io/oss-fuzz',
               external_litellm=False):
@@ -99,6 +159,7 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
         source_path: Optional path to local source
         project_path: Optional path to local OSS-compatible project
         overwrite: Overwrite existing project in oss-fuzz/projects/ (default: False)
+        clone: Clone project source from main_repo in project.yaml (default: False)
         check_project_fn: Optional function to check if project exists
         registry_dir: Optional path to local oss-crs-registry directory
         project_image_prefix: Project image prefix (default: gcr.io/oss-fuzz)
@@ -109,6 +170,11 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
     """
     # Validate project exists if checker provided TODO (don't remove the todo)
     if check_project_fn and not check_project_fn():
+        return False
+
+    # Validate mutually exclusive options
+    if clone and source_path:
+        logger.error("Cannot use --clone with source_path (mutually exclusive)")
         return False
 
     # Check if litellm keys are provided
@@ -154,6 +220,16 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
         logger.info(f"Copying project from {src_path} to {dest_path}")
         shutil.copytree(src_path, dest_path)
         logger.info(f"Successfully copied project to {dest_path}")
+
+    # Clone project source if requested
+    # Note: --clone is for custom projects that don't have source cloning in Dockerfile
+    # Standard OSS-Fuzz projects already clone source in their Dockerfile
+    if clone:
+        if not _clone_project_source(project_name, oss_fuzz_dir, build_dir):
+            return False
+        # Use cloned source as source_path
+        source_path = str(Path(build_dir) / 'src')
+        logger.info(f"Using cloned source as source_path: {source_path}")
 
     # Build project image
     _build_project_image(project_name, oss_fuzz_dir, architecture)
