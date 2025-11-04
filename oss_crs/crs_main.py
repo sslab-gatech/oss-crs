@@ -111,8 +111,8 @@ def _clone_project_source(project_name, oss_fuzz_dir, build_dir):
         logger.error(f"main_repo not found in {project_yaml_path}")
         return False
 
-    # Clone to build/src/
-    clone_dest = Path(build_dir) / 'src'
+    # Clone to build/src/{project_name}
+    clone_dest = Path(build_dir) / 'src' / project_name
 
     if clone_dest.exists():
         logger.info(f"Source already exists at {clone_dest}, skipping clone")
@@ -228,7 +228,7 @@ def build_crs(config_dir, project_name, oss_fuzz_dir, build_dir,
         if not _clone_project_source(project_name, oss_fuzz_dir, build_dir):
             return False
         # Use cloned source as source_path
-        source_path = str(Path(build_dir) / 'src')
+        source_path = str(Path(build_dir) / 'src' / project_name)
         logger.info(f"Using cloned source as source_path: {source_path}")
 
     # Build project image
