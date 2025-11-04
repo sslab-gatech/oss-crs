@@ -34,7 +34,7 @@ These parameters serve different purposes and can be used together:
 oss-crs build example_configs/crs-libfuzzer \
     aixcc-challenge \
     /path/to/my/source \
-    /path/to/aixcc/project
+    --project-path /path/to/aixcc/project
 ```
 
 ### Implementation Strategy: Copy to OSS-Fuzz Projects
@@ -115,8 +115,8 @@ Continue with normal workflow:
 
 **Build command:**
 ```python
-build_parser.add_argument('project_path', nargs='?',
-    help='Optional path to local OSS-compatible project')
+build_parser.add_argument('--project-path',
+    help='Path to local OSS-compatible project')
 build_parser.add_argument('--overwrite', action='store_true',
     help='Overwrite existing project in oss-fuzz/projects/')
 
@@ -189,7 +189,7 @@ The implementation maintains full backward compatibility:
 oss-crs build \
     example_configs/crs-libfuzzer \
     aixcc-challenge \
-    ~/aixcc/challenge-projects/cp-nginx/
+    --project-path ~/aixcc/challenge-projects/cp-nginx/
 ```
 
 ### 2. Development Project
@@ -199,7 +199,7 @@ oss-crs build \
 oss-crs build \
     example_configs/ensemble-c \
     my-new-library \
-    ~/dev/my-library-ossfuzz/
+    --project-path ~/dev/my-library-ossfuzz/
 ```
 
 ### 3. Combined with Source Override
@@ -209,8 +209,8 @@ oss-crs build \
 oss-crs build \
     example_configs/atlantis-c-libafl \
     benchmark-project \
-    ~/src/benchmark-source/ \      # source_path
-    ~/benchmarks/benchmark-proj/   # project_path
+    ~/src/benchmark-source/ \              # source_path (positional)
+    --project-path ~/benchmarks/benchmark-proj/   # project_path (flag)
 ```
 
 ### 4. Private Benchmark Suite
@@ -220,7 +220,7 @@ oss-crs build \
 for project in /benchmarks/suite/*; do
     oss-crs build example_configs/ensemble-c \
         $(basename $project) \
-        $project
+        --project-path $project
 done
 ```
 

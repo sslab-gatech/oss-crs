@@ -89,6 +89,39 @@ source:
   local_path: ~/atlantis-c-libafl
 ```
 
+### Custom project path
+
+Provide a custom OSS-Fuzz compatible project directory with `--project-path`.
+This allows using out-of-tree projects (e.g., AIxCC challenges, custom benchmarks) without modifying the OSS-Fuzz repository.
+
+The custom project is copied to `oss-fuzz/projects/{project-name}/` during build.
+Use `--overwrite` to replace an existing project at that location.
+
+```bash
+# Use custom project directory
+uv run oss-crs build example_configs/crs-libfuzzer \
+                     my-custom-project \
+                     --project-path ~/my-projects/custom-project
+
+# With nested project names (e.g., aixcc/c/asc-nginx)
+uv run oss-crs build example_configs/ensemble-c \
+                     aixcc/c/asc-nginx \
+                     --project-path ~/aixcc/projects/asc-nginx \
+                     --overwrite
+
+# Combined with source path override
+uv run oss-crs build example_configs/atlantis-c-libafl \
+                     benchmark-project \
+                     ~/src/benchmark-source \
+                     --project-path ~/benchmarks/benchmark-proj
+```
+
+**Requirements for custom projects:**
+- Must contain `project.yaml` with valid OSS-Fuzz metadata
+- Must contain `Dockerfile` for building
+- Must contain `build.sh` or build instructions
+- Should follow OSS-Fuzz project structure conventions
+
 ### Custom OSS-Fuzz directory
 
 Provide the path to the custom OSS-Fuzz repository with `--oss-fuzz-dir`.
