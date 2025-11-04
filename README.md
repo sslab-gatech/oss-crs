@@ -102,7 +102,7 @@ uv run oss-crs build --oss-fuzz-dir oss-fuzz-aixcc \
                      example_configs/crs-libfuzzer \
                      aixcc/c/asc-nginx \
                      ~/aixcc/oss-fuzz/clone/cp-user-nginx-asc-source
-                     
+
 uv run oss-crs run --oss-fuzz-dir oss-fuzz-aixcc \
                    example_configs/crs-libfuzzer \
                    aixcc/c/asc-nginx \

@@ -25,6 +25,8 @@ def main():
     build_parser.add_argument('project', help='OSS-Fuzz project name')
     build_parser.add_argument('source_path', nargs='?',
                               help='Optional path to local source')
+    build_parser.add_argument('project_path', nargs='?',
+                              help='Optional path to local oss-compatiable project')
     build_parser.add_argument('--build-dir', default=str(Path.cwd() / 'build'),
                               help='Path to build directory (default: ./build)')
     build_parser.add_argument('--oss-fuzz-dir', default=None,
