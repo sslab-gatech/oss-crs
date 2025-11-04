@@ -54,22 +54,42 @@ uv run oss-crs run example_configs/ensemble-java java-example ExampleFuzzer
 
 ## Testing
 
-### Quick Test Script
+### Quick Test Scripts
 
-For quick testing with custom projects, use the provided test script:
+For quick testing, use the provided test scripts:
+
+#### Build Script
 
 ```bash
-# Test with custom project (project name inferred from basename)
+# Test build with custom project (project name inferred from basename)
 ./scripts/test-build.sh /home/yufu/aixcc_shared/CRSBench/benchmarks/atlanta-binutils-delta-01
 
-# Test with both custom project and source path
+# Test build with both custom project and source path
 ./scripts/test-build.sh ~/benchmarks/my-project ~/src/my-source
 ```
 
-The test script automatically:
+The build test script automatically:
 - Infers project name from the basename of the project path
-- Uses `example_configs/ensemble-c` as the CRS configuration
-- Enables `--overwrite` flag for convenient re-testing
+- Uses `example_configs/crs-libfuzzer` as the CRS configuration
+- Enables `--clone` and `--overwrite` flags for convenient testing
+
+#### Run Script
+
+```bash
+# Run with project name and harness
+./scripts/test-run.sh libxml2-delta-01 lint
+
+# Run with project path (name inferred from basename)
+./scripts/test-run.sh /home/yufu/aixcc_shared/CRSBench/benchmarks/atlanta-binutils-delta-01 my_harness
+
+# Run with additional fuzzer arguments
+./scripts/test-run.sh my-project my_fuzzer -max_len=100
+```
+
+The run test script automatically:
+- Infers project name from basename if a path is provided
+- Uses `example_configs/crs-libfuzzer` as the CRS configuration
+- Passes through fuzzer arguments
 
 ## Options
 
