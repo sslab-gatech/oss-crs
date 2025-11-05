@@ -1,0 +1,5 @@
+model_list:
+  - model_name: o3
+    litellm_params:
+      model: o3
+      api_key: os.environ/OPENAI_API_KEY
