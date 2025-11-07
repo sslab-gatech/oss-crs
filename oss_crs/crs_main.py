@@ -13,12 +13,18 @@ import signal
 import uuid
 import yaml
 from pathlib import Path
+from importlib.resources import files
 
 from dotenv import dotenv_values
 
-from . import render_compose
+
+import oss_crs
+from oss_crs import render_compose
 
 logger = logging.getLogger(__name__)
+
+# Default registry path
+DEFAULT_REGISTRY_DIR = files(oss_crs).parent / 'crs_registry'
 
 
 def _get_absolute_path(path):
@@ -183,15 +189,10 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
         logger.error("No CRS defined in config-resource.yaml")
         return False
 
-    # Determine registry path
-    if registry_dir:
-        oss_crs_registry_path = registry_dir
-    else:
-        # Use default location
-        oss_crs_registry_path = Path(__file__).parent.parent / 'oss-crs-registry'
-        if not oss_crs_registry_path.exists():
-            logger.warning(f"Registry not found at {oss_crs_registry_path}, skipping mode validation")
-            return True
+    # Verify registry exists
+    if not registry_dir.exists():
+        logger.warning(f"Registry not found at {registry_dir}")
+        return False
 
     # Check each CRS assigned to this worker
     for crs_name, crs_config in crs_configs.items():
@@ -201,7 +202,7 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
             continue
 
         # Load pkg.yaml for this CRS
-        pkg_yaml_path = oss_crs_registry_path / 'crs' / crs_name / 'pkg.yaml'
+        pkg_yaml_path = registry_dir / crs_name / 'pkg.yaml'
         if not pkg_yaml_path.exists():
             logger.warning(f"pkg.yaml not found for CRS '{crs_name}' at {pkg_yaml_path}, skipping mode validation")
             continue
@@ -304,7 +305,8 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
               architecture: str = 'x86_64', source_path: Path = None,
               project_path: Path = None, overwrite: bool = False, clone: bool = False,
               check_project_fn = None,
-              registry_dir: Path = None, project_image_prefix: str = 'gcr.io/oss-fuzz',
+              registry_dir: Path = DEFAULT_REGISTRY_DIR,
+              project_image_prefix: str = 'gcr.io/oss-fuzz',
               external_litellm: bool = False, source_oss_fuzz_dir: Path = None):
     """
     Build CRS for a project using docker compose.
@@ -419,7 +421,7 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            registry_dir=str(registry_dir) if registry_dir else None,
+            registry_dir=str(registry_dir),
             source_path=source_path_str,
             project_image_prefix=project_image_prefix,
             external_litellm=external_litellm
@@ -599,7 +601,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             oss_fuzz_dir: Path, build_dir: Path, worker: str = 'local',
             engine: str = 'libfuzzer', sanitizer: str = 'address',
             architecture: str = 'x86_64', check_project_fn = None,
-            registry_dir: Path = None,
+            registry_dir: Path = DEFAULT_REGISTRY_DIR,
             hints_dir: Path = None,
             harness_source: Path = None,
             diff_path: Path = None,
@@ -657,7 +659,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            registry_dir=str(registry_dir) if registry_dir else None,
+            registry_dir=str(registry_dir),
             worker=worker,
             fuzzer_command=fuzzer_command,
             harness_source=str(harness_source) if harness_source else None,

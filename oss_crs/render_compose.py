@@ -16,11 +16,15 @@ import sys
 import yaml
 from dataclasses import dataclass
 from pathlib import Path
-from jinja2 import Template
+from importlib.resources import files
 from typing import Dict, Any, List, Optional, Tuple
 
-TEMPLATE_DIR = Path(__file__).parent / "templates"
-KEY_PROVISIONER_DIR = Path(__file__).parent / "key_provisioner"
+from jinja2 import Template
+
+import oss_crs
+
+TEMPLATE_DIR = files(oss_crs).parent / "templates"
+KEY_PROVISIONER_DIR = files(oss_crs).parent / "key_provisioner"
 
 # Configure logging (INFO level won't show by default)
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
@@ -155,8 +159,8 @@ def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) 
     """
     crs_path = crs_build_dir / crs_name
 
-    # Parse oss-crs-registry to get CRS metadata
-    crs_meta_path = registry_dir / "crs" / crs_name / "pkg.yaml"
+    # Parse crs_registry to get CRS metadata
+    crs_meta_path = registry_dir / crs_name / "pkg.yaml"
 
     if not crs_meta_path.exists():
         print(f"ERROR: CRS metadata not found for '{crs_name}' at {crs_meta_path}")
@@ -455,34 +459,11 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
     output_dir = crs_build_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Determine oss-crs-registry location
-    if registry_dir_path:
-        # Use provided local registry directory
-        if not registry_dir_path.exists():
-            raise FileNotFoundError(f'Provided registry directory does not exist: {registry_dir_path}')
-        oss_crs_registry_path = registry_dir_path
-        logging.info(f'Using local oss-crs-registry at: {oss_crs_registry_path}')
-    else:
-        # Use/clone oss-crs-registry in build_dir/crs
-        oss_crs_registry_path = build_dir / 'crs' / 'oss-crs-registry'
-        if mode == 'build':
-            if not oss_crs_registry_path.exists():
-                logging.info(f'Cloning oss-crs-registry to: {oss_crs_registry_path}')
-                try:
-                    subprocess.check_call([
-                        'git', 'clone',
-                        'https://github.com/Team-Atlanta/oss-crs-registry',
-                        '--depth', '1',
-                        str(oss_crs_registry_path)
-                    ])
-                except subprocess.CalledProcessError:
-                    raise RuntimeError('Failed to clone oss-crs-registry')
-            else:
-                logging.info(f'Using existing oss-crs-registry at: {oss_crs_registry_path}')
-        else:  # mode == 'run'
-            if not oss_crs_registry_path.exists():
-                raise FileNotFoundError(f'oss-crs-registry not found at: {oss_crs_registry_path}. Please run build first.')
-            logging.info(f'Using oss-crs-registry at: {oss_crs_registry_path}')
+    # Verify crs_registry exists
+    if not registry_dir_path.exists():
+        raise FileNotFoundError(f'Registry directory does not exist: {registry_dir_path}')
+    oss_crs_registry_path = registry_dir_path
+    logging.info(f'Using crs_registry at: {oss_crs_registry_path}')
 
     # Copy env file to output directory as .env if provided
     if env_file_path:
@@ -506,7 +487,7 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
         crs_paths[crs_name] = str(crs_path)
 
         # Load pkg.yaml for this CRS from registry
-        pkg_yaml_path = oss_crs_registry_path / "crs" / crs_name / "pkg.yaml"
+        pkg_yaml_path = oss_crs_registry_path / crs_name / "pkg.yaml"
         if pkg_yaml_path.exists():
             try:
                 with open(pkg_yaml_path) as f:

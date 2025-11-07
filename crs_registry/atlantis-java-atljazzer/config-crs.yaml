@@ -1,0 +1,6 @@
+atlantis-java-atljazzer:
+  models:
+  cpu: "all"
+  ram: 4G
+  dependencies: []
+  features: []

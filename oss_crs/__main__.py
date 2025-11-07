@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .crs_main import build_crs, run_crs
+from oss_crs.crs_main import build_crs, run_crs
 
 
 def main():
@@ -100,13 +100,35 @@ def main():
     # Resolve source oss-fuzz directory if provided (for copying)
     source_oss_fuzz_dir = args.oss_fuzz_dir.resolve() if args.oss_fuzz_dir else None
 
-    # Resolve optional paths for build command
-    source_path = args.source_path.resolve() if hasattr(args, 'source_path') and args.source_path else None
-    project_path = args.project_path.resolve() if hasattr(args, 'project_path') and args.project_path else None
-    registry_dir = args.registry_dir.resolve() if args.registry_dir else None
+    if args.command == 'build':
+        # Build kwargs, only including non-None optional arguments
+        build_kwargs = {
+            'config_dir': config_dir,
+            'project_name': args.project,
+            'oss_fuzz_dir': oss_fuzz_dir,
+            'build_dir': build_dir,
+            'engine': args.engine,
+            'sanitizer': args.sanitizer,
+            'architecture': args.architecture,
+            'overwrite': args.overwrite,
+            'clone': args.clone,
+            'project_image_prefix': args.project_image_prefix,
+            'external_litellm': args.external_litellm,
+        }
 
-    # Resolve and validate paths for run command
-    if args.command == 'run':
+        # Only add optional paths if provided
+        if args.source_path:
+            build_kwargs['source_path'] = args.source_path.resolve()
+        if args.project_path:
+            build_kwargs['project_path'] = args.project_path.resolve()
+        if args.registry_dir:
+            build_kwargs['registry_dir'] = args.registry_dir.resolve()
+        if source_oss_fuzz_dir:
+            build_kwargs['source_oss_fuzz_dir'] = source_oss_fuzz_dir
+
+        result = build_crs(**build_kwargs)
+    elif args.command == 'run':
+        # Resolve and validate run-specific paths
         hints_dir = args.hints.resolve() if args.hints else None
         harness_source = args.harness_source.resolve() if args.harness_source else None
         diff_path = args.diff.resolve() if args.diff else None
@@ -121,43 +143,34 @@ def main():
             logging.error(f"Diff file does not exist: {diff_path}")
             return 1
 
-    if args.command == 'build':
-        result = build_crs(
-            config_dir=config_dir,
-            project_name=args.project,
-            oss_fuzz_dir=oss_fuzz_dir,
-            build_dir=build_dir,
-            engine=args.engine,
-            sanitizer=args.sanitizer,
-            architecture=args.architecture,
-            source_path=source_path,
-            project_path=project_path,
-            overwrite=args.overwrite,
-            clone=args.clone,
-            registry_dir=registry_dir,
-            project_image_prefix=args.project_image_prefix,
-            external_litellm=args.external_litellm,
-            source_oss_fuzz_dir=source_oss_fuzz_dir
-        )
-    elif args.command == 'run':
-        result = run_crs(
-            config_dir=config_dir,
-            project_name=args.project,
-            fuzzer_name=args.fuzzer_name,
-            fuzzer_args=args.fuzzer_args,
-            oss_fuzz_dir=oss_fuzz_dir,
-            build_dir=build_dir,
-            worker=args.worker,
-            engine=args.engine,
-            sanitizer=args.sanitizer,
-            architecture=args.architecture,
-            registry_dir=registry_dir,
-            hints_dir=hints_dir,
-            harness_source=harness_source,
-            diff_path=diff_path,
-            external_litellm=args.external_litellm,
-            source_oss_fuzz_dir=source_oss_fuzz_dir
-        )
+        # Build kwargs, only including non-None optional arguments
+        run_kwargs = {
+            'config_dir': config_dir,
+            'project_name': args.project,
+            'fuzzer_name': args.fuzzer_name,
+            'fuzzer_args': args.fuzzer_args,
+            'oss_fuzz_dir': oss_fuzz_dir,
+            'build_dir': build_dir,
+            'worker': args.worker,
+            'engine': args.engine,
+            'sanitizer': args.sanitizer,
+            'architecture': args.architecture,
+            'external_litellm': args.external_litellm,
+        }
+
+        # Only add optional paths if provided
+        if args.registry_dir:
+            run_kwargs['registry_dir'] = args.registry_dir.resolve()
+        if hints_dir:
+            run_kwargs['hints_dir'] = hints_dir
+        if harness_source:
+            run_kwargs['harness_source'] = harness_source
+        if diff_path:
+            run_kwargs['diff_path'] = diff_path
+        if source_oss_fuzz_dir:
+            run_kwargs['source_oss_fuzz_dir'] = source_oss_fuzz_dir
+
+        result = run_crs(**run_kwargs)
     else:
         parser.print_help()
         return 1

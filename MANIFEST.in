@@ -1,0 +1,7 @@
+recursive-include crs_registry *.yaml
+
+include templates/*.j2
+
+include key_provisioner/*.py
+include key_provisioner/Dockerfile
+include key_provisioner/*.toml
