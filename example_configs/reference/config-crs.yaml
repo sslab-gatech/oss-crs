@@ -1,5 +1,0 @@
-atlantis-c-libafl:
-  models:
-    - gpt-4o
-    - anthropic/claude-sonnet-4
-  ncpu: 1-all    

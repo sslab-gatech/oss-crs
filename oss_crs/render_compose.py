@@ -67,14 +67,6 @@ def load_config(config_dir: Path) -> Dict[str, Any]:
     else:
         config['worker'] = {}
 
-    # Load CRS configuration (optional)
-    crs_config_path = config_dir / "config-crs.yaml"
-    if crs_config_path.exists():
-        with open(crs_config_path) as f:
-            config['crs'] = yaml.safe_load(f)
-    else:
-        config['crs'] = {}
-
     return config
 
 
@@ -241,7 +233,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
       worker_name: Name of the worker
       resource_config: Resource configuration dictionary
       crs_paths: Mapping of crs_name -> actual filesystem path
-      crs_pkg_data: Mapping of crs_name -> pkg.yaml data
+      crs_pkg_data: Mapping of crs_name -> config-crs.yaml data from registry
 
     Exits with error if:
     - CPU cores conflict (two CRS trying to use same core)
@@ -320,7 +312,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
         used_cpus.update(crs_cpus_set)
         used_memory_mb += crs_memory_mb
 
-        # Get dind flag from CRS pkg.yaml dependencies
+        # Get dind flag from CRS config-crs.yaml dependencies
         crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
         crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
 
@@ -376,7 +368,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
             else:
                 crs_memory = memory_per_crs
 
-            # Get dind flag from CRS pkg.yaml dependencies
+            # Get dind flag from CRS config-crs.yaml dependencies
             crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
             crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
 
@@ -486,18 +478,28 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
             raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
         crs_paths[crs_name] = str(crs_path)
 
-        # Load pkg.yaml for this CRS from registry
-        pkg_yaml_path = oss_crs_registry_path / crs_name / "pkg.yaml"
-        if pkg_yaml_path.exists():
+        # Load config-crs.yaml for this CRS from registry
+        crs_config_yaml_path = oss_crs_registry_path / crs_name / "config-crs.yaml"
+        if crs_config_yaml_path.exists():
             try:
-                with open(pkg_yaml_path) as f:
-                    pkg_data = yaml.safe_load(f)
-                    crs_pkg_data[crs_name] = pkg_data if pkg_data else {}
+                with open(crs_config_yaml_path) as f:
+                    crs_config_data = yaml.safe_load(f)
+                    # Extract dependencies from the CRS-specific config
+                    if crs_config_data and crs_name in crs_config_data:
+                        crs_data = crs_config_data[crs_name]
+                        # Handle both dict and list formats
+                        if isinstance(crs_data, dict):
+                            crs_pkg_data[crs_name] = crs_data
+                        else:
+                            # Empty list or other format - treat as no config
+                            crs_pkg_data[crs_name] = {}
+                    else:
+                        crs_pkg_data[crs_name] = {}
             except yaml.YAMLError as e:
-                logging.warning(f"Failed to parse pkg.yaml for CRS '{crs_name}': {e}")
+                logging.warning(f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}")
                 crs_pkg_data[crs_name] = {}
         else:
-            logging.warning(f"pkg.yaml not found for CRS '{crs_name}' at {pkg_yaml_path}")
+            logging.warning(f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}")
             crs_pkg_data[crs_name] = {}
 
     # Check for .env file in config-dir if no explicit env-file was provided

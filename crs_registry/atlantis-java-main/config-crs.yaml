@@ -1,8 +1,7 @@
 atlantis-java-main:
   models:
-    - gpt5
-    - gpt5-mini
-  cpu: "all"
-  ram: 4G
-  dependencies: []
-  features: []
+    - gpt-5
+    - o4-mini
+    - o3
+    - gpt-4.1
+  ncpu: 1-all

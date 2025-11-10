@@ -1,4 +1,0 @@
-atlantis-c-libafl:
-  models:
-    - gpt-4o-mini
-  ncpu: 1-all

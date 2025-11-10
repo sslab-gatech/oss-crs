@@ -1,6 +1,7 @@
 atlantis-java-atljazzer:
   models:
-  cpu: "all"
-  ram: 4G
-  dependencies: []
-  features: []
+    - gpt-5
+    - o4-mini
+    - o3
+    - gpt-4.1
+  ncpu: 1-all

@@ -1,8 +1,4 @@
 atlantis-c-libafl:
   models:
-    - gpt5
-    - gpt5-mini
-  cpu: "all"
-  ram: 4G
-  dependencies: []
-  features: []
+    - gpt-4o-mini
+  ncpu: 1-all
