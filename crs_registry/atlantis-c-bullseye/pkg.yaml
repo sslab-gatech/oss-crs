@@ -3,5 +3,3 @@ type: bug-finding
 source:
   url: git@github.com:Team-Atlanta/atlantis-c-bullseye
   ref: main
-mode:
-  - delta

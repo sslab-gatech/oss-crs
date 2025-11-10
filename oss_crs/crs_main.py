@@ -201,21 +201,32 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
         if worker not in crs_workers:
             continue
 
-        # Load pkg.yaml for this CRS
-        pkg_yaml_path = registry_dir / crs_name / 'pkg.yaml'
-        if not pkg_yaml_path.exists():
-            logger.warning(f"pkg.yaml not found for CRS '{crs_name}' at {pkg_yaml_path}, skipping mode validation")
+        # Load config-crs.yaml for this CRS
+        crs_config_yaml_path = registry_dir / crs_name / 'config-crs.yaml'
+        if not crs_config_yaml_path.exists():
+            logger.warning(f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}, skipping mode validation")
             continue
 
         try:
-            with open(pkg_yaml_path) as f:
-                pkg_data = yaml.safe_load(f)
+            with open(crs_config_yaml_path) as f:
+                crs_config_data = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            logger.warning(f"Failed to parse pkg.yaml for CRS '{crs_name}': {e}, skipping mode validation")
+            logger.warning(f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}, skipping mode validation")
             continue
 
-        # Get supported modes (default to both if not specified)
-        supported_modes = pkg_data.get('mode', ['full', 'delta'])
+        # Extract CRS-specific config
+        if not crs_config_data or crs_name not in crs_config_data:
+            logger.warning(f"CRS '{crs_name}' config not found in config-crs.yaml, skipping mode validation")
+            continue
+
+        crs_data = crs_config_data[crs_name]
+        # Handle both dict and list formats
+        if not isinstance(crs_data, dict):
+            # Empty list or other format - treat as both modes supported
+            supported_modes = ['full', 'delta']
+        else:
+            # Get supported modes (default to both if not specified)
+            supported_modes = crs_data.get('modes', ['full', 'delta'])
         if not isinstance(supported_modes, list):
             supported_modes = [supported_modes]
 

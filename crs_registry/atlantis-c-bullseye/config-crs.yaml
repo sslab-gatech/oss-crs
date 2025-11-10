@@ -1,3 +1,5 @@
 atlantis-c-bullseye:
   models:
     - o3
+  modes:
+    - delta
