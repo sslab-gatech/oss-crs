@@ -205,21 +205,27 @@ Handled by `calculate_budgets()` in `key_provisioner.py`:
 
 ### Purpose
 
-The CRS Registry stores CRS metadata and source code:
+The CRS Registry stores CRS metadata and source references:
 - CRS package definitions (`pkg.yaml`)
-- Git repository URLs and versions
+- Git repository URLs and versions (or local paths)
+- CRS-specific configuration (`config-crs.yaml`)
 - Build instructions and dependencies
 
 ### Registry Structure
 
+The registry is bundled with the oss-crs package at `crs_registry/`:
+
 ```
-oss-crs-registry/
+crs_registry/
 ├── atlantis-c-libafl/
-│   └── pkg.yaml
+│   ├── pkg.yaml
+│   └── config-crs.yaml
 ├── crs-libfuzzer/
-│   └── pkg.yaml
-├── ensemble-c/
-│   └── pkg.yaml
+│   ├── pkg.yaml
+│   └── config-crs.yaml
+├── atlantis-java-main/
+│   ├── pkg.yaml
+│   └── config-crs.yaml
 └── ...
 ```
 
@@ -239,9 +245,9 @@ source:
 
 #### 1. Registry Location
 
-- **Default**: `build/registry/oss-crs-registry/`
+- **Default**: `crs_registry/` (bundled with oss-crs package)
 - **Custom**: Via `--registry-dir` flag
-- **Auto-clone**: Cloned if not present
+- **Implementation**: `DEFAULT_REGISTRY_DIR = files(oss_crs).parent / 'crs_registry'` in `crs_main.py:27`
 
 #### 2. CRS Resolution
 

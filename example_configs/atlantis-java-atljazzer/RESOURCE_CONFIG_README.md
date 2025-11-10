@@ -189,8 +189,8 @@ See [infra/crs/example_configs/ensemble-c](../ensemble-c/) for a complete ensemb
 ### Build Failures
 
 1. **CRS repository not found:**
-   - Ensure `atlantis-java-atljazzer` is registered in `oss-crs-registry`
-   - Check SSH access to the CRS repository
+   - Ensure `atlantis-java-atljazzer` is registered in `crs_registry/`
+   - Check the CRS repository access (git URL or local path in `pkg.yaml`)
 
 2. **Out of memory during build:**
    - Increase memory allocation in `config-resource.yaml`

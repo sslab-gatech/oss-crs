@@ -153,11 +153,12 @@ uv run oss-crs run --oss-fuzz-dir oss-fuzz-aixcc \
 
 ### CRS Registry Directory (`--registry-dir`)
 
-Specify a custom CRS registry directory. Defaults to the bundled `oss-crs-registry` in the package parent directory.
+Specify a custom CRS registry directory. Defaults to the bundled `crs_registry/` in the oss-crs repository.
 
 The registry contains:
 - CRS metadata (`pkg.yaml` for each CRS)
 - CRS source references (git URL + ref, or local path)
+- CRS-specific configuration (`config-crs.yaml`)
 - CRS type and mode information
 
 ```bash
@@ -174,14 +175,16 @@ uv run oss-crs build --registry-dir ./local-registry \
 
 **Registry Structure:**
 ```
-oss-crs-registry/
-└── crs/
-    ├── atlantis-c-libafl/
-    │   └── pkg.yaml
-    ├── crs-libfuzzer/
-    │   └── pkg.yaml
-    └── my-custom-crs/
-        └── pkg.yaml
+crs_registry/
+├── atlantis-c-libafl/
+│   ├── pkg.yaml
+│   └── config-crs.yaml
+├── crs-libfuzzer/
+│   ├── pkg.yaml
+│   └── config-crs.yaml
+└── my-custom-crs/
+    ├── pkg.yaml
+    └── config-crs.yaml
 ```
 
 **Using `local_path` in `pkg.yaml`:**
@@ -279,8 +282,8 @@ uv run oss-crs build --clone \
 
 ## Repository Structure
 
-- **Entry Repository**: [oss-fuzz-post-aixcc](https://github.com/Team-Atlanta/oss-fuzz-post-aixcc)
-- **CRS Registry**: [oss-crs-registry](https://github.com/Team-Atlanta/oss-crs-registry)
+- **Main Repository**: [oss-fuzz-post-aixcc](https://github.com/Team-Atlanta/oss-fuzz-post-aixcc)
+  - Contains the `oss-crs` package and bundled CRS registry (`crs_registry/`)
 - **C CRS Implementations**:
   - [atlantis-c-libafl-snapshot](https://github.com/Team-Atlanta/atlantis-c-libafl-snapshot)
   - [crs-libfuzzer](https://github.com/Team-Atlanta/crs-libfuzzer)
