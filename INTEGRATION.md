@@ -154,11 +154,52 @@ with models specified from `config-crs.yaml`
 and budget calculated from `config-resource.yaml` in the operator-provided configs dir.
 The provisioned key will be stored in a shared volume at `/keys/api_key`.
 
+The CRS developers should migrate their LLM requests to using the LiteLLM proxy.
+
 ### Multi-Container (DinD)
-TODO dind project image tarball
+
+NOTE: this approach was chosen so that OSS-CRS can still control container resources easily,
+but we have yet to port a real CRS that requires multiple containers.
+As such, this section may be under further development or redesigns if substantial
+obstacles are encountered with porting such a CRS.
+
+The current approach to supporting multi-container CRSs is by letting the CRS use DinD
+and provide supplementary resources for the CRS container.
+
+The proposed workflow is for the CRS to build its additional docker images at the build phase, 
+and export the images as tarballs into `/out` for them to be loaded at the run phase.
+
+In order to access the project image for building the harnesses, 
+it is provided as `/project-image.tar` inside the build container.
+
+The `mock-dind` CRS is provided as an example of the docker image exporting and loading workflow.
+
+## Operator configuration files
+
+The operator needs to provide configuration files which specify which CRSs run, 
+what machine the CRSs runs on, compute contraints, and LLM budgets.
+In order to help the operator get started, we provide sample configurations in the
+`example_configs/` directory.
+
+CRS developers may optionally add sample configurations for their CRS.
+For running OSS-CRS for debugging purposes, 
+developers should at least modify one `config-resource.yaml` to include their CRS.
 
 ## Output format
-TODO
 
-## Configs explanation
-TODO (example_configs)
+For supporting the benchmarks RFC, the `/out` directory should be organized as follows:
+```
+/out/                           # CRS output directory (container)
+├── povs/                       # POVs discovered (required for bug finding CRS)
+│   ├── pov_001                 # Binary blob (test input that triggers vulnerability)
+│   ├── pov_002                 # Binary blob
+│   └── pov_003                 # Binary blob
+├── corpus/                     # Fuzzing corpus (optional)
+│   ├── input-001               # Test input
+│   ├── input-002
+│   └── input-003
+└── crs-data/                   # CRS-specific outputs (optional)
+    ├── analysis-report.txt     # Any additional data CRS wants to record
+    ├── intermediate-results.json
+    └── debug-trace.log
+```
