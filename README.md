@@ -32,9 +32,9 @@ Choose a configured CRS from `example_configs` and build it:
 
 ```bash
 # Example 1: Build ensemble-c for the json-c project
-uv run oss-crs build example_configs/ensemble-c json-c
+uv run oss-bugfind-crs build example_configs/ensemble-c json-c
 # Example 2: Build ensemble-java for the java-example project
-uv run oss-crs build example_configs/ensemble-java java-example
+uv run oss-bugfind-crs build example_configs/ensemble-java java-example
 ```
 
 Built artifacts will be available under `build/crs` and `build/out`.
@@ -45,9 +45,9 @@ Execute a built CRS with a specific fuzzer target:
 
 ```bash
 # c
-uv run oss-crs run example_configs/ensemble-c json-c json_array_fuzzer
+uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer
 # java
-uv run oss-crs run example_configs/ensemble-java java-example ExampleFuzzer
+uv run oss-bugfind-crs run example_configs/ensemble-java java-example ExampleFuzzer
 ```
 
 **Expected Output**: The CRS will launch successfully with running logs showing CPU core allocation (base numbers 0-15). For ensemble CRSs, CPU cores are evenly distributed among the contained CRSs.
@@ -106,12 +106,12 @@ The build directory contains:
 
 ```bash
 # Use custom build directory
-uv run oss-crs build --build-dir /tmp/my-builds \
+uv run oss-bugfind-crs build --build-dir /tmp/my-builds \
                      example_configs/ensemble-c \
                      json-c
 
 # Run must use the same build directory
-uv run oss-crs run --build-dir /tmp/my-builds \
+uv run oss-bugfind-crs run --build-dir /tmp/my-builds \
                    example_configs/ensemble-c \
                    json-c \
                    json_array_fuzzer
@@ -130,18 +130,18 @@ Useful when:
 
 ```bash
 # Use custom OSS-Fuzz directory
-uv run oss-crs build --oss-fuzz-dir ~/my-oss-fuzz \
+uv run oss-bugfind-crs build --oss-fuzz-dir ~/my-oss-fuzz \
                      example_configs/crs-libfuzzer \
                      json-c
 
 # For AIxCC with custom project image prefix
-uv run oss-crs build --oss-fuzz-dir oss-fuzz-aixcc \
+uv run oss-bugfind-crs build --oss-fuzz-dir oss-fuzz-aixcc \
                      --project-image-prefix aixcc-afc \
                      example_configs/crs-libfuzzer \
                      aixcc/c/asc-nginx \
                      ~/aixcc/oss-fuzz/clone/cp-user-nginx-asc-source
 
-uv run oss-crs run --oss-fuzz-dir oss-fuzz-aixcc \
+uv run oss-bugfind-crs run --oss-fuzz-dir oss-fuzz-aixcc \
                    example_configs/crs-libfuzzer \
                    aixcc/c/asc-nginx \
                    pov_harness
@@ -153,7 +153,7 @@ uv run oss-crs run --oss-fuzz-dir oss-fuzz-aixcc \
 
 ### CRS Registry Directory (`--registry-dir`)
 
-Specify a custom CRS registry directory. Defaults to the bundled `crs_registry/` in the oss-crs repository.
+Specify a custom CRS registry directory. Defaults to the bundled `crs_registry/` in the oss-bugfind-crs repository.
 
 The registry contains:
 - CRS metadata (`pkg.yaml` for each CRS)
@@ -163,12 +163,12 @@ The registry contains:
 
 ```bash
 # Use custom registry
-uv run oss-crs build --registry-dir ~/my-crs-registry \
+uv run oss-bugfind-crs build --registry-dir ~/my-crs-registry \
                      example_configs/atlantis-c-libafl \
                      json-c
 
 # Registry with local CRS development
-uv run oss-crs build --registry-dir ./local-registry \
+uv run oss-bugfind-crs build --registry-dir ./local-registry \
                      example_configs/my-custom-crs \
                      test-project
 ```
@@ -209,8 +209,8 @@ either in the process environment or in `CONFIG_DIR/.env`.
 ```bash
 export LITELLM_URL=https://my-litellm-proxy:4000
 export LITELLM_KEY=sk-litellm-virtual-key
-uv run oss-crs build --external-litellm example_configs/atlantis-c-libafl json-c
-uv run oss-crs run --external-litellm example_configs/atlantis-c-libafl json-c json_array_fuzzer
+uv run oss-bugfind-crs build --external-litellm example_configs/atlantis-c-libafl json-c
+uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-c-libafl json-c json_array_fuzzer
 ```
 
 ### Custom project path
@@ -223,18 +223,18 @@ Use `--overwrite` to replace an existing project at that location.
 
 ```bash
 # Use custom project directory
-uv run oss-crs build example_configs/crs-libfuzzer \
+uv run oss-bugfind-crs build example_configs/crs-libfuzzer \
                      my-custom-project \
                      --project-path ~/my-projects/custom-project
 
 # With nested project names (e.g., aixcc/c/asc-nginx)
-uv run oss-crs build example_configs/ensemble-c \
+uv run oss-bugfind-crs build example_configs/ensemble-c \
                      aixcc/c/asc-nginx \
                      --project-path ~/aixcc/projects/asc-nginx \
                      --overwrite
 
 # Combined with source path override
-uv run oss-crs build example_configs/atlantis-c-libafl \
+uv run oss-bugfind-crs build example_configs/atlantis-c-libafl \
                      benchmark-project \
                      ~/src/benchmark-source \
                      --project-path ~/benchmarks/benchmark-proj
@@ -254,13 +254,13 @@ The source will be cloned to `build/src/{project_name}/` with depth 1 and recurs
 
 ```bash
 # Clone source for custom project
-uv run oss-crs build --clone \
+uv run oss-bugfind-crs build --clone \
                      --project-path ~/my-custom-project \
                      example_configs/crs-libfuzzer \
                      my-project
 
 # Clone is idempotent - skips if build/src/{project_name}/ already exists
-uv run oss-crs build --clone \
+uv run oss-bugfind-crs build --clone \
                      --project-path ~/benchmarks/atlanta-binutils-delta-01 \
                      example_configs/ensemble-c \
                      atlanta-binutils-delta-01
@@ -283,7 +283,7 @@ uv run oss-crs build --clone \
 ## Repository Structure
 
 - **Main Repository**: [oss-fuzz-post-aixcc](https://github.com/Team-Atlanta/oss-fuzz-post-aixcc)
-  - Contains the `oss-crs` package and bundled CRS registry (`crs_registry/`)
+  - Contains the `oss-bugfind-crs` package and bundled CRS registry (`crs_registry/`)
 - **C CRS Implementations**:
   - [atlantis-c-libafl-snapshot](https://github.com/Team-Atlanta/atlantis-c-libafl-snapshot)
   - [crs-libfuzzer](https://github.com/Team-Atlanta/crs-libfuzzer)

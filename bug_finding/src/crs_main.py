@@ -18,13 +18,12 @@ from importlib.resources import files
 from dotenv import dotenv_values
 
 
-import oss_crs
-from oss_crs import render_compose
+from . import render_compose
 
 logger = logging.getLogger(__name__)
 
 # Default registry path
-DEFAULT_REGISTRY_DIR = files(oss_crs).parent / 'crs_registry'
+DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / 'crs_registry'
 
 
 def _get_absolute_path(path):

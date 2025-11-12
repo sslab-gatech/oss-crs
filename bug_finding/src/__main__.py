@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
-from oss_crs.crs_main import build_crs, run_crs
+from .crs_main import build_crs, run_crs
 
 
 def main():

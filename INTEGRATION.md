@@ -11,10 +11,10 @@ Furthermore for bug-finding CRSs, we believe the building phase is commonly cust
 
 ```sh
 # Operator uses configs to build a particular CRS
-uv run oss-crs build example_configs/ensemble-c json-c
+uv run oss-bugfind-crs build example_configs/ensemble-c json-c
 
 # Operator uses configs to run a particular CRS on a harness
-uv run oss-crs run example_configs/ensemble-c json-c json_array_fuzzer
+uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer
 ```
 
 Artifacts from the build phase are shared to the run phase thought the `/out` directory inside the containers.

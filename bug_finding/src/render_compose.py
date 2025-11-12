@@ -21,10 +21,8 @@ from typing import Dict, Any, List, Optional, Tuple
 
 from jinja2 import Template
 
-import oss_crs
-
-TEMPLATE_DIR = files(oss_crs).parent / "templates"
-KEY_PROVISIONER_DIR = files(oss_crs).parent / "key_provisioner"
+TEMPLATE_DIR = files(__package__).parent / "templates"
+KEY_PROVISIONER_DIR = files(__package__).parent / "key_provisioner"
 
 # Configure logging (INFO level won't show by default)
 logging.basicConfig(level=logging.WARNING, format='%(message)s')

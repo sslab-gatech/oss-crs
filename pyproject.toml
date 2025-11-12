@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oss-crs"
+name = "oss-bugfind-crs"
 version = "0.1.0"
-description = "Cyber Reasoning System (CRS) build and run tools"
+description = "Cyber Reasoning System (CRS) build and run tools for bug finding"
 requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
 authors = [
@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-oss-crs = "oss_crs.__main__:main"
+oss-bugfind-crs = "bug_finding.src.__main__:main"
 
 [project.optional-dependencies]
 dev = [
@@ -28,7 +28,13 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["oss_crs"]
+packages = ["bug_finding", "bug_finding.src", "crs_registry"]
 
 [tool.setuptools.package-data]
-"oss_crs" = ["templates/*.j2", "key_provisioner/*"]
+"bug_finding" = [
+    "templates/*.j2",
+    "key_provisioner/*.py",
+    "key_provisioner/Dockerfile",
+    "key_provisioner/*.toml",
+]
+"crs_registry" = ["*/*.yaml"]
