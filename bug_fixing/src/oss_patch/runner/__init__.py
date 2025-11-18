@@ -4,7 +4,10 @@ import shutil
 import yaml
 import base64
 import subprocess
-from bug_fixing.src.oss_patch.functions import get_runner_image_name
+from bug_fixing.src.oss_patch.functions import (
+    get_runner_image_name,
+    run_command
+)
 from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_CRS_SYSTEM_IMAGES,
     OSS_PATCH_CRS_DOCKER_ASSETS,
@@ -92,11 +95,11 @@ class OSSPatchCRSRunner:
         )
 
         command = " ".join(cmd_parts)
-        logger.info(f"Running: {command}")
 
         try:
             # @TODO: ensure the clean-up of existing docker processes
-            subprocess.check_call(command, shell=True)
+            # subprocess.check_call(command, shell=True)
+            run_command(command, n=10)
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"CRS failed: {e}")
@@ -125,7 +128,9 @@ class OSSPatchCRSRunner:
         if hints_path:
             self._prepare_hints(hints_path)
 
+        logger.info(f"Now launching \"{self.crs_name}\"")
         if not self._run_crs_against_povs(litellm_api_key, litellm_api_base):
             return False
 
+        logger.info(f"The CRS \"{self.crs_name}\" has run successfully. Check the \"{self.out_dir}\" for its outputs.")
         return True
