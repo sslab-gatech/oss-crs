@@ -1,0 +1,5 @@
+name: buttercup-patcher
+type: bug-fixing
+source:
+  url: git@github.com:Team-Atlanta/buttercup-oss-patch.git
+  ref: oss-patch

@@ -1,0 +1,5 @@
+name: patch-agent
+type: bug-fixing
+source:
+  url: https://github.com/Team-Atlanta/PatchAgent
+  ref: oss-patch

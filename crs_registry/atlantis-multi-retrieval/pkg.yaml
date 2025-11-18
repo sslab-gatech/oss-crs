@@ -1,0 +1,5 @@
+name: atlantis-multi-retrieval
+type: bug-fixing
+source:
+  url: git@github.com:Team-Atlanta/crete.git
+  ref: oss-patch

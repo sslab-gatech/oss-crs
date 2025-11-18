@@ -1,0 +1,10 @@
+atlantis-prism:
+  models:
+    - claude-sonnet-4
+  cpu: "all"
+  ram: 4G
+  dependencies: []
+  features: []
+
+build:  # optional, by default builder.Dockerfile
+ dockerfile: oss-patch/prism.builder.Dockerfile

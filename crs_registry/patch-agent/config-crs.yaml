@@ -1,0 +1,10 @@
+patch-agent:
+  models:
+    - gpt-o4-mini
+  cpu: "all"
+  ram: 4G
+  dependencies: []
+  features: []
+
+build:  # optional, by default builder.Dockerfile
+ dockerfile: oss-patch/builder.Dockerfile

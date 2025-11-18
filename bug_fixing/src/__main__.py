@@ -1,0 +1,169 @@
+import argparse
+import logging
+import sys
+from pathlib import Path
+from .oss_patch import OSSPatch
+
+
+logger = logging.getLogger(__name__)
+
+def _get_path_or_none(arg_str: str) -> Path | None:
+    return Path(arg_str) if arg_str else None
+
+
+# This format removes the long module path, adds a timestamp, and keeps it concise.
+CUSTOM_LOG_FORMAT = "%(asctime)s | %(levelname)s | %(message)s"
+
+# This is an even more concise format, only showing the log level, the filename,
+# and the message (similar to what you might want if the module path is too long).
+CONCISE_LOG_FORMAT = "OSS-Patch | %(levelname)s | %(message)s"
+
+# Define the date format (optional, works with %(asctime)s)
+CUSTOM_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def _setup_logger_config():
+    """
+    Configures the root logger with the desired format and level.
+    """
+    # Use the concise format for this example
+    logging.basicConfig(
+        level=logging.INFO,  # Set the minimum level to log (e.g., DEBUG, INFO, WARNING)
+        format=CONCISE_LOG_FORMAT,  # Apply the custom format string
+        datefmt=CUSTOM_DATE_FORMAT,  # Apply the custom date format
+    )
+
+def main():  # pylint: disable=too-many-branches,too-many-return-statements
+    """Gets subcommand from program arguments and does it. Returns 0 on success 1
+    on error."""
+    _setup_logger_config()
+    parser = _get_parser()
+    args = _parse_args(parser)
+
+    oss_patch = OSSPatch(args.crs, args.project)
+
+    if args.command == "build_crs":
+        result = oss_patch.build_crs(
+            _get_path_or_none(args.oss_fuzz),
+            _get_path_or_none(args.project_path),
+            _get_path_or_none(args.source_path),
+            _get_path_or_none(args.local_crs),
+        )
+    elif args.command == "run_crs":
+        result = oss_patch.run_crs(
+            args.harness,
+            _get_path_or_none(args.povs),
+            args.litellm_key,
+            args.litellm_base,
+            _get_path_or_none(args.hints),
+            _get_path_or_none(args.out),
+        )
+    else:
+        # Print help string if no arguments provided.
+        parser.print_help()
+        result = False
+
+    return 0 if result else 1
+
+
+def _parse_args(parser, args=None):
+    """Parses |args| using |parser| and returns parsed args. Also changes
+    |args.build_integration_path| to have correct default behavior."""
+    # Use default argument None for args so that in production, argparse does its
+    # normal behavior, but unittesting is easier.
+    parsed_args = parser.parse_args(args)
+    return parsed_args
+
+
+def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
+    """Returns an argparse parser."""
+    parser = argparse.ArgumentParser(
+        "oss-patch-crs", description="OSS-Patch helper script"
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    build_crs_parser = subparsers.add_parser(
+        "build_crs", aliases=["build"], help="Build CRS for a project."
+    )
+
+    build_crs_parser.add_argument("crs", help="name of the crs")
+    build_crs_parser.add_argument(
+        "project",
+        help="name of the project in the given OSS-Fuzz (e.g., json-c, aixcc/c/mock-c, etc).",
+    )
+    # build_crs_parser.add_argument('source_path',
+    #                               help='path of local source',
+    #                               nargs='?')
+    build_crs_parser.add_argument("--local-crs", help="path to local CRS source code")
+    build_crs_parser.add_argument("--oss-fuzz", help="path to OSS-Fuzz repository")
+    build_crs_parser.add_argument(
+        "--project-path",
+        help="Path to OSS-Fuzz compatible project directory "
+        "(alternative to oss-fuzz/projects/{name}). "
+        "Must contain project.yaml, Dockerfile, and build.sh",
+        default=None,
+    )
+    build_crs_parser.add_argument(
+        "--source-path",
+        help="Path to pre-cloned source code directory "
+        "(alternative to cloning from project.yaml main_repo). "
+        "Requires --project-path",
+        default=None,
+    )
+
+    build_crs_parser.set_defaults(clean=False)
+
+    run_crs_parser = subparsers.add_parser(
+        "run_crs", aliases=["run"], help="Run a patching CRS."
+    )
+    run_crs_parser.add_argument("crs", help="name of the crs")
+    run_crs_parser.add_argument(
+        "project", help="name of the project or path (external)"
+    )
+    # run_crs_parser.add_argument(
+    #     "--pov", help="path to a single PoV file to generate a patch"
+    # )
+    run_crs_parser.add_argument(
+        "--povs",
+        help="path to directory that contains a set of PoVs to generate patches",
+    )
+    run_crs_parser.add_argument("--harness", help="name of the harness")
+    # run_crs_parser.add_argument(
+    #     "--harness-source", help="path to harness source file for analysis"
+    # )
+    run_crs_parser.add_argument("--hints", help="path to hint text file for the crs")
+    run_crs_parser.add_argument("--out", help="path to crs output directory")
+    run_crs_parser.add_argument("--litellm-base", help="address of litellm API base")
+    run_crs_parser.add_argument("--litellm-key", help="The API key for litellm")
+
+    # manage_crs_parser = subparsers.add_parser(
+    #     "manage_crs", aliases=["manage"], help="Manage existing CRSes."
+    # )
+
+    # manage_subparsers = manage_crs_parser.add_subparsers(
+    #     dest="manage_command", required=True, help="Subcommand for managing CRSes."
+    # )
+    # list_parser = manage_subparsers.add_parser(
+    #     "list", help="list existing CRS-related images"
+    # )
+    # check_parser = manage_subparsers.add_parser(
+    #     "check", help="Check a specific CRS or artifact status."
+    # )
+    # # Add the specific argument for the 'check' command
+    # check_parser.add_argument(
+    #     "image_name",
+    #     help="Specify the Docker image name to check against the cache/volume.",
+    # )
+
+    # remove_parser = manage_subparsers.add_parser(
+    #     "delete", help="Check a specific CRS or artifact status."
+    # )
+    # remove_parser.add_argument(
+    #     "image_name",
+    #     help="Specify the Docker image name to check against the cache/volume.",
+    # )
+    return parser
+
+
+if __name__ == "__main__":
+    sys.exit(main())
