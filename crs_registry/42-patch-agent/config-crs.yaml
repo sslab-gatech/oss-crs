@@ -1,4 +1,4 @@
-patch-agent:
+42-patch-agent:
   models:
     - gpt-o4-mini
   cpu: "all"
