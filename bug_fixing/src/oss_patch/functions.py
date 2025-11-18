@@ -121,6 +121,7 @@ def run_command(command: str, n: int = 5) -> None:
     lines_printed_count = (
         0  # Tracks how many lines we previously printed to manage cursor
     )
+    first_output = True  # Flag to track if this is the first output
 
     # Get terminal width for calculating wrapped lines
     terminal_width = shutil.get_terminal_size(fallback=(80, 24)).columns
@@ -169,7 +170,8 @@ def run_command(command: str, n: int = 5) -> None:
 
                     # 2. Clear previous output (move cursor up and clear lines)
                     # We move the cursor up by the number of lines we last printed.
-                    if lines_printed_count > 0:
+                    # Only do this if we've already printed output from this function call
+                    if lines_printed_count > 0 and not first_output:
                         sys.stdout.write("\033[1A\033[K" * lines_printed_count)
 
                     # 3. Print the new state of the buffer
@@ -182,13 +184,16 @@ def run_command(command: str, n: int = 5) -> None:
 
                     # 4. Update the tracker with actual display line count
                     lines_printed_count = count_display_lines(current_output)
+                    first_output = False  # Mark that we've printed at least once
 
         # Wait for the process to complete and get the return code
         process.wait()
 
-        # Final cleanup - clear the rolling display
+        # Don't clear the rolling display - leave final output visible
+        # Just add a newline to separate from subsequent output
         if lines_printed_count > 0:
-            sys.stdout.write("\033[1A\033[K" * lines_printed_count)
+            sys.stdout.write(os.linesep)
+            sys.stdout.flush()
 
         if process.returncode != 0:
             # Print final error state
