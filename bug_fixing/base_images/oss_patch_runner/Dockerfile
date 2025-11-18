@@ -17,11 +17,10 @@ ENV SANITIZER=${target_sanitizer}
 
 COPY .build_context/oss-fuzz /oss-fuzz
 COPY .build_context/cp-sources /cp-sources
-# COPY .build_context/builder-image.tar /builder-images/builder-image.tar
 
-COPY infra/base-images/oss-patch-runner/setup.sh /usr/bin/setup.sh
-COPY infra/base-images/oss-patch-runner/launch_crs.sh /usr/bin/launch_crs.sh
-COPY infra/base-images/oss-patch-runner/build_fuzzers.sh /usr/bin/build_fuzzers.sh
+COPY bug_fixing/base_images/oss_patch_runner/setup.sh /usr/bin/setup.sh
+COPY bug_fixing/base_images/oss_patch_runner/launch_crs.sh /usr/bin/launch_crs.sh
+COPY bug_fixing/base_images/oss_patch_runner/build_fuzzers.sh /usr/bin/build_fuzzers.sh
 
 RUN chmod +x /usr/bin/setup.sh && setup.sh
     

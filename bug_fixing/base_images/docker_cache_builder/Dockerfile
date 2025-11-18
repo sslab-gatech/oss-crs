@@ -5,4 +5,4 @@ FROM cruizba/ubuntu-dind:latest
 
 RUN apt update
 
-COPY infra/base-images/docker-cache-builder/image_checker.sh /image_checker.sh
+COPY bug_fixing/base_images/docker_cache_builder/image_checker.sh /image_checker.sh
