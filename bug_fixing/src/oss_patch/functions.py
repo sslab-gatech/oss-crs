@@ -178,9 +178,6 @@ def run_command(command: str, n: int = 5) -> None:
             # Re-raise the exception for caller to handle
             raise subprocess.CalledProcessError(process.returncode, command)
 
-        # Success - print final summary
-        print(f"--- Command finished successfully. Last {n} lines were: ---")
-
     except subprocess.CalledProcessError:
         # Re-raise CalledProcessError for caller to handle
         raise
