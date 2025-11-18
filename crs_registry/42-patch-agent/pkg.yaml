@@ -1,4 +1,4 @@
-name: patch-agent
+name: 42-patch-agent
 type: bug-fixing
 source:
   url: https://github.com/Team-Atlanta/PatchAgent
