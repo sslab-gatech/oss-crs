@@ -4,7 +4,11 @@ import shutil
 import yaml
 import base64
 import subprocess
-from bug_fixing.src.oss_patch.functions import get_runner_image_name, run_command
+from bug_fixing.src.oss_patch.functions import (
+    get_runner_image_name,
+    run_command,
+
+)
 from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_CRS_SYSTEM_IMAGES,
     OSS_PATCH_CRS_DOCKER_ASSETS,
@@ -133,3 +137,24 @@ class OSSPatchCRSRunner:
             f'The CRS "{self.crs_name}" has run successfully. Check the "{self.out_dir}" for its outputs.'
         )
         return True
+
+    def build_fuzzers(self, source_path: Path):
+        build_fuzzers_command = f"python3 /oss-fuzz/infra/helper.py build_fuzzers {self.project_name} /cp-sources"
+
+        runner_command = f"docker run --rm --privileged -v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} -v {source_path}:/cp-sources {get_runner_image_name(self.project_name)} {build_fuzzers_command}"
+
+        try:
+            subprocess.check_call(runner_command, shell=True)
+            return True
+        except subprocess.CalledProcessError as e:
+            raise e
+
+    def run_pov(self, harness_name: str, pov_path: Path, source_path: Path):
+        build_fuzzers_command = f"python3 /oss-fuzz/infra/helper.py build_fuzzers {self.project_name} /cp-sources"
+
+        reproduce_command = f"python3 /oss-fuzz/infra/helper.py reproduce {self.project_name} {harness_name} /testcase"
+
+        runner_command = f'docker run --rm --privileged -v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} -v {source_path}:/cp-sources -v {pov_path}:/testcase {get_runner_image_name(self.project_name)} sh -c "{build_fuzzers_command} && {reproduce_command}"'
+
+        print(runner_command)
+        subprocess.run(runner_command, shell=True)

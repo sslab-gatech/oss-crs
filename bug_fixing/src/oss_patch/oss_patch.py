@@ -116,3 +116,12 @@ class OSSPatch:
         return oss_patch_runner.run_crs_against_povs(
             harness_name, povs_dir, litellm_api_key, litellm_api_base, hints_dir, "full"
         )
+
+    # Testing purpose function
+    def run_pov(self, harness_name: str, pov_path: Path, source_path: Path) -> bool:
+        oss_patch_runner = OSSPatchCRSRunner(
+            self.crs_name, self.project_name, self.work_dir, Path("/tmp/out")
+        )
+
+        oss_patch_runner.run_pov(harness_name, pov_path, source_path)
+        return True

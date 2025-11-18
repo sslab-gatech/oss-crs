@@ -42,9 +42,8 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
     parser = _get_parser()
     args = _parse_args(parser)
 
-    oss_patch = OSSPatch(args.crs, args.project)
-
     if args.command == "build":
+        oss_patch = OSSPatch(args.crs, args.project)
         result = oss_patch.build_crs(
             Path(args.oss_fuzz),
             _get_path_or_none(args.project_path),
@@ -52,6 +51,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             _get_path_or_none(args.local_crs),
         )
     elif args.command == "run":
+        oss_patch = OSSPatch(args.crs, args.project)
         result = oss_patch.run_crs(
             args.harness,
             Path(args.povs),
@@ -60,6 +60,10 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             _get_path_or_none(args.hints),
             Path(args.out),
         )
+    elif args.command == "run_pov":
+        oss_patch = OSSPatch("run_pov", args.project)
+        result = oss_patch.run_pov(args.harness, Path(args.pov), args.source_path)
+
     else:
         # Print help string if no arguments provided.
         parser.print_help()
@@ -117,9 +121,7 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
 
     run_crs_parser = subparsers.add_parser("run", help="Run a patching CRS.")
     run_crs_parser.add_argument("crs", help="name of the crs")
-    run_crs_parser.add_argument(
-        "project", help="name of the project or path (external)"
-    )
+    run_crs_parser.add_argument("project", help="name of the project")
     # run_crs_parser.add_argument(
     #     "--pov", help="path to a single PoV file to generate a patch"
     # )
@@ -141,6 +143,17 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     )
     run_crs_parser.add_argument(
         "--litellm-key", required=True, help="The API key for litellm"
+    )
+
+    run_pov_parser = subparsers.add_parser(
+        "run_pov", help="Run a PoV under the current project builder environemt."
+    )
+    run_pov_parser.add_argument("project", help="name of the project")
+    run_pov_parser.add_argument("harness", help="name of the harness")
+    run_pov_parser.add_argument("pov", help="PoV path to test against")
+    run_pov_parser.add_argument(
+        "source_path",
+        help="Source code of project where the PoV will be tested based on",
     )
 
     # manage_crs_parser = subparsers.add_parser(
