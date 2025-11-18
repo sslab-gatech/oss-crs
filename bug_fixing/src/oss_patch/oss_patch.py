@@ -2,7 +2,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from .crs_builder import OSSPatchCRSBuilder
 from .project_builder import OSSPatchProjectBuilder
-from .runner import OSSPatchCRSRunner
+from .crs_runner import OSSPatchCRSRunner
 from .globals import (
     OSS_PATCH_WORK_DIR,
     OSS_PATCH_BUILD_CONTEXT_DIR,

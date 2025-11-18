@@ -197,7 +197,7 @@ class OSSPatchProjectBuilder:
         logger.info("Copying OSS-Fuzz and target project's sources")
 
         if dst_dir.exists():
-            dst_dir.rmdir()
+            shutil.rmtree(dst_dir)
         dst_dir.mkdir()
 
         # prepare cp sources
