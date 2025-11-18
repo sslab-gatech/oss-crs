@@ -95,8 +95,8 @@ class OSSPatchCRSRunner:
 
         try:
             # @TODO: ensure the clean-up of existing docker processes
-            # subprocess.check_call(command, shell=True)
-            run_command(command, n=10)
+            subprocess.check_call(command, shell=True)
+            # run_command(command, n=10)
             return True
         except subprocess.CalledProcessError as e:
             logger.error(f"CRS failed: {e}")

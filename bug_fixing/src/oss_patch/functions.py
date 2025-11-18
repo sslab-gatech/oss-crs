@@ -125,9 +125,11 @@ def run_command(command: str, n: int = 5) -> None:
     try:
         # Use Python's built-in stderr=STDOUT for robust output merging
         # start_new_session=True ensures child processes inherit I/O redirections
+        # stdin=subprocess.DEVNULL prevents TTY access from nested processes
         process = subprocess.Popen(
             command,
             shell=True,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
