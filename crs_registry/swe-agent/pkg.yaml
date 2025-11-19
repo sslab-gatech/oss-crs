@@ -1,5 +1,5 @@
 name: swe-agent
 type: bug-fixing
 source:
-  url: git@github.com:Team-Atlanta/crete.git
-  ref: oss-patch
+  url: git@github.com:sslab-gatech/atlantis-crete.git
+  ref: main
