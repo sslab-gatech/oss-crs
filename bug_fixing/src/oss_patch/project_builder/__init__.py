@@ -115,17 +115,6 @@ def _workdir_from_dockerfile(project_path: Path, proj_name: str):
     return _workdir_from_lines(lines, default=os.path.join("/src", proj_name))
 
 
-def _build_docker_cache_builder_image() -> bool:
-    try:
-        run_command(
-            f"docker build --tag {OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} --file {OSS_PATCH_CACHE_BUILDER_DATA_PATH / 'Dockerfile'} {str(Path.cwd())}"
-        )
-
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
 class OSSPatchProjectBuilder:
     def __init__(
         self,
@@ -251,21 +240,6 @@ class OSSPatchProjectBuilder:
         )
 
         run_command(command)
-        return True
-
-    def prepare_docker_cache_builder(self) -> bool:
-        if docker_image_exists(OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE):
-            return True
-
-        logger.info(
-            f'"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" does not exist. Build a new image...'
-        )
-        if not _build_docker_cache_builder_image():
-            logger.error(
-                f'Building "{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" has failed.'
-            )
-            return False
-
         return True
 
     def prepare_docker_volumes(self) -> bool:
