@@ -7,6 +7,9 @@ from .globals import (
     OSS_PATCH_WORK_DIR,
     OSS_PATCH_BUILD_CONTEXT_DIR,
 )
+from .functions import (
+    prepare_docker_cache_builder
+)
 import shutil
 import logging
 
@@ -58,11 +61,16 @@ class OSSPatch:
             else oss_fuzz_path / "projects" / self.project_name
         )
 
+        if not prepare_docker_cache_builder():
+            return False
+
         crs_builder = OSSPatchCRSBuilder(
             self.crs_name,
             self.work_dir,
             local_crs=local_crs,
         )
+        if not crs_builder.build_crs_image():
+            return False
 
         project_builder = OSSPatchProjectBuilder(
             self.work_dir,
@@ -73,13 +81,8 @@ class OSSPatch:
         )
         if not project_builder.validate_arguments():
             return False
-        if not project_builder.prepare_docker_cache_builder():
-            return False
 
         with temp_build_context(str(OSS_PATCH_BUILD_CONTEXT_DIR)):
-            if not crs_builder.build_crs_image():
-                return False
-
             if not project_builder.copy_oss_fuzz_and_sources(
                 OSS_PATCH_BUILD_CONTEXT_DIR
             ):
