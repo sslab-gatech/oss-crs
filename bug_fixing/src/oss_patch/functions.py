@@ -4,12 +4,16 @@ from pathlib import Path
 from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
+    OSS_PATCH_CACHE_BUILDER_DATA_PATH
 )
 import os
 from typing import Deque
 from collections import deque
 import sys
 import shutil
+import logging
+
+logger = logging.getLogger()
 
 
 def _docker_volume_exists(volume_name: str) -> bool:
@@ -216,3 +220,29 @@ def run_command(command: str, n: int = 5) -> None:
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         raise
+
+def _build_docker_cache_builder_image() -> bool:
+    try:
+        run_command(
+            f"docker build --tag {OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} --file {OSS_PATCH_CACHE_BUILDER_DATA_PATH / 'Dockerfile'} {str(Path.cwd())}"
+        )
+
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def prepare_docker_cache_builder() -> bool:
+    if docker_image_exists(OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE):
+        return True
+
+    logger.info(
+        f'"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" does not exist. Build a new image...'
+    )
+    if not _build_docker_cache_builder_image():
+        logger.error(
+            f'Building "{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" has failed.'
+        )
+        return False
+
+    return True
