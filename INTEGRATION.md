@@ -271,7 +271,7 @@ This is the example of running 42-patch-agent (https://github.com/sslab-gatech/4
 # Type `-h` to see the usage
 uv run oss-bugfix-crs build -h
 
-# build a particular CRS (for example, target project is `json-c` project)
+# build a particular CRS (for example, target project is `sqlite3` project)
 uv run oss-bugfix-crs build 42-patch-agent sqlite3 --oss-fuzz /path/to/oss-fuzz
 
 # Type `-h` to see the usage
