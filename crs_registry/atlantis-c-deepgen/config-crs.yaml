@@ -4,5 +4,6 @@ atlantis-c-deepgen:
     - gpt5-mini
   cpu: "all"
   ram: 4G
-  dependencies: []
+  dependencies:
+    - dind
   features: []
