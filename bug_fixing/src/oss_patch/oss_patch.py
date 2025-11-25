@@ -1,38 +1,16 @@
 from pathlib import Path
-from contextlib import contextmanager
 from .crs_builder import OSSPatchCRSBuilder
 from .project_builder import OSSPatchProjectBuilder
 from .crs_runner import OSSPatchCRSRunner
 from .globals import (
     OSS_PATCH_WORK_DIR,
-    OSS_PATCH_BUILD_CONTEXT_DIR,
 )
-from .functions import (
-    prepare_docker_cache_builder
-)
-import shutil
+from .functions import prepare_docker_cache_builder, extract_sanitizer_report
 import logging
+import time
+import subprocess
 
 logger = logging.getLogger()
-
-
-@contextmanager
-def temp_build_context(path_name="temp_data"):
-    temp_path = Path(path_name).resolve()
-
-    try:
-        temp_path.mkdir(exist_ok=True)
-    except OSError as e:
-        raise e
-
-    try:
-        yield temp_path
-    finally:
-        if temp_path.exists():
-            try:
-                shutil.rmtree(temp_path)
-            except OSError:
-                pass
 
 
 class OSSPatch:
@@ -69,7 +47,7 @@ class OSSPatch:
             self.work_dir,
             local_crs=local_crs,
         )
-        if not crs_builder.build_crs_image():
+        if not crs_builder.build():
             return False
 
         project_builder = OSSPatchProjectBuilder(
@@ -79,26 +57,8 @@ class OSSPatch:
             project_path=project_path,
             source_path=source_path,
         )
-        if not project_builder.validate_arguments():
+        if not project_builder.build():
             return False
-
-        with temp_build_context(str(OSS_PATCH_BUILD_CONTEXT_DIR)):
-            if not project_builder.copy_oss_fuzz_and_sources(
-                OSS_PATCH_BUILD_CONTEXT_DIR
-            ):
-                return False
-
-            if not project_builder.prepare_docker_volumes():
-                return False
-
-            if not project_builder.prepare_project_builder_image():
-                return False
-
-            if not project_builder.prepare_runner_image(OSS_PATCH_BUILD_CONTEXT_DIR):
-                return False
-
-            if not project_builder.take_incremental_build_snapshot():
-                return False
 
         logger.info(f"CRS building successfully done!")
         return True
@@ -121,10 +81,121 @@ class OSSPatch:
         )
 
     # Testing purpose function
-    def run_pov(self, harness_name: str, pov_path: Path, source_path: Path) -> bool:
+    def run_pov(
+        self,
+        harness_name: str,
+        pov_path: Path,
+        source_path: Path,
+    ) -> tuple[bytes, bytes]:
         oss_patch_runner = OSSPatchCRSRunner(
             self.crs_name, self.project_name, self.work_dir, Path("/tmp/out")
         )
 
-        oss_patch_runner.run_pov(harness_name, pov_path, source_path)
+        return oss_patch_runner.run_pov(harness_name, pov_path, source_path)
+
+    # Testing purpose function
+    def test_inc_build(self, oss_fuzz_path: Path) -> bool:
+        oss_fuzz_path = oss_fuzz_path.resolve()
+        project_path = oss_fuzz_path / "projects" / self.project_name
+
+        if not prepare_docker_cache_builder():
+            return False
+
+        project_builder = OSSPatchProjectBuilder(
+            self.work_dir,
+            self.project_name,
+            oss_fuzz_path,
+            project_path=project_path,
+        )
+
+        project_builder.remove_builder_image()
+        project_builder.build(inc_build_enabled=False)
+
+        # measure consumed time
+        cur_time = time.time()
+        result = project_builder.build_fuzzers()
+        build_time_without_inc_build = time.time() - cur_time
+
+        if result:
+            stdout, stderr = result
+            logger.error(f"build_fuzzers failed...")
+            print(str(stdout))
+            print(str(stderr))
+            return False
+
+        logger.info(
+            f"Build time without incremental build: {build_time_without_inc_build}"
+        )
+
+        logger.info(f"Now taking a snapshot for incremental build")
+        if not project_builder.take_incremental_build_snapshot():
+            logger.error(f"taking incremental build snapshot failed")
+            return False
+
+        # measure consumed time
+        cur_time = time.time()
+        result = project_builder.build_fuzzers()
+        build_time_with_inc_build = time.time() - cur_time
+
+        logger.info(f"Build time with incremental build: {build_time_with_inc_build}")
+
+        source_path = Path("/tmp/project-src")
+
+        subprocess.run("rm -rf /tmp/project-src", shell=True)
+
+        project_builder.prepare_project_sources(source_path)
+        aixcc_dir = oss_fuzz_path / "projects" / self.project_name / ".aixcc"
+        if not aixcc_dir.exists():
+            logger.error(
+                f'".aixcc" directory does not exist in {oss_fuzz_path / "projects" / self.project_name}'
+            )
+            return False
+
+        povs_dir = aixcc_dir / "povs"
+
+        for pov_per_harness_dir in povs_dir.iterdir():
+            harness_name = pov_per_harness_dir.name
+
+            for pov_path in pov_per_harness_dir.iterdir():
+                pov_name = pov_path.name
+                stdout, _ = self.run_pov(harness_name, pov_path, source_path)
+
+                if not extract_sanitizer_report(str(stdout)):
+                    logger.error(f'crash is not detected for "{pov_name}"')
+                    return False
+
+                patch_path = aixcc_dir / "patches" / harness_name / f"{pov_name}.diff"
+                assert patch_path.exists(), patch_path
+
+                # apply a patch
+                subprocess.check_call(
+                    f"git apply {patch_path}", shell=True, cwd=source_path
+                )
+
+                cur_time = time.time()
+                project_builder.build_fuzzers(source_path)
+                build_time_with_patch = time.time() - cur_time
+                logger.info(
+                    f'Build time with incremental build and patch ("{patch_path}"): {build_time_with_patch}'
+                )
+
+                stdout, _ = self.run_pov(harness_name, pov_path, source_path)
+
+                if extract_sanitizer_report(str(stdout)):
+                    logger.error(
+                        f'crash is detected for "{pov_name}" with a patch "{patch_path}"'
+                    )
+                    return False
+
+                # reset a source-path
+                subprocess.check_call(
+                    f"git reset --hard",
+                    shell=True,
+                    cwd=source_path,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+        logger.info(f"Incremental build is working correctly for {self.project_name}")
+
         return True

@@ -7,7 +7,6 @@ import subprocess
 from bug_fixing.src.oss_patch.functions import (
     get_runner_image_name,
     run_command,
-
 )
 from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_CRS_SYSTEM_IMAGES,
@@ -149,12 +148,18 @@ class OSSPatchCRSRunner:
         except subprocess.CalledProcessError as e:
             raise e
 
-    def run_pov(self, harness_name: str, pov_path: Path, source_path: Path):
+    def run_pov(
+        self, harness_name: str, pov_path: Path, source_path: Path
+    ) -> tuple[bytes, bytes]:
         build_fuzzers_command = f"python3 /oss-fuzz/infra/helper.py build_fuzzers {self.project_name} /cp-sources"
 
         reproduce_command = f"python3 /oss-fuzz/infra/helper.py reproduce {self.project_name} {harness_name} /testcase"
 
         runner_command = f'docker run --rm --privileged -v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} -v {source_path}:/cp-sources -v {pov_path}:/testcase {get_runner_image_name(self.project_name)} sh -c "{build_fuzzers_command} && {reproduce_command}"'
 
-        print(runner_command)
-        subprocess.run(runner_command, shell=True)
+        # print(runner_command)
+        proc = subprocess.run(
+            runner_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+        return (proc.stdout, proc.stderr)

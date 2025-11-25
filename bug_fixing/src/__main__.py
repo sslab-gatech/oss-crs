@@ -63,7 +63,9 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
     elif args.command == "run_pov":
         oss_patch = OSSPatch("run_pov", args.project)
         result = oss_patch.run_pov(args.harness, Path(args.pov), args.source_path)
-
+    elif args.command == "test-inc-build":
+        oss_patch = OSSPatch("test-inc-build", args.project)
+        result = oss_patch.test_inc_build(Path(args.oss_fuzz))
     else:
         # Print help string if no arguments provided.
         parser.print_help()
@@ -146,7 +148,8 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     )
 
     run_pov_parser = subparsers.add_parser(
-        "run_pov", help="Run a PoV under the current project builder environemt."
+        "run_pov",
+        help="Run a PoV under the current project builder environemt. A sanitizer output (i.e., a crash) is expected for a valid PoV.",
     )
     run_pov_parser.add_argument("project", help="name of the project")
     run_pov_parser.add_argument("harness", help="name of the harness")
@@ -156,13 +159,16 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         help="Source code of project where the PoV will be tested based on",
     )
 
-    # manage_crs_parser = subparsers.add_parser(
-    #     "manage_crs", aliases=["manage"], help="Manage existing CRSes."
-    # )
+    test_inc_build_parser = subparsers.add_parser(
+        "test-inc-build", help="Test incremental build for a given project."
+    )
 
-    # manage_subparsers = manage_crs_parser.add_subparsers(
-    #     dest="manage_command", required=True, help="Subcommand for managing CRSes."
+    # test_inc_build_sub_parser = test_inc_build_parser.add_subparsers(
+    #     dest="manage_command", required=True, help="Subcommand for testing incremental build."
     # )
+    test_inc_build_parser.add_argument("project", help="name of the project")
+    test_inc_build_parser.add_argument("oss_fuzz", help="path to OSS-Fuzz")
+
     # list_parser = manage_subparsers.add_parser(
     #     "list", help="list existing CRS-related images"
     # )
