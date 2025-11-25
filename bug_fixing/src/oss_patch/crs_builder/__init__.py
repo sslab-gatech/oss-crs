@@ -40,7 +40,7 @@ class OSSPatchCRSBuilder:
         self.work_dir = work_dir
         self.crs_path = local_crs
 
-    def build_crs_image(self, volume_name: str = OSS_PATCH_CRS_SYSTEM_IMAGES) -> bool:
+    def build(self, volume_name: str = OSS_PATCH_CRS_SYSTEM_IMAGES) -> bool:
         logger.info(f'Getting CRS metadata for "{self.crs_name}"...')
         result = self._get_crs_yamls()
         if not result:
@@ -114,11 +114,11 @@ class OSSPatchCRSBuilder:
         run_command(f"git clone {crs_url} {self.crs_path}")
         if crs_ref is not None:
             run_command(f"git -C {self.crs_path} checkout {crs_ref}")
-            
+
         run_command(
             f"git -C {self.crs_path} submodule update --init --recursive --depth 1"
         )
-        
+
         return True
 
     def _build_crs_image_in_volume(self, config_yaml: Path, volume_name: str) -> bool:

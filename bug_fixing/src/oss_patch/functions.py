@@ -4,7 +4,7 @@ from pathlib import Path
 from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
-    OSS_PATCH_CACHE_BUILDER_DATA_PATH
+    OSS_PATCH_CACHE_BUILDER_DATA_PATH,
 )
 import os
 from typing import Deque
@@ -221,6 +221,7 @@ def run_command(command: str, n: int = 5) -> None:
         print(f"An unexpected error occurred: {e}")
         raise
 
+
 def _build_docker_cache_builder_image() -> bool:
     try:
         run_command(
@@ -240,9 +241,7 @@ def prepare_docker_cache_builder() -> bool:
         f'"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" does not exist. Build a new image...'
     )
     if not _build_docker_cache_builder_image():
-        logger.error(
-            f'Building "{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" has failed.'
-        )
+        logger.error(f'Building "{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE}" has failed.')
         return False
 
     return True

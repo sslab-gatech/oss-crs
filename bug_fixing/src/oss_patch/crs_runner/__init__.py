@@ -7,7 +7,6 @@ import subprocess
 from bug_fixing.src.oss_patch.functions import (
     get_runner_image_name,
     run_command,
-
 )
 from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_CRS_SYSTEM_IMAGES,

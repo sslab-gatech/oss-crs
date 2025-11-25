@@ -1,38 +1,14 @@
 from pathlib import Path
-from contextlib import contextmanager
 from .crs_builder import OSSPatchCRSBuilder
 from .project_builder import OSSPatchProjectBuilder
 from .crs_runner import OSSPatchCRSRunner
 from .globals import (
     OSS_PATCH_WORK_DIR,
-    OSS_PATCH_BUILD_CONTEXT_DIR,
 )
-from .functions import (
-    prepare_docker_cache_builder
-)
-import shutil
+from .functions import prepare_docker_cache_builder
 import logging
 
 logger = logging.getLogger()
-
-
-@contextmanager
-def temp_build_context(path_name="temp_data"):
-    temp_path = Path(path_name).resolve()
-
-    try:
-        temp_path.mkdir(exist_ok=True)
-    except OSError as e:
-        raise e
-
-    try:
-        yield temp_path
-    finally:
-        if temp_path.exists():
-            try:
-                shutil.rmtree(temp_path)
-            except OSError:
-                pass
 
 
 class OSSPatch:
@@ -69,7 +45,7 @@ class OSSPatch:
             self.work_dir,
             local_crs=local_crs,
         )
-        if not crs_builder.build_crs_image():
+        if not crs_builder.build():
             return False
 
         project_builder = OSSPatchProjectBuilder(
@@ -79,26 +55,8 @@ class OSSPatch:
             project_path=project_path,
             source_path=source_path,
         )
-        if not project_builder.validate_arguments():
+        if not project_builder.build():
             return False
-
-        with temp_build_context(str(OSS_PATCH_BUILD_CONTEXT_DIR)):
-            if not project_builder.copy_oss_fuzz_and_sources(
-                OSS_PATCH_BUILD_CONTEXT_DIR
-            ):
-                return False
-
-            if not project_builder.prepare_docker_volumes():
-                return False
-
-            if not project_builder.prepare_project_builder_image():
-                return False
-
-            if not project_builder.prepare_runner_image(OSS_PATCH_BUILD_CONTEXT_DIR):
-                return False
-
-            if not project_builder.take_incremental_build_snapshot():
-                return False
 
         logger.info(f"CRS building successfully done!")
         return True

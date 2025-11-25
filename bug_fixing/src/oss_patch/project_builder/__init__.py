@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import re
 import os
+from contextlib import contextmanager
 
 from bug_fixing.src.oss_patch.functions import (
     create_docker_volume,
@@ -22,7 +23,7 @@ from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
     OSS_PATCH_RUNNER_DATA_PATH,
-    OSS_PATCH_CACHE_BUILDER_DATA_PATH,
+    OSS_PATCH_BUILD_CONTEXT_DIR,
 )
 
 WORKDIR_REGEX = re.compile(r"\s*WORKDIR\s*([^\s]+)")
@@ -49,6 +50,25 @@ fi
 
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def temp_build_context(path_name="temp_data"):
+    temp_path = Path(path_name).resolve()
+
+    try:
+        temp_path.mkdir(exist_ok=True)
+    except OSError as e:
+        raise e
+
+    try:
+        yield temp_path
+    finally:
+        if temp_path.exists():
+            try:
+                shutil.rmtree(temp_path)
+            except OSError:
+                pass
 
 
 def _clone_project_repo(proj_yaml_path: Path, dst_path: Path) -> bool:
@@ -130,7 +150,29 @@ class OSSPatchProjectBuilder:
         self.project_path = project_path
         self.source_path = source_path
 
-    def validate_arguments(self):
+    def build(self, context_dir: Path = OSS_PATCH_BUILD_CONTEXT_DIR) -> bool:
+        if not self._validate_arguments():
+            return False
+
+        with temp_build_context(str(context_dir)):
+            if not self._copy_oss_fuzz_and_sources(context_dir):
+                return False
+
+            if not self._prepare_docker_volumes():
+                return False
+
+            if not self._prepare_project_builder_image():
+                return False
+
+            if not self._prepare_runner_image(context_dir):
+                return False
+
+            if not self._take_incremental_build_snapshot():
+                return False
+
+        return True
+
+    def _validate_arguments(self):
         # Validate OSS-Fuzz path
         if not self.oss_fuzz_path.exists():
             logger.error(f"OSS-Fuzz path does not exist: {self.oss_fuzz_path}")
@@ -175,19 +217,21 @@ class OSSPatchProjectBuilder:
         return True
 
     def _checkout_project_sources(self, dst_path: Path) -> bool:
+        assert self.project_path
+
         aixcc_config_yaml_path = self.project_path / ".aixcc" / "config.yaml"
 
         if not aixcc_config_yaml_path.exists():
             # Don't have `.aixcc/config.yaml` directory, do nothing.
             return True
 
-        with open(aixcc_config_yaml_path, 'r') as f:
+        with open(aixcc_config_yaml_path, "r") as f:
             aixcc_config_yaml = yaml.safe_load(f)
 
         assert aixcc_config_yaml["full_mode"]
         assert aixcc_config_yaml["full_mode"]["base_commit"]
 
-        command = f"git reset --hard {aixcc_config_yaml["full_mode"]["base_commit"]}"
+        command = f"git reset --hard {aixcc_config_yaml['full_mode']['base_commit']}"
         try:
             subprocess.check_call(command, shell=True, cwd=dst_path)
             return True
@@ -199,9 +243,7 @@ class OSSPatchProjectBuilder:
         assert self.project_path
 
         # CP's source not provided, clone the remote repository
-        if not _clone_project_repo(
-            self.project_path / "project.yaml", dst_path
-        ):
+        if not _clone_project_repo(self.project_path / "project.yaml", dst_path):
             logger.error("Cloning target project source code has failed.")
             return False
 
@@ -210,7 +252,7 @@ class OSSPatchProjectBuilder:
 
         return True
 
-    def copy_oss_fuzz_and_sources(
+    def _copy_oss_fuzz_and_sources(
         self,
         dst_dir: Path,
     ) -> bool:
@@ -272,7 +314,7 @@ class OSSPatchProjectBuilder:
         run_command(command)
         return True
 
-    def prepare_docker_volumes(self) -> bool:
+    def _prepare_docker_volumes(self) -> bool:
         if not create_docker_volume(OSS_PATCH_CRS_DOCKER_ASSETS):
             return False
         if not create_docker_volume(OSS_PATCH_CRS_SYSTEM_IMAGES):
@@ -316,7 +358,7 @@ class OSSPatchProjectBuilder:
 
         return True
 
-    def prepare_project_builder_image(
+    def _prepare_project_builder_image(
         self, volume_name: str = OSS_PATCH_CRS_DOCKER_ASSETS
     ) -> bool:
         if not self._pull_base_images_in_volume(volume_name):
@@ -331,7 +373,7 @@ class OSSPatchProjectBuilder:
 
         return True
 
-    def prepare_runner_image(self, copy_dir: Path) -> bool:
+    def _prepare_runner_image(self, copy_dir: Path) -> bool:
         assert (copy_dir / "oss-fuzz").exists()
         assert (copy_dir / "cp-sources").exists()
 
@@ -412,7 +454,7 @@ class OSSPatchProjectBuilder:
         else:
             return False
 
-    def take_incremental_build_snapshot(
+    def _take_incremental_build_snapshot(
         self, volume_name: str = OSS_PATCH_CRS_DOCKER_ASSETS
     ) -> bool:
         if not self._detect_incremental_build(volume_name):
