@@ -127,10 +127,10 @@ class OSSPatch:
             f"Build time without incremental build: {build_time_without_inc_build}"
         )
 
-        # logger.info(f"Now taking a snapshot for incremental build")
-        # if not project_builder.take_incremental_build_snapshot():
-        #     logger.error(f"taking incremental build snapshot failed")
-        #     return False
+        logger.info(f"Now taking a snapshot for incremental build")
+        if not project_builder.take_incremental_build_snapshot():
+            logger.error(f"taking incremental build snapshot failed")
+            return False
 
         # measure consumed time
         cur_time = time.time()
