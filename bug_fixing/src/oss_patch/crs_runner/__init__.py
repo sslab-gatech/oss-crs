@@ -39,8 +39,7 @@ def _cleanup_dir(target_dir: Path):
 
 
 class OSSPatchCRSRunner:
-    def __init__(self, crs_name: str, project_name: str, work_dir: Path, out_dir: Path):
-        self.crs_name = crs_name
+    def __init__(self, project_name: str, work_dir: Path, out_dir: Path):
         self.project_name = project_name
         self.work_dir = work_dir
         self.out_dir = out_dir
@@ -68,7 +67,7 @@ class OSSPatchCRSRunner:
                 )
 
     def _run_crs_against_povs(
-        self, litellm_api_key: str, litellm_api_base: str
+        self, crs_name: str, litellm_api_key: str, litellm_api_base: str
     ) -> bool:
         cmd_parts = [
             "docker",
@@ -88,7 +87,7 @@ class OSSPatchCRSRunner:
             [
                 f"-e LITELLM_API_KEY={litellm_api_key}",
                 f"-e LITELLM_API_BASE={litellm_api_base}",
-                f"-e CRS_NAME={self.crs_name}",
+                f"-e CRS_NAME={crs_name}",
                 get_runner_image_name(self.project_name),
                 "launch_crs.sh",
             ]
@@ -110,6 +109,7 @@ class OSSPatchCRSRunner:
 
     def run_crs_against_povs(
         self,
+        crs_name: str,
         harness_name: str,
         povs_path: Path,
         litellm_api_key: str,
@@ -128,12 +128,12 @@ class OSSPatchCRSRunner:
         if hints_path:
             self._prepare_hints(hints_path)
 
-        logger.info(f'Now launching "{self.crs_name}"')
-        if not self._run_crs_against_povs(litellm_api_key, litellm_api_base):
+        logger.info(f'Now launching "{crs_name}"')
+        if not self._run_crs_against_povs(crs_name, litellm_api_key, litellm_api_base):
             return False
 
         logger.info(
-            f'The CRS "{self.crs_name}" has run successfully. Check the "{self.out_dir}" for its outputs.'
+            f'The CRS "{crs_name}" has run successfully. Check the "{self.out_dir}" for its outputs.'
         )
         return True
 
@@ -155,7 +155,14 @@ class OSSPatchCRSRunner:
 
         reproduce_command = f"python3 /oss-fuzz/infra/helper.py reproduce {self.project_name} {harness_name} /testcase"
 
-        runner_command = f'docker run --rm --privileged -v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} -v {source_path}:/cp-sources -v {pov_path}:/testcase {get_runner_image_name(self.project_name)} sh -c "{build_fuzzers_command} && {reproduce_command}"'
+        runner_command = (
+            f"docker run --rm --privileged --net=host "
+            f"-v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} "
+            f"-v {source_path}:/cp-sources "
+            f"-v {pov_path}:/testcase "
+            f"{get_runner_image_name(self.project_name)} "
+            f'sh -c "{build_fuzzers_command} && {reproduce_command}"'
+        )
 
         # print(runner_command)
         proc = subprocess.run(

@@ -43,7 +43,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
     args = _parse_args(parser)
 
     if args.command == "build":
-        oss_patch = OSSPatch(args.crs, args.project)
+        oss_patch = OSSPatch(args.project, crs_name=args.crs)
         result = oss_patch.build_crs(
             Path(args.oss_fuzz),
             _get_path_or_none(args.project_path),
@@ -51,7 +51,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             _get_path_or_none(args.local_crs),
         )
     elif args.command == "run":
-        oss_patch = OSSPatch(args.crs, args.project)
+        oss_patch = OSSPatch(args.project, crs_name=args.crs)
         result = oss_patch.run_crs(
             args.harness,
             Path(args.povs),
@@ -61,11 +61,14 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             Path(args.out),
         )
     elif args.command == "run_pov":
-        oss_patch = OSSPatch("run_pov", args.project)
+        oss_patch = OSSPatch(args.project)
         result = oss_patch.run_pov(args.harness, Path(args.pov), args.source_path)
     elif args.command == "test-inc-build":
-        oss_patch = OSSPatch("test-inc-build", args.project)
+        oss_patch = OSSPatch(args.project)
         result = oss_patch.test_inc_build(Path(args.oss_fuzz))
+    elif args.command == "check_povs":
+        oss_patch = OSSPatch(args.project)
+        result = oss_patch.test_povs(Path(args.oss_fuzz))
     else:
         # Print help string if no arguments provided.
         parser.print_help()
@@ -168,6 +171,13 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     # )
     test_inc_build_parser.add_argument("project", help="name of the project")
     test_inc_build_parser.add_argument("oss_fuzz", help="path to OSS-Fuzz")
+
+    test_project_parser = subparsers.add_parser(
+        "check_povs",
+        help="Test whether the given PoVs for the project work properly (i.e., result in crashes).",
+    )
+    test_project_parser.add_argument("project", help="name of the project")
+    test_project_parser.add_argument("oss_fuzz", help="path to OSS-Fuzz")
 
     # list_parser = manage_subparsers.add_parser(
     #     "list", help="list existing CRS-related images"

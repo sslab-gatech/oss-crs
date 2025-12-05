@@ -263,3 +263,12 @@ def extract_sanitizer_report(full_log: str) -> str | None:
         return None
 
     return full_log[match.start() :]
+
+
+def extract_java_exception_report(full_log: str) -> str | None:
+    match = re.search(r"== Java Exception:", full_log)
+
+    if match is None:
+        return None
+
+    return full_log[match.start() :]

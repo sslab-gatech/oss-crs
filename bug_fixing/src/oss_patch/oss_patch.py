@@ -5,16 +5,35 @@ from .crs_runner import OSSPatchCRSRunner
 from .globals import (
     OSS_PATCH_WORK_DIR,
 )
-from .functions import prepare_docker_cache_builder, extract_sanitizer_report
+from .functions import (
+    prepare_docker_cache_builder,
+    extract_sanitizer_report,
+    extract_java_exception_report,
+)
 import logging
 import time
 import subprocess
+from tempfile import TemporaryDirectory
 
 logger = logging.getLogger()
 
 
+def _detect_crash_report(stdout: str, language: str) -> bool:
+    if language in ["c", "c++"]:
+        return extract_sanitizer_report(stdout) is not None
+    elif language == "jvm":
+        if "ERROR: libFuzzer:" in stdout:
+            return True
+        elif "FuzzerSecurityIssueLow: Stack overflow" in stdout:
+            return True
+        else:
+            return extract_java_exception_report(stdout) is not None
+    else:
+        return False
+
+
 class OSSPatch:
-    def __init__(self, crs_name: str, project_name: str):
+    def __init__(self, project_name: str, crs_name: str | None = None):
         self.crs_name = crs_name
         self.project_name = project_name
         self.work_dir = OSS_PATCH_WORK_DIR / project_name
@@ -32,6 +51,8 @@ class OSSPatch:
         source_path: Path | None = None,
         local_crs: Path | None = None,
     ) -> bool:
+        assert self.crs_name
+
         oss_fuzz_path = oss_fuzz_path.resolve()
         project_path = (
             Path(project_path).resolve()
@@ -72,12 +93,18 @@ class OSSPatch:
         hints_dir: Path | None,
         out_dir: Path,
     ) -> bool:
-        oss_patch_runner = OSSPatchCRSRunner(
-            self.crs_name, self.project_name, self.work_dir, out_dir
-        )
+        assert self.crs_name
+
+        oss_patch_runner = OSSPatchCRSRunner(self.project_name, self.work_dir, out_dir)
 
         return oss_patch_runner.run_crs_against_povs(
-            harness_name, povs_dir, litellm_api_key, litellm_api_base, hints_dir, "full"
+            self.crs_name,
+            harness_name,
+            povs_dir,
+            litellm_api_key,
+            litellm_api_base,
+            hints_dir,
+            "full",
         )
 
     # Testing purpose function
@@ -88,10 +115,56 @@ class OSSPatch:
         source_path: Path,
     ) -> tuple[bytes, bytes]:
         oss_patch_runner = OSSPatchCRSRunner(
-            self.crs_name, self.project_name, self.work_dir, Path("/tmp/out")
+            self.project_name, self.work_dir, Path("/tmp/out")
         )
 
         return oss_patch_runner.run_pov(harness_name, pov_path, source_path)
+
+    def test_povs(self, oss_fuzz_path: Path) -> bool:
+        oss_fuzz_path = oss_fuzz_path.resolve()
+        project_path = oss_fuzz_path / "projects" / self.project_name
+
+        if not prepare_docker_cache_builder():
+            return False
+
+        project_builder = OSSPatchProjectBuilder(
+            self.work_dir,
+            self.project_name,
+            oss_fuzz_path,
+            project_path=project_path,
+        )
+
+        project_builder.remove_builder_image()
+        project_builder.build(inc_build_enabled=False)
+
+        with TemporaryDirectory() as tmp_dir:
+            source_path = Path(tmp_dir) / "target-sources"
+            project_builder.prepare_project_sources(source_path)
+            aixcc_dir = oss_fuzz_path / "projects" / self.project_name / ".aixcc"
+            if not aixcc_dir.exists():
+                logger.error(
+                    f'".aixcc" directory does not exist in {oss_fuzz_path / "projects" / self.project_name}'
+                )
+                return False
+
+            povs_dir = aixcc_dir / "povs"
+
+            for pov_per_harness_dir in povs_dir.iterdir():
+                harness_name = pov_per_harness_dir.name
+
+                for pov_path in pov_per_harness_dir.iterdir():
+                    pov_name = pov_path.name
+                    logger.info(f'Testing "{pov_name}" for harness "{harness_name}"')
+                    stdout, _ = self.run_pov(harness_name, pov_path, source_path)
+
+                    if not _detect_crash_report(
+                        stdout.decode(), project_builder.project_lang
+                    ):
+                        logger.error(f'crash is not detected for "{pov_name}"')
+                        print(stdout.decode())
+                        return False
+
+        return True
 
     # Testing purpose function
     def test_inc_build(self, oss_fuzz_path: Path) -> bool:
@@ -158,10 +231,14 @@ class OSSPatch:
 
             for pov_path in pov_per_harness_dir.iterdir():
                 pov_name = pov_path.name
+                logger.info(f'Checking "{pov_name}" for crash...')
                 stdout, _ = self.run_pov(harness_name, pov_path, source_path)
 
-                if not extract_sanitizer_report(str(stdout)):
+                if not _detect_crash_report(
+                    stdout.decode(), project_builder.project_lang
+                ):
                     logger.error(f'crash is not detected for "{pov_name}"')
+                    print(stdout.decode())
                     return False
 
                 patch_path = aixcc_dir / "patches" / harness_name / f"{pov_name}.diff"
@@ -176,18 +253,20 @@ class OSSPatch:
                 project_builder.build_fuzzers(source_path)
                 build_time_with_patch = time.time() - cur_time
                 logger.info(
-                    f'Build time with incremental build and patch ("{patch_path}"): {build_time_with_patch}'
+                    f'Build time with incremental build and patch ("{patch_path.name}"): {build_time_with_patch}'
                 )
 
                 stdout, _ = self.run_pov(harness_name, pov_path, source_path)
 
-                if extract_sanitizer_report(str(stdout)):
+                if _detect_crash_report(str(stdout), project_builder.project_lang):
                     logger.error(
                         f'crash is detected for "{pov_name}" with a patch "{patch_path}"'
                     )
                     return False
 
-                # reset a source-path
+                logger.info(f'Incremental build for "{pov_name}" has been validated')
+
+                # reset the given source code
                 subprocess.check_call(
                     f"git reset --hard",
                     shell=True,
