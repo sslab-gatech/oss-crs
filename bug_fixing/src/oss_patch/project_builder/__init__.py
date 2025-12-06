@@ -16,14 +16,15 @@ from bug_fixing.src.oss_patch.functions import (
     get_builder_image_name,
     get_runner_image_name,
     run_command,
+    is_git_repository,
+    change_ownership_with_docker,
 )
 from bug_fixing.src.oss_patch.globals import (
-    OSS_PATCH_CRS_DOCKER_ASSETS,
+    OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
     OSS_PATCH_CRS_SYSTEM_IMAGES,
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
     OSS_PATCH_RUNNER_DATA_PATH,
-    OSS_PATCH_BUILD_CONTEXT_DIR,
 )
 
 WORKDIR_REGEX = re.compile(r"\s*WORKDIR\s*([^\s]+)")
@@ -142,13 +143,11 @@ class OSSPatchProjectBuilder:
         project_name: str,
         oss_fuzz_path: Path,
         project_path: Path,
-        source_path: Path | None = None,
     ):
         self.work_dir = work_dir
         self.project_name = project_name
         self.oss_fuzz_path = oss_fuzz_path.resolve()
         self.project_path = project_path
-        self.source_path = source_path
 
         assert self.project_path.exists()
         assert (self.project_path / "project.yaml").exists()
@@ -157,61 +156,29 @@ class OSSPatchProjectBuilder:
             self.project_path / "project.yaml"
         )
 
-    def build(
-        self,
-        context_dir: Path = OSS_PATCH_BUILD_CONTEXT_DIR,
-        inc_build_enabled: bool = True,
-    ) -> bool:
+    def build(self, source_path: Path, inc_build_enabled: bool = True) -> bool:
         if not self._validate_arguments():
             return False
 
-        with temp_build_context(str(context_dir)):
-            if not self._copy_oss_fuzz_and_sources(context_dir):
-                return False
+        if not self._prepare_project_builder_image():
+            return False
 
-            if not self._prepare_docker_volumes():
+        if inc_build_enabled:
+            if not self.take_incremental_build_snapshot(source_path):
                 return False
-
-            if not self._prepare_project_builder_image():
-                return False
-
-            if not self._prepare_runner_image(context_dir):
-                return False
-
-            if inc_build_enabled:
-                if not self.take_incremental_build_snapshot():
-                    return False
 
         return True
 
     def build_fuzzers(
         self,
         source_path: Path | None = None,
-        volume_name: str = OSS_PATCH_CRS_DOCKER_ASSETS,
     ) -> tuple[bytes, bytes] | None:
-        logger.info(
-            f'Execute `build_fuzzers` command for "{self.project_name}" in {volume_name}'
-        )
-
-        container_command = (
-            f"python3 /oss-fuzz/infra/helper.py build_fuzzers {self.project_name}"
-        )
+        # logger.info(f'Execute `build_fuzzers` command for "{self.project_name}"')
 
         if source_path:
-            command = (
-                f"docker run --rm --privileged --net=host "
-                f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
-                f"-v {source_path}:/cp-sources "
-                f"{get_runner_image_name(self.project_name)} "
-                f"{container_command}"
-            )
+            command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers {self.project_name} {source_path}"
         else:
-            command = (
-                f"docker run --rm --privileged --net=host "
-                f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
-                f"{get_runner_image_name(self.project_name)} "
-                f"{container_command}"
-            )
+            command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers {self.project_name}"
 
         proc = subprocess.run(
             command,
@@ -226,7 +193,7 @@ class OSSPatchProjectBuilder:
         return (proc.stdout, proc.stderr)
 
     def remove_builder_image(
-        self, volume_name: str = OSS_PATCH_CRS_DOCKER_ASSETS
+        self, volume_name: str = OSS_PATCH_DOCKER_IMAGES_FOR_CRS
     ) -> bool:
         logger.info(
             f'Removing "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}" from {volume_name}'
@@ -253,21 +220,7 @@ class OSSPatchProjectBuilder:
             logger.error(f"OSS-Fuzz path does not exist: {self.oss_fuzz_path}")
             return False
 
-        if self.source_path:
-            # Validation 1: source_path requires project_path
-            # if not project_path:
-            #   logger.error(
-            #       "ERROR: --source-path requires --project-path\n"
-            #       "You must provide project metadata when using pre-cloned source.\n"
-            #       "Usage: --project-path /path/to/project --source-path /path/to/source"
-            #   )
-            #   return False
-
-            if not self.source_path.exists():
-                logger.error(f"Source path does not exist: {self.source_path}")
-                return False
-
-        # Validation 2: project_path must exist if provided
+        # `project_path` must exist if provided
         if self.project_path:
             if not self.project_path.exists():
                 logger.error(f"Project path does not exist: {self.project_path}")
@@ -277,7 +230,7 @@ class OSSPatchProjectBuilder:
                 logger.error(f"Project path is not a directory: {self.project_path}")
                 return False
 
-        # Validation 3: project.yaml must exist in project_path
+        # `project.yaml` must exist in `project_path`
         if not self.project_path:
             self.project_path = self.oss_fuzz_path / "projects" / self.project_name
 
@@ -291,213 +244,79 @@ class OSSPatchProjectBuilder:
 
         return True
 
-    def _checkout_project_sources(self, dst_path: Path) -> bool:
-        assert self.project_path
-
-        aixcc_config_yaml_path = self.project_path / ".aixcc" / "config.yaml"
-
-        if not aixcc_config_yaml_path.exists():
-            # Don't have `.aixcc/config.yaml` directory, do nothing.
-            return True
-
-        with open(aixcc_config_yaml_path, "r") as f:
-            aixcc_config_yaml = yaml.safe_load(f)
-
-        assert aixcc_config_yaml["full_mode"]
-        assert aixcc_config_yaml["full_mode"]["base_commit"]
-
-        command = f"git reset --hard {aixcc_config_yaml['full_mode']['base_commit']}"
-        try:
-            subprocess.check_call(
-                command,
-                shell=True,
-                cwd=dst_path,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            return True
-        except subprocess.CalledProcessError as e:
-            logger.error(f"`{command}` has failed... {e}")
-            return False
-
-    def prepare_project_sources(self, dst_path: Path) -> bool:
-        assert self.project_path
-
-        # CP's source not provided, clone the remote repository
-        if not _clone_project_repo(self.project_path / "project.yaml", dst_path):
-            logger.error("Cloning target project source code has failed.")
-            return False
-
-        if not self._checkout_project_sources(dst_path):
-            return False
-
-        return True
-
-    def _copy_oss_fuzz_and_sources(
-        self,
-        dst_dir: Path,
-    ) -> bool:
-        assert self.project_path
-
-        logger.info("Copying OSS-Fuzz and target project's sources")
-
-        if dst_dir.exists():
-            shutil.rmtree(dst_dir)
-        dst_dir.mkdir()
-
-        # prepare cp sources
-        cp_source_path = (dst_dir / "cp-sources").resolve()
-        copied_oss_fuzz_path = (dst_dir / "oss-fuzz").resolve()
-
-        if self.source_path:
-            # copy existing CP's source
-            shutil.copytree(self.source_path, cp_source_path)
-        else:
-            if not self.prepare_project_sources(cp_source_path):
-                return False
-
-        # copy the provided OSS-Fuzz source
-        shutil.copytree(self.oss_fuzz_path, copied_oss_fuzz_path)
-
-        # overwrite the provided project configs
-        shutil.copytree(
-            self.project_path,
-            copied_oss_fuzz_path / "projects" / self.project_name,
-            dirs_exist_ok=True,
-        )
-
-        # From now, we use the overwritten OSS-Fuzz
-        # self.oss_fuzz_path = copied_oss_fuzz_path
-
-        return True
-
-    def _pull_base_images_in_volume(self, volume_name: str) -> bool:
+    def _pull_base_images(self) -> bool:
         base_runner_image_name = get_base_runner_image_name(self.oss_fuzz_path)
 
-        if docker_image_exists_in_volume(base_runner_image_name, volume_name):
+        if docker_image_exists(base_runner_image_name):
             logger.info(
-                f'Base runner image ("{base_runner_image_name}") already exists in the {volume_name}.'
+                f'Base runner image ("{base_runner_image_name}") already exists. Skip pulling it.'
             )
             return True
 
-        logger.info(f"Pulling OSS-Fuzz base images inside the {volume_name}...")
+        logger.info(f'Pulling OSS-Fuzz base images "{base_runner_image_name}"...')
 
         # oss_fuzz_image_build_cmd = f"python3 /oss-fuzz/infra/helper.py pull_images"
         pull_cmd = f"docker pull {base_runner_image_name}"
 
-        command = (
-            f"docker run --rm --privileged --net=host "
-            f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
-            f"-v {self.oss_fuzz_path}:/oss-fuzz "
-            f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} {pull_cmd}"
-        )
+        # command = (
+        #     f"docker run --rm --privileged --net=host "
+        #     f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
+        #     f"-v {self.oss_fuzz_path}:/oss-fuzz "
+        #     f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} {pull_cmd}"
+        # )
 
-        run_command(command)
+        run_command(pull_cmd)
+
+        if not docker_image_exists(base_runner_image_name):
+            logger.error(
+                f'"{base_runner_image_name}" does not exist in the docker daemon.'
+            )
+            return False
+
         return True
 
     def _prepare_docker_volumes(self) -> bool:
-        if not create_docker_volume(OSS_PATCH_CRS_DOCKER_ASSETS):
+        if not create_docker_volume(OSS_PATCH_DOCKER_IMAGES_FOR_CRS):
             return False
         if not create_docker_volume(OSS_PATCH_CRS_SYSTEM_IMAGES):
             return False
         return True
 
-    def _prepare_builder_image_in_volume(self, volume_name: str) -> bool:
+    def _prepare_builder_image(self) -> bool:
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
         )
 
-        if docker_image_exists_in_volume(builder_image_name, volume_name):
+        if docker_image_exists(builder_image_name):
             logger.info(
-                f'The image "{builder_image_name}" already exists in docker cache: {volume_name}'
+                f'The image "{builder_image_name}" already exists. Skip building it.'
             )
             return True
 
-        logger.info(
-            f'Building the image "{builder_image_name}" inside the cache-builder...'
-        )
+        logger.info(f'Building the image "{builder_image_name}"...')
 
-        oss_fuzz_image_build_cmd = f"python3 /oss-fuzz/infra/helper.py build_image --no-pull {self.project_name}"
-        command = f"docker run --rm --privileged --net=host -v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} -v {self.oss_fuzz_path}:/oss-fuzz {OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} {oss_fuzz_image_build_cmd}"
+        oss_fuzz_image_build_cmd = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_image --no-pull {self.project_name}"
 
-        run_command(command)
+        run_command(oss_fuzz_image_build_cmd)
 
-        if not docker_image_exists_in_volume(builder_image_name, volume_name):
-            logger.error(f'"{builder_image_name}" does not exist in {volume_name}')
+        if not docker_image_exists(builder_image_name):
+            logger.error(f'"{builder_image_name}" does not exist in the docker daemon.')
             return False
 
         return True
 
-    def _prepare_project_builder_image(
-        self, volume_name: str = OSS_PATCH_CRS_DOCKER_ASSETS
-    ) -> bool:
-        if not self._pull_base_images_in_volume(volume_name):
+    def _prepare_project_builder_image(self) -> bool:
+        if not self._pull_base_images():
             logger.error(f"Pulling OSS-Fuzz base images has failed...")
             return False
 
-        if not self._prepare_builder_image_in_volume(volume_name):
+        if not self._prepare_builder_image():
             logger.error(
-                f"Preparing builder image for {self.project_name} has failed..."
+                f'Preparing builder image for "{self.project_name}" has failed...'
             )
             return False
 
         return True
-
-    def _prepare_runner_image(self, copy_dir: Path) -> bool:
-        assert (copy_dir / "oss-fuzz").exists()
-        assert (copy_dir / "cp-sources").exists()
-
-        if docker_image_exists(get_runner_image_name(self.project_name)):
-            logger.info(
-                f'runner image "{get_runner_image_name(self.project_name)}" already exists. Use the existing image.'
-            )
-            return True
-
-        runner_container_name = f"oss-patch-{self.project_name.split('/')[-1]}-runner"
-
-        try:
-            if not self._build_runner_image():
-                logger.error("Building oss-patch runner image failed")
-                return False
-
-        finally:
-            subprocess.run(
-                f"docker stop {runner_container_name}",
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                shell=True,
-            )
-            subprocess.run(
-                f"docker rm {runner_container_name}",
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                shell=True,
-            )
-
-        return True
-
-    def _build_runner_image(self) -> bool:
-        if docker_image_exists(get_runner_image_name(self.project_name)):
-            logger.info(
-                f'OSS-Patch runner image "{get_runner_image_name(self.project_name)}" already exists, skipping the build process.'
-            )
-            return True
-
-        logger.info(
-            f'Building runner image "{get_runner_image_name(self.project_name)}"...'
-        )
-
-        try:
-            command = (
-                f"docker build --tag {get_runner_image_name(self.project_name)} "
-                f"--build-arg target_project={self.project_name} "
-                f"--file {OSS_PATCH_RUNNER_DATA_PATH / 'Dockerfile'} "
-                f"{str(Path.cwd())}"
-            )
-            run_command(command)
-            return True
-        except subprocess.CalledProcessError:
-            return False
 
     def _detect_incremental_build(self, volume_name: str) -> bool:
         # Check if the project_builder image contains `/usr/local/bin/replay_build.sh`
@@ -524,13 +343,12 @@ class OSSPatchProjectBuilder:
         else:
             return False
 
-    def _take_incremental_build_snapshot_for_c(self, volume_name: str) -> bool:
+    def _take_incremental_build_snapshot_for_c(self, source_path: Path) -> bool:
         # if not self._detect_incremental_build(volume_name):
         #     logger.info(
         #         "`replay_build.sh` not detected, incremental build feature disabled."
         #     )
         #     return False
-
         project_path = self.oss_fuzz_path / "projects" / self.project_name
         sanitizer = "address"
 
@@ -544,101 +362,117 @@ class OSSPatchProjectBuilder:
         )
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
-        create_container_command = (
-            f"docker create --privileged --net=host "
-            f"--env=SANITIZER={sanitizer} "
-            f"--env=CCACHE_DIR=/workspace/ccache "
-            f"--env=FUZZING_LANGUAGE={self.project_lang} "
-            f"--env=CAPTURE_REPLAY_SCRIPT=1 "
-            f"--name={container_name} "
-            f"-v=/oss-fuzz/ccaches/{self.project_name}/ccache:/workspace/ccache "
-            f"-v=/oss-fuzz/build/out/{self.project_name}/:/out/ "
-            f"-v=/cp-sources:{_workdir_from_dockerfile(project_path, self.project_name)} "
-            f"{builder_image_name} "
-            f'/bin/bash -c "export PATH=/ccache/bin:\\$PATH && rsync -av \\$SRC/ {new_src_dir} && export SRC={new_src_dir} && cd {new_workdir} && compile && cp -n /usr/local/bin/replay_build.sh \\$SRC/"'
-        )
-
-        install_replay_command = f"docker cp /opt/replay_build.sh {container_name}:/usr/local/bin/replay_build.sh"
-        install_make_replay_command = f"docker cp /opt/make_build_replayable.py {container_name}:/usr/local/bin/make_build_replayable.py"
-
-        start_container_command = f"docker start -a {container_name}"
-
-        # Command for patched `compile` in gcr.io/oss-fuzz/<proj-name>
-        patch_compile_command = (
-            f"docker cp /work/compile {container_name}:/usr/local/bin/compile"
-        )
-
-        commit_command = (
-            f"docker container commit "
-            f'-c "ENV REPLAY_ENABLED=1" '
-            f'-c "ENV CAPTURE_REPLAY_SCRIPT=" '
-            f'-c "ENV SRC={new_src_dir}" '
-            f'-c "WORKDIR {new_workdir}" '
-            f'-c "CMD [\\"compile\\"]" '
-            f"{container_name} {builder_image_name}"
-        )
-
-        shell_script = f"""
-        #!/bin/bash
-
-        set -e -o pipefail
-        set -u
-
-        # Cleanup function to ensure containers are removed
-        cleanup() {{
-            docker stop $(docker ps -a -q) 2>/dev/null || true
-            docker rm $(docker ps -a -q) 2>/dev/null || true
-        }}
-
-        # Register cleanup to run on exit (success or failure)
-        trap cleanup EXIT
-
-        # Create the container (without starting it)
-        {create_container_command}
-
-        # Install replay scripts before starting
-        {install_replay_command}
-        {install_make_replay_command}
-
-        # Start the container and run the build
-        {start_container_command}
-
-        # patch /usr/bin/compile
-        {patch_compile_command}
-
-        {commit_command}
-        """
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
-
-            (tmp_path / "prepare_artifacts.sh").write_text(shell_script)
-
-            patched_compile = self._get_patched_compile_sh()
-            if not patched_compile:
-                return False
-            (tmp_path / "compile").write_text(patched_compile)
-
-            runner_command = (
-                f"docker run "
-                f"--rm --privileged --net=host "
-                f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
-                f"-v {tmp_path}:/work "
-                f"{get_runner_image_name(self.project_name)} "
-                f"/bin/bash -c 'chmod +x /work/* && /work/prepare_artifacts.sh'"
+        try:
+            create_container_command = (
+                f"docker create --privileged --net=host "
+                f"--env=SANITIZER={sanitizer} "
+                f"--env=CCACHE_DIR=/workspace/ccache "
+                f"--env=FUZZING_LANGUAGE={self.project_lang} "
+                f"--env=CAPTURE_REPLAY_SCRIPT=1 "
+                f"--name={container_name} "
+                f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
+                f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
+                f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
+                f"{builder_image_name} "
+                f'/bin/bash -c "export PATH=/ccache/bin:\\$PATH && rsync -av \\$SRC/ {new_src_dir} && export SRC={new_src_dir} && cd {new_workdir} && chmod +x /usr/local/bin/compile && compile && cp -n /usr/local/bin/replay_build.sh \\$SRC/"'
             )
 
             proc = subprocess.run(
-                runner_command,
+                create_container_command,
                 shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("docker create command has failed")
+                return False
+
+            proc = subprocess.run(
+                f"docker cp {OSS_PATCH_RUNNER_DATA_PATH / 'replay_build.sh'} {container_name}:/usr/local/bin/replay_build.sh",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("Installing `replay_build.sh` has failed")
+                return False
+
+            proc = subprocess.run(
+                f"docker cp {OSS_PATCH_RUNNER_DATA_PATH / 'make_build_replayable.py'} {container_name}:/usr/local/bin/make_build_replayable.py",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("Installing `make_build_replayable.py` failed")
+                return False
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                patched_compile_path = Path(tmp_dir) / "compile"
+
+                patched_compile_txt = self._get_patched_compile_sh()
+                if not patched_compile_txt:
+                    return False
+                patched_compile_path.write_text(patched_compile_txt)
+
+                # Command for patched `compile` in gcr.io/oss-fuzz/<proj-name>
+                proc = subprocess.run(
+                    f"docker cp {patched_compile_path} {container_name}:/usr/local/bin/compile",
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if proc.returncode != 0:
+                    logger.error("Installing patched compile script has failed")
+                    return False
+
+            proc = subprocess.run(
+                f"docker start -a {container_name}",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("docker start command has failed")
+                return False
+
+            commit_command = (
+                f"docker container commit "
+                f'-c "ENV REPLAY_ENABLED=1" '
+                f'-c "ENV CAPTURE_REPLAY_SCRIPT=" '
+                f'-c "ENV SRC={new_src_dir}" '
+                f'-c "WORKDIR {new_workdir}" '
+                f'-c "CMD [\\"compile\\"]" '
+                f"{container_name} {builder_image_name}"
             )
 
-            if proc.returncode == 0:
-                return True
-            else:
+            proc = subprocess.run(
+                commit_command,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("Committing container has failed")
                 return False
+
+            change_ownership_with_docker(source_path)
+
+            return True
+
+        finally:
+            subprocess.run(
+                "docker stop $(docker ps -a -q)",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                "docker rm $(docker ps -a -q)",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
     def _take_incremental_build_snapshot_for_java(self, volume_name: str) -> bool:
         project_path = self.oss_fuzz_path / "projects" / self.project_name
@@ -648,10 +482,6 @@ class OSSPatchProjectBuilder:
             self.oss_fuzz_path, self.project_name
         )
 
-        new_src_dir = "/built-src"
-        new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir
-        )
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
         run_container_command = (
@@ -739,16 +569,29 @@ class OSSPatchProjectBuilder:
             else:
                 return False
 
-    def take_incremental_build_snapshot(
-        self, volume_name: str = OSS_PATCH_CRS_DOCKER_ASSETS
-    ) -> bool:
+    def take_incremental_build_snapshot(self, source_path: Path) -> bool:
+        logger.info("Taking a snapshot for incremental build...")
         assert self.oss_fuzz_path.exists()
         assert self.project_path
 
+        assert source_path.exists()
+
+        assert is_git_repository(source_path), (
+            f'"{source_path}" is not a git repository'
+        )
+
+        if not docker_image_exists(
+            get_builder_image_name(self.oss_fuzz_path, self.project_name)
+        ):
+            logger.error(
+                f'The project builder image "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}" does not exist.'
+            )
+            return False
+
         if self.project_lang in ["c", "c++"]:
-            return self._take_incremental_build_snapshot_for_c(volume_name)
+            return self._take_incremental_build_snapshot_for_c(source_path)
         elif self.project_lang == "jvm":
-            return self._take_incremental_build_snapshot_for_java(volume_name)
+            return self._take_incremental_build_snapshot_for_java(source_path)
         else:
             logger.error(
                 f'Incremental build for language "{self.project_lang}" is not supported.'

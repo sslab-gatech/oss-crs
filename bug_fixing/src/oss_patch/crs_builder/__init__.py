@@ -143,9 +143,7 @@ class OSSPatchCRSBuilder:
             )
             return True
 
-        logger.info("=" * 60)
         logger.info("Building CRS Docker image...")
-        logger.info("=" * 60)
 
         crs_repo_path_in_container = "/crs-source"
 

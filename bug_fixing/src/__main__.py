@@ -44,7 +44,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
 
     if args.command == "build":
         oss_patch = OSSPatch(args.project, crs_name=args.crs)
-        result = oss_patch.build_crs(
+        result = oss_patch.build(
             Path(args.oss_fuzz),
             _get_path_or_none(args.project_path),
             _get_path_or_none(args.source_path),
@@ -60,15 +60,15 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             _get_path_or_none(args.hints),
             Path(args.out),
         )
-    elif args.command == "run_pov":
-        oss_patch = OSSPatch(args.project)
-        result = oss_patch.run_pov(args.harness, Path(args.pov), args.source_path)
     elif args.command == "test-inc-build":
         oss_patch = OSSPatch(args.project)
         result = oss_patch.test_inc_build(Path(args.oss_fuzz))
-    elif args.command == "check_povs":
-        oss_patch = OSSPatch(args.project)
-        result = oss_patch.test_povs(Path(args.oss_fuzz))
+    # elif args.command == "run_pov":
+    #     oss_patch = OSSPatch(args.project)
+    #     result = oss_patch.run_pov(args.harness, Path(args.pov), args.source_path)
+    # elif args.command == "check_povs":
+    #     oss_patch = OSSPatch(args.project)
+    #     result = oss_patch.test_povs(Path(args.oss_fuzz))
     else:
         # Print help string if no arguments provided.
         parser.print_help()

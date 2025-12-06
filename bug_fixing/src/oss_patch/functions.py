@@ -5,7 +5,9 @@ from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
     OSS_PATCH_CACHE_BUILDER_DATA_PATH,
+    OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
 )
+from tempfile import TemporaryDirectory
 import os
 from typing import Deque
 from collections import deque
@@ -13,6 +15,7 @@ import sys
 import shutil
 import logging
 import re
+import yaml
 
 logger = logging.getLogger()
 
@@ -47,6 +50,172 @@ def create_docker_volume(volume_name: str) -> bool:
         return True
     except subprocess.CalledProcessError:
         return False
+
+
+def load_image_to_volume(volume_name: str) -> bool:
+    try:
+        subprocess.check_call(
+            f"docker volume create {volume_name}",
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            shell=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def change_ownership_with_docker(target_path: Path) -> bool:
+    command = f"docker run --rm --privileged -v {target_path}:/target {OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} chown -R {os.getuid()} /target"
+
+    proc = subprocess.run(
+        command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True
+    )
+
+    if proc.returncode == 0:
+        return True
+    else:
+        return False
+
+
+def pull_project_source(project_path: Path, dst_path: Path) -> bool:
+    assert project_path.exists()
+
+    if not _clone_project_repo(project_path, dst_path):
+        logger.error("Cloning target project source code has failed.")
+        return False
+
+    if not _checkout_project_sources(project_path, dst_path):
+        logger.error("Checking out project source code has failed.")
+        return False
+
+    return True
+
+
+def _clone_project_repo(project_path: Path, dst_path: Path) -> bool:
+    proj_yaml_path = project_path / "project.yaml"
+    if not proj_yaml_path.exists():
+        logger.error(f'Target project "{proj_yaml_path}" not found')
+        return False
+
+    with open(proj_yaml_path) as f:
+        yaml_data = yaml.safe_load(f)
+
+    if not "main_repo" in yaml_data.keys():
+        logger.error(f"Invalid project.yaml file: {proj_yaml_path}")
+        return False
+
+    logger.info(
+        f'Cloning the target project repository from "{yaml_data["main_repo"]}" to "{dst_path}"'
+    )
+
+    clone_command = f"git clone {yaml_data['main_repo']} --shallow-submodules --recurse-submodules {dst_path}"
+    # @TODO: how to properly handle `--shallow-submodules --recurse-submodules` options
+
+    try:
+        subprocess.check_call(
+            clone_command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            shell=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def _checkout_project_sources(project_path: Path, dst_path: Path) -> bool:
+    assert project_path.exists()
+
+    aixcc_config_yaml_path = project_path / ".aixcc" / "config.yaml"
+
+    if not aixcc_config_yaml_path.exists():
+        # Don't have `.aixcc/config.yaml` directory, do nothing.
+        return True
+
+    with open(aixcc_config_yaml_path, "r") as f:
+        aixcc_config_yaml = yaml.safe_load(f)
+
+    assert aixcc_config_yaml["full_mode"]
+    assert aixcc_config_yaml["full_mode"]["base_commit"]
+
+    command = f"git reset --hard {aixcc_config_yaml['full_mode']['base_commit']}"
+    try:
+        subprocess.check_call(
+            command,
+            shell=True,
+            cwd=dst_path,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"`{command}` has failed... {e}")
+        return False
+
+
+def is_git_repository(path: Path) -> bool:
+    return os.path.isdir(path / ".git")
+
+
+def reset_repository(path: Path) -> bool:
+    proc = subprocess.run(
+        f"git reset --hard && git clean -fdx",
+        cwd=path,
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    if proc.returncode == 0:
+        return True
+    else:
+        return False
+
+
+def load_images_to_volume(images: list[str], volume_name: str) -> bool:
+    logger.info(f'Loading docker images to "{volume_name}". It may take a while...')
+
+    if len(images) == 0:
+        logger.warning(f"No images to load provided")
+        return True
+
+    with TemporaryDirectory() as tmp_dir:
+        images_path = Path(tmp_dir)
+
+        for image_name in images:
+            if not docker_image_exists(image_name):
+                logger.error(f'"{image_name}" does not exist in docker daemon')
+                return False
+
+            subprocess.run(
+                f"docker save -o {images_path / image_name.split('/')[-1]}.tar {image_name}",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+        docker_load_cmd = (
+            f"docker run --privileged --rm "
+            f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:{DEFAULT_DOCKER_ROOT_DIR} "
+            f"-v {images_path}:/images "
+            f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
+            f"sh -c 'for f in /images/*; do docker load -i \"$f\"; done'"
+        )
+
+        proc = subprocess.run(
+            docker_load_cmd,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        if proc.returncode == 0:
+            return True
+        else:
+            return False
+
+    return True
 
 
 def docker_image_exists_in_volume(image_name: str, volume_name: str) -> bool:
