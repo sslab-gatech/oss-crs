@@ -72,10 +72,6 @@ class IncrementalBuildChecker:
             shutil.rmtree(proj_src_path)
         pull_project_source(self.project_path, proj_src_path)
 
-        pull_project_source(
-            self.oss_fuzz_path / "projects" / self.project_name, proj_src_path
-        )
-
         logger.info(
             f'create project builder image: "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}"'
         )
