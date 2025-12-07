@@ -474,100 +474,106 @@ class OSSPatchProjectBuilder:
                 stderr=subprocess.DEVNULL,
             )
 
-    def _take_incremental_build_snapshot_for_java(self, volume_name: str) -> bool:
+    def _take_incremental_build_snapshot_for_java(self, source_path: Path) -> bool:
         project_path = self.oss_fuzz_path / "projects" / self.project_name
         sanitizer = "address"
 
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
         )
-
+        new_src_dir = "/built-src"
+        new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
+            "/src", new_src_dir
+        )
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
-        run_container_command = (
-            f"docker run --privileged --net=host "
-            f"--env=SANITIZER={sanitizer} "
-            f"--env=CCACHE_DIR=/workspace/ccache "
-            f"--env=FUZZING_LANGUAGE={self.project_lang} "
-            f"--env=CAPTURE_REPLAY_SCRIPT=1 "
-            f"--name={container_name} "
-            f"-v=/oss-fuzz/ccaches/{self.project_name}/ccache:/workspace/ccache "
-            f"-v=/oss-fuzz/build/out/{self.project_name}/:/out/ "
-            f"-v=/cp-sources:{_workdir_from_dockerfile(project_path, self.project_name)} "
-            f"{builder_image_name} "
-            f'/bin/bash -c "compile"'
-        )
-
-        # install_replay_command = f"docker cp /opt/replay_build.sh {container_name}:/usr/local/bin/replay_build.sh"
-        # install_make_replay_command = f"docker cp /opt/make_build_replayable.py {container_name}:/usr/local/bin/make_build_replayable.py"
-
-        # start_container_command = f"docker start -a {container_name}"
-
-        # Command for patched `compile` in gcr.io/oss-fuzz/<proj-name>
-        # patch_compile_command = (
-        #     f"docker cp /work/compile {container_name}:/usr/local/bin/compile"
-        # )
-
-        commit_command = (
-            f"docker container commit "
-            # f'-c "ENV REPLAY_ENABLED=1" '
-            # f'-c "ENV CAPTURE_REPLAY_SCRIPT=" '
-            # f'-c "WORKDIR {new_workdir}" '
-            f'-c "CMD [\\"compile\\"]" '
-            f"{container_name} {builder_image_name}"
-        )
-
-        shell_script = f"""
-        #!/bin/bash
-
-        set -e -o pipefail
-        set -u
-
-        # Cleanup function to ensure containers are removed
-        cleanup() {{
-            docker stop $(docker ps -a -q) 2>/dev/null || true
-            docker rm $(docker ps -a -q) 2>/dev/null || true
-        }}
-
-        # Register cleanup to run on exit (success or failure)
-        trap cleanup EXIT
-
-        # run the container
-        {run_container_command}
-
-        {commit_command}
-        """
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            tmp_path = Path(tmp_dir)
-
-            (tmp_path / "prepare_artifacts.sh").write_text(shell_script)
-
-            patched_compile = self._get_patched_compile_sh()
-            if not patched_compile:
-                return False
-            (tmp_path / "compile").write_text(patched_compile)
-
-            runner_command = (
-                f"docker run "
-                f"--rm --privileged --net=host "
-                f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
-                f"-v {tmp_path}:/work "
-                f"{get_runner_image_name(self.project_name)} "
-                f"/bin/bash -c 'chmod +x /work/* && /work/prepare_artifacts.sh'"
+        try:
+            create_container_command = (
+                f"docker create --privileged --net=host "
+                f"--env=SANITIZER={sanitizer} "
+                f"--env=FUZZING_LANGUAGE={self.project_lang} "
+                f"--name={container_name} "
+                f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
+                f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
+                f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
+                f"{builder_image_name} "
+                f'/bin/bash -c "rsync -av \\$SRC/ {new_src_dir} && export SRC={new_src_dir} && cd {new_workdir} && chmod +x /usr/local/bin/compile && compile"'
             )
 
             proc = subprocess.run(
-                runner_command,
+                create_container_command,
                 shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("docker create command has failed")
+                return False
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                patched_compile_path = Path(tmp_dir) / "compile"
+
+                patched_compile_txt = self._get_patched_compile_sh()
+                if not patched_compile_txt:
+                    return False
+                patched_compile_path.write_text(patched_compile_txt)
+
+                # Command for patched `compile` in gcr.io/oss-fuzz/<proj-name>
+                proc = subprocess.run(
+                    f"docker cp {patched_compile_path} {container_name}:/usr/local/bin/compile",
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if proc.returncode != 0:
+                    logger.error("Installing patched compile script has failed")
+                    return False
+
+            proc = subprocess.run(
+                f"docker start -a {container_name}",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("docker start command has failed")
+                return False
+
+            commit_command = (
+                f"docker container commit "
+                f'-c "ENV SRC={new_src_dir}" '
+                f'-c "WORKDIR {new_workdir}" '
+                f'-c "CMD [\\"compile\\"]" '
+                f"{container_name} {builder_image_name}"
             )
 
-            if proc.returncode == 0:
-                return True
-            else:
+            proc = subprocess.run(
+                commit_command,
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if proc.returncode != 0:
+                logger.error("Committing container has failed")
                 return False
+
+            change_ownership_with_docker(source_path)
+
+            return True
+
+        finally:
+            subprocess.run(
+                "docker stop $(docker ps -a -q)",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                "docker rm $(docker ps -a -q)",
+                shell=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
     def take_incremental_build_snapshot(self, source_path: Path) -> bool:
         logger.info("Taking a snapshot for incremental build...")

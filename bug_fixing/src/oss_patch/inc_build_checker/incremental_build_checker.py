@@ -85,8 +85,8 @@ class IncrementalBuildChecker:
         image_build_time = time.time() - cur_time
         logger.info(f"Docker image build time: {image_build_time}")
 
-        # if not self._measure_time_without_inc_build():
-        #     return False
+        if not self._measure_time_without_inc_build(proj_src_path):
+            return False
 
         logger.info(f"Now taking a snapshot for incremental build")
         if not self.project_builder.take_incremental_build_snapshot(proj_src_path):
@@ -123,6 +123,8 @@ class IncrementalBuildChecker:
 
     def _measure_time_without_inc_build(self, source_path: Path) -> bool:
         logger.info("Measuring original build time without incremental build")
+        change_ownership_with_docker(self.oss_fuzz_path / "out")
+
         # measure consumed time
         cur_time = time.time()
         build_fail_logs = self.project_builder.build_fuzzers(source_path)
@@ -144,6 +146,7 @@ class IncrementalBuildChecker:
             f"Build time without incremental build: {self.build_time_without_inc_build}"
         )
 
+        change_ownership_with_docker(source_path)
         if not reset_repository(source_path):
             logger.error(f"Reset of {source_path} has failed...")
             return False
@@ -152,6 +155,7 @@ class IncrementalBuildChecker:
 
     def _measure_time_with_inc_build(self, source_path) -> bool:
         logger.info("Measuring build time with incremental build")
+        change_ownership_with_docker(self.oss_fuzz_path / "out")
 
         # measure consumed time
         cur_time = time.time()
@@ -174,6 +178,7 @@ class IncrementalBuildChecker:
             f"Build time with incremental build: {self.build_time_with_inc_build}"
         )
 
+        change_ownership_with_docker(source_path)
         if not reset_repository(source_path):
             logger.error(f"Reset of {source_path} has failed...")
             return False
