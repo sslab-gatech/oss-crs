@@ -462,13 +462,13 @@ class OSSPatchProjectBuilder:
 
         finally:
             subprocess.run(
-                "docker stop $(docker ps -a -q)",
+                f"docker stop {container_name}",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             subprocess.run(
-                "docker rm $(docker ps -a -q)",
+                f"docker rm {container_name}",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
