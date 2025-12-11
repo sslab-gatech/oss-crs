@@ -9,10 +9,11 @@ This script performs one-time setup for RTS tools (Ekstazi, JcgEks) on Java proj
 - Commits changes to git
 
 Usage:
-    python rts_init.py <project_path> [--tool ekstazi|jcgeks]
+    python rts_init.py [project_path] [--tool ekstazi|jcgeks]  # project_path defaults to current directory
+    python rts_init.py --install-deps  # Install Ekstazi and JcgEks dependencies only
 
 Environment variables:
-    RTS_TOOL: RTS tool to use (ekstazi or jcgeks), default: ekstazi
+    RTS_TOOL: RTS tool to use (ekstazi or jcgeks), default: jcgeks
 """
 
 import os
@@ -23,6 +24,7 @@ import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Optional
+import tempfile
 
 # RTS tool configurations (only ekstazi and jcgeks supported)
 RTS_TOOLS = {
@@ -41,28 +43,71 @@ RTS_TOOLS = {
 MAVEN_NAMESPACE = "http://maven.apache.org/POM/4.0.0"
 SUREFIRE_VERSION = "2.22.2"
 
-# JcgEks JAR download URLs
-JCGEKS_JARS = [
+# JcgEks artifacts download URLs (order matters: parent -> core -> plugin)
+JCGEKS_ARTIFACTS = [
+    # 1. Parent POM (must be installed first, no jar)
     {
-        "url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.jcgeks.core-1.0.0.jar",
-        "filename": "org.jcgeks.core-1.0.0.jar",
-        "group_id": "org.jcgeks",
+        "jar_url": None,
+        "pom_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.jcgeks.parent-1.0.0.pom",
+        "jar_filename": None,
+        "pom_filename": "org.jcgeks.parent-1.0.0.pom",
+        "artifact_id": "org.jcgeks.parent",
+        "packaging": "pom",
+    },
+    # 2. Core library (depends on parent)
+    {
+        "jar_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.jcgeks.core-1.0.0.jar",
+        "pom_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.jcgeks.core-1.0.0.pom",
+        "jar_filename": "org.jcgeks.core-1.0.0.jar",
+        "pom_filename": "org.jcgeks.core-1.0.0.pom",
         "artifact_id": "org.jcgeks.core",
-        "version": "1.0.0",
         "packaging": "jar",
     },
+    # 3. Maven plugin (depends on parent and core)
     {
-        "url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/jcgeks-maven-plugin-1.0.0.jar",
-        "filename": "jcgeks-maven-plugin-1.0.0.jar",
-        "group_id": "org.jcgeks",
+        "jar_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/jcgeks-maven-plugin-1.0.0.jar",
+        "pom_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/jcgeks-maven-plugin-1.0.0.pom",
+        "jar_filename": "jcgeks-maven-plugin-1.0.0.jar",
+        "pom_filename": "jcgeks-maven-plugin-1.0.0.pom",
         "artifact_id": "jcgeks-maven-plugin",
-        "version": "1.0.0",
+        "packaging": "maven-plugin",
+    },
+]
+
+# Ekstazi artifacts download URLs (order matters: parent -> core -> plugin)
+# Note: Ekstazi 5.3.0 artifacts are hosted under JcgEks release 1.0.0
+EKSTAZI_ARTIFACTS = [
+    # 1. Parent POM (must be installed first, no jar)
+    {
+        "jar_url": None,
+        "pom_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.ekstazi.parent-5.3.0.pom",
+        "jar_filename": None,
+        "pom_filename": "org.ekstazi.parent-5.3.0.pom",
+        "artifact_id": "org.ekstazi.parent",
+        "packaging": "pom",
+    },
+    # 2. Core library (depends on parent)
+    {
+        "jar_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.ekstazi.core-5.3.0.jar",
+        "pom_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/org.ekstazi.core-5.3.0.pom",
+        "jar_filename": "org.ekstazi.core-5.3.0.jar",
+        "pom_filename": "org.ekstazi.core-5.3.0.pom",
+        "artifact_id": "org.ekstazi.core",
+        "packaging": "jar",
+    },
+    # 3. Maven plugin (depends on parent and core)
+    {
+        "jar_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/ekstazi-maven-plugin-5.3.0.jar",
+        "pom_url": "https://github.com/acorn421/JcgEks/releases/download/1.0.0/ekstazi-maven-plugin-5.3.0.pom",
+        "jar_filename": "ekstazi-maven-plugin-5.3.0.jar",
+        "pom_filename": "ekstazi-maven-plugin-5.3.0.pom",
+        "artifact_id": "ekstazi-maven-plugin",
         "packaging": "maven-plugin",
     },
 ]
 
 
-def execute_cmd(cmd: str, cwd: Optional[str] = None, timeout: int = 300) -> bool:
+def execute_cmd(cmd: str, cwd: Optional[str] = None, timeout: int = 3600) -> bool:
     """Execute a shell command and return success status."""
     try:
         subprocess.run(
@@ -78,6 +123,66 @@ def execute_cmd(cmd: str, cwd: Optional[str] = None, timeout: int = 300) -> bool
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         print(f"[ERROR] Command failed: {cmd}")
         print(f"[ERROR] {e}")
+        return False
+
+
+def ensure_xmllint_installed() -> bool:
+    """Ensure xmllint is installed, install via apt if not available."""
+    try:
+        subprocess.run(
+            ["xmllint", "--version"],
+            capture_output=True,
+            timeout=10,
+        )
+        return True
+    except FileNotFoundError:
+        print("[INFO] xmllint not found, installing libxml2-utils...")
+        try:
+            subprocess.run(
+                ["apt-get", "update"],
+                capture_output=True,
+                timeout=120,
+            )
+            result = subprocess.run(
+                ["apt-get", "install", "-y", "libxml2-utils"],
+                capture_output=True,
+                timeout=120,
+            )
+            if result.returncode == 0:
+                print("[INFO] xmllint installed successfully")
+                return True
+            else:
+                print("[WARNING] Failed to install xmllint")
+                return False
+        except Exception as e:
+            print(f"[WARNING] Failed to install xmllint: {e}")
+            return False
+    except Exception:
+        return False
+
+
+def format_xml_with_xmllint(file_path: str) -> bool:
+    """Format XML file using xmllint."""
+    try:
+        # Run xmllint --format and capture output
+        result = subprocess.run(
+            ["xmllint", "--format", file_path],
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            # Write formatted output back to file
+            with open(file_path, "wb") as f:
+                f.write(result.stdout)
+            return True
+        else:
+            print(f"[WARNING] xmllint failed for {file_path}: {result.stderr.decode()}")
+            return False
+    except FileNotFoundError:
+        print("[WARNING] xmllint not available, skipping formatting")
+        return False
+    except Exception as e:
+        print(f"[WARNING] Failed to format {file_path}: {e}")
         return False
 
 
@@ -142,62 +247,62 @@ def download_file(url: str, dest_path: str, timeout: int = 120) -> bool:
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
 
-    # Fallback to curl
-    try:
-        result = subprocess.run(
-            ["curl", "-sL", "-o", dest_path, url],
-            timeout=timeout,
-            capture_output=True,
-        )
-        if result.returncode == 0 and os.path.exists(dest_path):
-            print(f"[INFO] Downloaded: {dest_path}")
-            return True
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-
     print(f"[ERROR] Failed to download: {url}")
     return False
 
 
-def install_jcgeks_jars() -> bool:
+def install_rts_artifacts(artifacts: list, tool_name: str, mvn: str) -> bool:
     """
-    Download and install JcgEks JAR files to Maven local repository.
+    Download and install RTS artifacts to Maven local repository.
+
+    Args:
+        artifacts: List of artifact configurations to install
+        tool_name: Name of the RTS tool (for logging)
+        mvn: Path to Maven executable
 
     Returns:
         True if installation succeeded, False otherwise
     """
-    print("[INFO] Installing JcgEks dependencies...")
-
-    # Find Maven executable
-    mvn = find_maven_executable()
-    if not mvn:
-        print("[ERROR] Maven executable not found!")
-        print("[ERROR] Checked: $MVN, $SRC/*/mvn, /usr/bin/mvn, PATH")
-        return False
+    print(f"[INFO] Installing {tool_name} dependencies...")
 
     # Create temp directory for downloads
-    import tempfile
     with tempfile.TemporaryDirectory() as tmp_dir:
-        for jar_info in JCGEKS_JARS:
-            jar_path = os.path.join(tmp_dir, jar_info["filename"])
+        # Install artifacts in order (parent -> core -> plugin)
+        for artifact in artifacts:
+            artifact_id = artifact["artifact_id"]
+            print(f"[INFO] Installing {artifact_id}...")
 
-            # Download JAR
-            if not download_file(jar_info["url"], jar_path):
-                print(f"[ERROR] Failed to download {jar_info['filename']}")
+            # Download POM file (required for all)
+            pom_path = os.path.join(tmp_dir, artifact["pom_filename"])
+            if not download_file(artifact["pom_url"], pom_path):
+                print(f"[ERROR] Failed to download POM for {artifact_id}")
                 return False
 
-            # Install to Maven local repository
-            install_cmd = [
-                mvn,
-                "install:install-file",
-                f"-Dfile={jar_path}",
-                f"-DgroupId={jar_info['group_id']}",
-                f"-DartifactId={jar_info['artifact_id']}",
-                f"-Dversion={jar_info['version']}",
-                f"-Dpackaging={jar_info['packaging']}",
-            ]
+            # Build install command
+            if artifact["jar_url"] is None:
+                # Parent POM only (no jar)
+                install_cmd = [
+                    mvn,
+                    "install:install-file",
+                    f"-Dfile={pom_path}",
+                    f"-DpomFile={pom_path}",
+                    "-Dpackaging=pom",
+                ]
+            else:
+                # JAR + POM
+                jar_path = os.path.join(tmp_dir, artifact["jar_filename"])
+                if not download_file(artifact["jar_url"], jar_path):
+                    print(f"[ERROR] Failed to download JAR for {artifact_id}")
+                    return False
 
-            print(f"[INFO] Installing {jar_info['artifact_id']}...")
+                install_cmd = [
+                    mvn,
+                    "install:install-file",
+                    f"-Dfile={jar_path}",
+                    f"-DpomFile={pom_path}",
+                ]
+
+            # Execute install command
             try:
                 result = subprocess.run(
                     install_cmd,
@@ -206,16 +311,59 @@ def install_jcgeks_jars() -> bool:
                     timeout=120,
                 )
                 if result.returncode != 0:
-                    print(f"[ERROR] Failed to install {jar_info['artifact_id']}")
+                    print(f"[ERROR] Failed to install {artifact_id}")
                     print(f"[ERROR] stdout: {result.stdout}")
                     print(f"[ERROR] stderr: {result.stderr}")
                     return False
-                print(f"[INFO] Installed: {jar_info['artifact_id']}")
+                print(f"[INFO] Installed: {artifact_id}")
             except subprocess.TimeoutExpired:
-                print(f"[ERROR] Timeout installing {jar_info['artifact_id']}")
+                print(f"[ERROR] Timeout installing {artifact_id}")
                 return False
 
-    print("[INFO] JcgEks installation completed!")
+    print(f"[INFO] {tool_name} installation completed!")
+    return True
+
+
+def install_jcgeks_jars() -> bool:
+    """Install JcgEks artifacts to Maven local repository."""
+    mvn = find_maven_executable()
+    if not mvn:
+        print("[ERROR] Maven executable not found!")
+        print("[ERROR] Checked: $MVN, $SRC/*/mvn, /usr/bin/mvn, PATH")
+        return False
+    return install_rts_artifacts(JCGEKS_ARTIFACTS, "JcgEks", mvn)
+
+
+def install_ekstazi_jars() -> bool:
+    """Install Ekstazi artifacts to Maven local repository."""
+    mvn = find_maven_executable()
+    if not mvn:
+        print("[ERROR] Maven executable not found!")
+        print("[ERROR] Checked: $MVN, $SRC/*/mvn, /usr/bin/mvn, PATH")
+        return False
+    return install_rts_artifacts(EKSTAZI_ARTIFACTS, "Ekstazi", mvn)
+
+
+def install_all_rts_deps() -> bool:
+    """Install all RTS tool dependencies (Ekstazi and JcgEks)."""
+    print("[INFO] Installing all RTS dependencies...")
+
+    # Find Maven executable once
+    mvn = find_maven_executable()
+    if not mvn:
+        print("[ERROR] Maven executable not found!")
+        print("[ERROR] Checked: $MVN, $SRC/*/mvn, /usr/bin/mvn, PATH")
+        return False
+
+    # Install Ekstazi first
+    if not install_rts_artifacts(EKSTAZI_ARTIFACTS, "Ekstazi", mvn):
+        return False
+
+    # Install JcgEks
+    if not install_rts_artifacts(JCGEKS_ARTIFACTS, "JcgEks", mvn):
+        return False
+
+    print("[INFO] All RTS dependencies installed successfully!")
     return True
 
 
@@ -279,7 +427,7 @@ def create_surefire_plugin(project_name: str, tool_name: str) -> ET.Element:
         excludes_file = ET.SubElement(configuration, "excludesFile")
         # Use unique exclude file path per project and tool
         prefix_path = "${java.io.tmpdir}/" + project_name
-        exclude_target = f"_{tool_name}Excludes/"
+        exclude_target = f"_{tool_name}Excludes"
         excludes_file.text = prefix_path + exclude_target
 
     return plugin
@@ -345,25 +493,144 @@ def delete_surefire_config_element(
 
             if modified:
                 tree.write(pom_path, encoding="utf-8", xml_declaration=True)
+                format_xml_with_xmllint(pom_path)
 
         except ET.ParseError as e:
             print(f"[WARNING] Failed to parse {pom_path}: {e}")
 
 
-def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> bool:
-    """Add surefire and RTS tool plugins to a pom.xml file."""
+def add_excludes_file_to_surefire(pom_path: str, project_name: str, tool_name: str) -> bool:
+    """Add excludesFile configuration to existing surefire plugin."""
+    ns = "{" + MAVEN_NAMESPACE + "}"
+
     try:
-        tree, plugins, _ = get_pom_tree_and_plugins(pom_path)
+        tree = ET.parse(pom_path)
+        root = tree.getroot()
+        ET.register_namespace("", MAVEN_NAMESPACE)
 
-        # Add surefire plugin
-        surefire_plugin = create_surefire_plugin(project_name, tool_name)
-        plugins.append(surefire_plugin)
+        # Find existing surefire plugin
+        for plugin in root.findall(".//" + ns + "plugin"):
+            artifact_id = plugin.find(ns + "artifactId")
+            if artifact_id is not None and artifact_id.text == "maven-surefire-plugin":
+                # Find or create configuration element
+                configuration = plugin.find(ns + "configuration")
+                if configuration is None:
+                    configuration = ET.SubElement(plugin, "configuration")
 
-        # Add RTS tool plugin
-        rts_plugin = create_rts_plugin(tool_name)
-        plugins.append(rts_plugin)
+                # Add or update excludesFile
+                excludes_file = configuration.find(ns + "excludesFile")
+                if excludes_file is None:
+                    excludes_file = ET.SubElement(configuration, "excludesFile")
+
+                # Set excludesFile path
+                prefix_path = "${java.io.tmpdir}/" + project_name
+                exclude_target = f"_{tool_name}Excludes"
+                excludes_file.text = prefix_path + exclude_target
+
+                tree.write(pom_path, encoding="utf-8", xml_declaration=True)
+                format_xml_with_xmllint(pom_path)
+                return True
+
+        # No existing surefire plugin found
+        return False
+
+    except Exception as e:
+        print(f"[ERROR] Failed to modify surefire in {pom_path}: {e}")
+        return False
+
+
+def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> bool:
+    """Add RTS tool plugin and configure surefire excludesFile in a pom.xml file."""
+    ns = "{" + MAVEN_NAMESPACE + "}"
+
+    try:
+        tree = ET.parse(pom_path)
+        root = tree.getroot()
+        ET.register_namespace("", MAVEN_NAMESPACE)
+
+        # Find build element (must exist)
+        build = root.find(ns + "build")
+        if build is None:
+            # Try without namespace (some pom.xml may not have namespace)
+            build = root.find("build")
+        if build is None:
+            print(f"[WARNING] No <build> element found in {pom_path}, skipping")
+            return True
+
+        # Find plugins element - try with and without namespace
+        plugins = build.find(ns + "plugins")
+        if plugins is None:
+            plugins = build.find("plugins")
+        if plugins is None:
+            print(f"[WARNING] No <build><plugins> element found in {pom_path}, skipping")
+            return True
+
+        # Determine namespace used in this pom.xml
+        # Check first plugin to see if it has namespace
+        first_plugin = plugins.find(ns + "plugin")
+        if first_plugin is None:
+            first_plugin = plugins.find("plugin")
+        plugin_ns = ns if plugins.find(ns + "plugin") is not None else ""
+
+        # Check if surefire plugin already exists
+        surefire_plugin = None
+        for plugin in plugins:
+            if plugin.tag == plugin_ns + "plugin" or plugin.tag == "plugin":
+                artifact_id = plugin.find(plugin_ns + "artifactId")
+                if artifact_id is None:
+                    artifact_id = plugin.find("artifactId")
+                if artifact_id is not None and artifact_id.text == "maven-surefire-plugin":
+                    surefire_plugin = plugin
+                    break
+
+        # Add excludesFile to existing surefire or create new one
+        if surefire_plugin is not None:
+            # Add excludesFile to existing surefire
+            configuration = surefire_plugin.find(plugin_ns + "configuration")
+            if configuration is None:
+                configuration = surefire_plugin.find("configuration")
+            if configuration is None:
+                configuration = ET.SubElement(surefire_plugin, "configuration")
+
+            excludes_file = configuration.find(plugin_ns + "excludesFile")
+            if excludes_file is None:
+                excludes_file = configuration.find("excludesFile")
+            if excludes_file is None:
+                excludes_file = ET.SubElement(configuration, "excludesFile")
+
+            prefix_path = "${java.io.tmpdir}/" + project_name
+            exclude_target = f"_{tool_name}Excludes"
+            excludes_file.text = prefix_path + exclude_target
+            print(f"[INFO] Added excludesFile to existing surefire plugin")
+        else:
+            # Create new surefire plugin
+            new_surefire = create_surefire_plugin(project_name, tool_name)
+            plugins.append(new_surefire)
+            print(f"[INFO] Created new surefire plugin")
+
+        # Check if RTS plugin already exists
+        rts_config = RTS_TOOLS.get(tool_name)
+        rts_exists = False
+        if rts_config:
+            for plugin in plugins:
+                if plugin.tag == plugin_ns + "plugin" or plugin.tag == "plugin":
+                    artifact_id = plugin.find(plugin_ns + "artifactId")
+                    if artifact_id is None:
+                        artifact_id = plugin.find("artifactId")
+                    if artifact_id is not None and artifact_id.text == rts_config["artifact_id"]:
+                        rts_exists = True
+                        break
+
+        # Add RTS tool plugin if not exists
+        if not rts_exists:
+            rts_plugin = create_rts_plugin(tool_name)
+            plugins.append(rts_plugin)
+            print(f"[INFO] Added {tool_name} plugin")
+        else:
+            print(f"[INFO] {tool_name} plugin already exists")
 
         tree.write(pom_path, encoding="utf-8", xml_declaration=True)
+        format_xml_with_xmllint(pom_path)
         return True
 
     except Exception as e:
@@ -373,19 +640,13 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
 
 def configure_surefire_settings(project_path: str) -> None:
     """Configure surefire settings for RTS compatibility."""
-    # Remove argLine (may conflict with RTS tools)
-    delete_surefire_config_element(project_path, "argLine")
-
-    # Set reuseForks=true (required for dependency collection)
-    delete_surefire_config_element(project_path, "reuseForks", "true")
-
-    # Set forkCount=1 for consistent behavior
-    delete_surefire_config_element(project_path, "forkCount", "1")
+    # Currently no modifications needed - keep existing surefire settings
+    pass
 
 
 def cleanup_rts_artifacts(project_path: str) -> None:
     """Clean up existing RTS artifacts from previous runs."""
-    artifacts_to_delete = [".ekstazi", ".jcg", "diffLog"]
+    artifacts_to_delete = [".ekstazi", ".jcg", "diffLog", "classes-javacg_merged.jar-output_javacg"]
 
     for root, dirs, _ in os.walk(project_path):
         for dir_name in dirs:
@@ -403,6 +664,20 @@ def cleanup_rts_artifacts(project_path: str) -> None:
 def git_commit_changes(project_path: str, tool_name: str) -> bool:
     """Commit RTS configuration changes to git."""
     print("[INFO] Committing RTS configuration changes...")
+
+    # Add project path to safe.directory
+    execute_cmd(f"git config --global --add safe.directory {project_path}", cwd=project_path)
+
+    # Set git user config
+    execute_cmd('git config --global user.email "you@example.com"', cwd=project_path)
+    execute_cmd('git config --global user.name "Your Name"', cwd=project_path)
+
+    # Initialize git if not already initialized
+    git_dir = os.path.join(project_path, ".git")
+    if not os.path.exists(git_dir):
+        print("[INFO] Git not initialized, running git init...")
+        if not execute_cmd("git init", cwd=project_path):
+            return False
 
     # Stage all changes
     if not execute_cmd("git add -A", cwd=project_path):
@@ -448,18 +723,23 @@ def init_rts(project_path: str, tool_name: str) -> bool:
 
     print(f"[INFO] Found {len(pom_files)} pom.xml file(s)")
 
+    # Ensure xmllint is available for XML formatting
+    ensure_xmllint_installed()
+
     # Step 1: Clean up existing RTS artifacts (but keep build artifacts)
     print("[INFO] Step 1: Cleaning up existing RTS artifacts...")
     cleanup_rts_artifacts(project_path)
 
-    # Step 2: Install JcgEks JARs if using jcgeks tool
+    # Step 2: Install RTS tool dependencies
+    print(f"[INFO] Step 2: Installing {tool_name} dependencies...")
     if tool_name == "jcgeks":
-        print("[INFO] Step 2: Installing JcgEks dependencies...")
         if not install_jcgeks_jars():
             print("[ERROR] Failed to install JcgEks dependencies")
             return False
-    else:
-        print("[INFO] Step 2: Skipping JcgEks installation (using ekstazi)")
+    elif tool_name == "ekstazi":
+        if not install_ekstazi_jars():
+            print("[ERROR] Failed to install Ekstazi dependencies")
+            return False
 
     # Step 3: Add RTS plugins to all pom.xml files
     print("[INFO] Step 3: Adding RTS plugins to pom.xml files...")
@@ -485,15 +765,30 @@ def main():
     parser = argparse.ArgumentParser(
         description="Initialize RTS (Regression Test Selection) for Java projects"
     )
-    parser.add_argument("project_path", help="Path to the Java project root")
+    parser.add_argument(
+        "project_path",
+        nargs="?",
+        default=".",
+        help="Path to the Java project root (default: current directory)",
+    )
     parser.add_argument(
         "--tool",
         choices=list(RTS_TOOLS.keys()),
-        default=os.environ.get("RTS_TOOL", "ekstazi"),
-        help="RTS tool to use (default: ekstazi or RTS_TOOL env var)",
+        default=os.environ.get("RTS_TOOL", "jcgeks"),
+        help="RTS tool to use (default: jcgeks or RTS_TOOL env var)",
+    )
+    parser.add_argument(
+        "--install-deps",
+        action="store_true",
+        help="Install RTS dependencies only (Ekstazi and JcgEks, no project configuration)",
     )
 
     args = parser.parse_args()
+
+    # Handle --install-deps option
+    if args.install_deps:
+        success = install_all_rts_deps()
+        sys.exit(0 if success else 1)
 
     if not os.path.isdir(args.project_path):
         print(f"[ERROR] Project path does not exist: {args.project_path}")

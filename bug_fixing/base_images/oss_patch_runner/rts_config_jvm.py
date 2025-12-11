@@ -10,22 +10,23 @@ This script performs dynamic configuration for RTS tools before each test run:
 Assumes patch was applied via `git apply` or `patch` command (uncommitted).
 
 Usage:
-    python rts_config.py <project_path> [--tool ekstazi|jcgeks]
+    python rts_config.py [project_path] [--tool ekstazi|jcgeks]  # project_path defaults to current directory
 
 Environment variables:
     RTS_ON: If set to "1" or "true", RTS configuration will be applied
-    RTS_TOOL: RTS tool to use (ekstazi or jcgeks), default: ekstazi
+    RTS_TOOL: RTS tool to use (ekstazi or jcgeks), default: jcgeks
 """
 
 import os
 import sys
 import argparse
 import subprocess
+import shutil
 from pathlib import Path
 from typing import List, Optional, Set
 
 
-def execute_cmd_get_output(cmd: str, cwd: Optional[str] = None) -> Optional[str]:
+def execute_cmd_get_output(cmd: str, cwd: Optional[str] = None, timeout: int = 3600) -> Optional[str]:
     """Execute a shell command and return output."""
     try:
         result = subprocess.run(
@@ -34,7 +35,7 @@ def execute_cmd_get_output(cmd: str, cwd: Optional[str] = None) -> Optional[str]
             cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout,
         )
         return result.stdout.strip()
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
@@ -102,12 +103,18 @@ def get_packages_from_classes(project_path: str) -> Set[str]:
                 package_path = os.path.dirname(parts[1])
                 if package_path:
                     packages.add(package_path + "/")
+                else:
+                    # Root package (default package) handling
+                    packages.add("/")
         elif "target/classes/" in class_file:
             parts = class_file.split("target/classes/")
             if len(parts) > 1:
                 package_path = os.path.dirname(parts[1])
                 if package_path:
                     packages.add(package_path + "/")
+                else:
+                    # Root package (default package) handling
+                    packages.add("/")
 
     return packages
 
@@ -121,8 +128,11 @@ class JcgEksConfig:
         self.config_dir = os.path.join(self.project_path, "jcg_config")
 
     def ensure_config_dir(self) -> None:
-        """Create jcg_config directory if it doesn't exist."""
-        os.makedirs(self.config_dir, exist_ok=True)
+        """Create jcg_config directory, removing existing one if present."""
+        if os.path.exists(self.config_dir):
+            print(f"[INFO] Removing existing jcg_config directory: {self.config_dir}")
+            shutil.rmtree(self.config_dir)
+        os.makedirs(self.config_dir)
 
     def create_config_properties(self) -> None:
         """Create config.properties file for JcgEks."""
@@ -198,10 +208,21 @@ class JcgEksConfig:
 
         print(f"[INFO] Created: {modify_path} ({len(modified_files)} modified files)")
 
+    def cleanup_stale_excludes(self) -> None:
+        """Clean up stale JcgEks excludes file from previous runs."""
+        excludes_path = f"/tmp/{self.project_name}_jcgeksExcludes"
+        if os.path.exists(excludes_path):
+            try:
+                os.remove(excludes_path)
+                print(f"[INFO] Removed stale excludes: {excludes_path}")
+            except OSError as e:
+                print(f"[WARNING] Failed to remove excludes file: {e}")
+
     def generate_all(self) -> None:
         """Generate all JcgEks configuration files."""
         print(f"[INFO] Generating JcgEks configuration for: {self.project_name}")
 
+        self.cleanup_stale_excludes()
         self.ensure_config_dir()
         self.create_config_properties()
         self.create_jar_dir_properties()
@@ -290,12 +311,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="Configure RTS (Regression Test Selection) before test run"
     )
-    parser.add_argument("project_path", help="Path to the Java project root")
+    parser.add_argument(
+        "project_path",
+        nargs="?",
+        default=".",
+        help="Path to the Java project root (default: current directory)",
+    )
     parser.add_argument(
         "--tool",
         choices=["ekstazi", "jcgeks"],
-        default=os.environ.get("RTS_TOOL", "ekstazi"),
-        help="RTS tool to use: ekstazi or jcgeks (default: ekstazi or RTS_TOOL env var)",
+        default=os.environ.get("RTS_TOOL", "jcgeks"),
+        help="RTS tool to use: ekstazi or jcgeks (default: jcgeks or RTS_TOOL env var)",
     )
     parser.add_argument(
         "--force",
