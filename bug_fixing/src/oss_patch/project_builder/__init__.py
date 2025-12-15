@@ -434,7 +434,7 @@ class OSSPatchProjectBuilder:
 
         new_src_dir = "/built-src"
         new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir
+            "/src", new_src_dir, 1
         )
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
@@ -585,7 +585,7 @@ class OSSPatchProjectBuilder:
         )
         new_src_dir = "/built-src"
         new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir
+            "/src", new_src_dir, 1
         )
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
