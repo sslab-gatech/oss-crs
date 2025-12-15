@@ -150,7 +150,7 @@ class OSSPatchCRSBuilder:
 
         crs_repo_path_in_container = "/crs-source"
 
-        crs_build_command = f"docker build --tag {crs_image_name} --file {str(Path(crs_repo_path_in_container, rel_dockerfile_path))} {crs_repo_path_in_container}"
+        crs_build_command = f"docker build --network=host --tag {crs_image_name} --file {str(Path(crs_repo_path_in_container, rel_dockerfile_path))} {crs_repo_path_in_container}"
 
         docker_command = (
             f"docker run --rm --privileged --net=host "
