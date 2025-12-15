@@ -226,7 +226,7 @@ class OSSPatchCRSRunner:
         cmd_parts = [
             "docker",
             "run --rm --privileged",
-            "--net=host",  # @NOTE: LiteLLM does not work properly without this option.
+            "--network=host",  # @NOTE: LiteLLM does not work properly without this option.
             f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:/crs-docker",
             f"-v {OSS_PATCH_CRS_SYSTEM_IMAGES}:{DEFAULT_DOCKER_ROOT_DIR}",
             f"-v {self.work_dir}:/work",
@@ -310,7 +310,7 @@ class OSSPatchCRSRunner:
         reproduce_command = f"python3 {oss_fuzz_path / 'infra/helper.py'} reproduce {self.project_name} {harness_name} /testcase"
 
         # runner_command = (
-        #     f"docker run --rm --privileged --net=host "
+        #     f"docker run --rm --privileged --network=host "
         #     f"-v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} "
         #     f"-v {source_path}:/cp-sources "
         #     f"-v {pov_path}:/testcase "

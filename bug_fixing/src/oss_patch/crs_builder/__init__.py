@@ -153,7 +153,7 @@ class OSSPatchCRSBuilder:
         crs_build_command = f"docker build --network=host --tag {crs_image_name} --file {str(Path(crs_repo_path_in_container, rel_dockerfile_path))} {crs_repo_path_in_container}"
 
         docker_command = (
-            f"docker run --rm --privileged --net=host "
+            f"docker run --rm --privileged --network=host "
             f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
             f"-v {self.crs_path}:{crs_repo_path_in_container} "
             f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "

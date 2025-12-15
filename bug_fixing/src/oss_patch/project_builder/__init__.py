@@ -259,7 +259,7 @@ class OSSPatchProjectBuilder:
         pull_cmd = f"docker pull {base_runner_image_name}"
 
         # command = (
-        #     f"docker run --rm --privileged --net=host "
+        #     f"docker run --rm --privileged --network=host "
         #     f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
         #     f"-v {self.oss_fuzz_path}:/oss-fuzz "
         #     f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} {pull_cmd}"
@@ -364,7 +364,7 @@ class OSSPatchProjectBuilder:
 
         try:
             create_container_command = (
-                f"docker create --privileged --net=host "
+                f"docker create --privileged --network=host "
                 f"--env=SANITIZER={sanitizer} "
                 f"--env=CCACHE_DIR=/workspace/ccache "
                 f"--env=FUZZING_LANGUAGE={self.project_lang} "
@@ -489,7 +489,7 @@ class OSSPatchProjectBuilder:
 
         try:
             create_container_command = (
-                f"docker create --privileged --net=host "
+                f"docker create --privileged --network=host "
                 f"--env=SANITIZER={sanitizer} "
                 f"--env=FUZZING_LANGUAGE={self.project_lang} "
                 f"--name={container_name} "
