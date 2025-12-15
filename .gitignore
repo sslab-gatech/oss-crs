@@ -4,3 +4,5 @@
 build
 oss-fuzz
 .work
+/logs
+.vscode
