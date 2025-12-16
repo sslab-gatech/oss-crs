@@ -15,8 +15,9 @@ ENV OSS_FUZZ=/oss-fuzz
 ENV CP_SOURCES=/cp-sources
 ENV SANITIZER=${target_sanitizer}
 
-COPY .build_context/oss-fuzz /oss-fuzz
-COPY .build_context/cp-sources /cp-sources
+# NOTE: we are now in .build_context
+COPY oss-fuzz /oss-fuzz
+COPY cp-sources /cp-sources
 
 COPY bug_fixing/base_images/oss_patch_runner/setup.sh /usr/bin/setup.sh
 COPY bug_fixing/base_images/oss_patch_runner/launch_crs.sh /usr/bin/launch_crs.sh
@@ -25,5 +26,5 @@ COPY bug_fixing/base_images/oss_patch_runner/replay_build.sh /opt/replay_build.s
 COPY bug_fixing/base_images/oss_patch_runner/make_build_replayable.py /opt/make_build_replayable.py
 
 RUN chmod +x /usr/bin/setup.sh && setup.sh
-    
+
 CMD ["sh", "-c", "/usr/bin/launch_crs.sh"]

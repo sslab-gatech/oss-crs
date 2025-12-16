@@ -19,6 +19,8 @@ from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_BUILD_CONTEXT_DIR,
     OSS_PATCH_RUNNER_DATA_PATH,
+    OSS_CRS_PATH,
+    OSS_PATCH_DIR
 )
 
 from bug_fixing.src.oss_patch.models import CRSMode
@@ -189,12 +191,22 @@ class OSSPatchCRSRunner:
             f'Building runner image "{get_runner_image_name(self.project_name)}"...'
         )
 
+        # FIXME: should not copy; when we have a dedicated oss_path_runner_base
+        # Copy OSS_PATCH_DIR to OSS_PATCH_BUILD_CONTEXT_DIR / {basename}
+        build_context = OSS_PATCH_BUILD_CONTEXT_DIR
+        build_context.mkdir(parents=True, exist_ok=True)
+
+        dst_patch_dir = build_context / OSS_PATCH_DIR.name  # Uses basename
+        if dst_patch_dir.exists():
+            shutil.rmtree(dst_patch_dir)
+        shutil.copytree(OSS_PATCH_DIR, dst_patch_dir)
+
         try:
             command = (
                 f"docker build --tag {get_runner_image_name(self.project_name)} "
                 f"--build-arg target_project={self.project_name} "
                 f"--file {OSS_PATCH_RUNNER_DATA_PATH / 'Dockerfile'} "
-                f"{str(Path.cwd())}"
+                f"{str(build_context)}"
             )
             run_command(command)
             return True
