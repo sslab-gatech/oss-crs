@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 from .oss_patch import OSSPatch
@@ -54,12 +55,23 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             args.gitcache,
         )
     elif args.command == "run":
+        # Resolve litellm config: CLI args > env vars
+        litellm_base = args.litellm_base or os.environ.get("LITELLM_API_BASE")
+        litellm_key = args.litellm_key or os.environ.get("LITELLM_API_KEY")
+
+        if not litellm_base:
+            logger.error("LiteLLM API base not set. Use --litellm-base or set LITELLM_API_BASE env var.")
+            return 1
+        if not litellm_key:
+            logger.error("LiteLLM API key not set. Use --litellm-key or set LITELLM_API_KEY env var.")
+            return 1
+
         oss_patch = OSSPatch(args.project, crs_name=args.crs)
         result = oss_patch.run_crs(
             args.harness,
             Path(args.povs),
-            args.litellm_key,
-            args.litellm_base,
+            litellm_key,
+            litellm_base,
             _get_path_or_none(args.hints),
             Path(args.out),
         )
@@ -162,10 +174,10 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         "--out", required=True, help="path to crs output directory"
     )
     run_crs_parser.add_argument(
-        "--litellm-base", required=True, help="address of litellm API base"
+        "--litellm-base", help="address of litellm API base (env: LITELLM_API_BASE)"
     )
     run_crs_parser.add_argument(
-        "--litellm-key", required=True, help="The API key for litellm"
+        "--litellm-key", help="The API key for litellm (env: LITELLM_API_KEY)"
     )
 
     run_pov_parser = subparsers.add_parser(
