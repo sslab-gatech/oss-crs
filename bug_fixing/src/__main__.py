@@ -60,10 +60,14 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         litellm_key = args.litellm_key or os.environ.get("LITELLM_API_KEY")
 
         if not litellm_base:
-            logger.error("LiteLLM API base not set. Use --litellm-base or set LITELLM_API_BASE env var.")
+            logger.error(
+                "LiteLLM API base not set. Use --litellm-base or set LITELLM_API_BASE env var."
+            )
             return 1
         if not litellm_key:
-            logger.error("LiteLLM API key not set. Use --litellm-key or set LITELLM_API_KEY env var.")
+            logger.error(
+                "LiteLLM API key not set. Use --litellm-key or set LITELLM_API_KEY env var."
+            )
             return 1
 
         oss_patch = OSSPatch(args.project, crs_name=args.crs)

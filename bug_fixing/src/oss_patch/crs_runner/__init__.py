@@ -20,7 +20,7 @@ from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_BUILD_CONTEXT_DIR,
     OSS_PATCH_RUNNER_DATA_PATH,
     OSS_CRS_PATH,
-    OSS_PATCH_DIR
+    OSS_PATCH_DIR,
 )
 
 from bug_fixing.src.oss_patch.models import CRSMode
@@ -235,6 +235,8 @@ class OSSPatchCRSRunner:
     def _run_crs_against_povs(
         self, crs_name: str, litellm_api_key: str, litellm_api_base: str
     ) -> bool:
+        assert self.out_dir
+
         cmd_parts = [
             "docker",
             "run --rm --privileged",

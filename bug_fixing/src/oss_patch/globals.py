@@ -3,7 +3,7 @@ from importlib.resources import files
 
 # Package data paths (bundled with package)
 # files(__package__) = "bug_fixing.src.oss_patch" → .parent.parent = "bug_fixing"
-_PACKAGE_ROOT = files(__package__).parent.parent  # bug_fixing/
+_PACKAGE_ROOT = files(__package__).parent.parent  # pyright: ignore[reportAttributeAccessIssue] # bug_fixing/
 OSS_PATCH_BASE_IMAGES_PATH = _PACKAGE_ROOT / "base_images"
 OSS_PATCH_CACHE_BUILDER_DATA_PATH = OSS_PATCH_BASE_IMAGES_PATH / "docker_cache_builder"
 OSS_PATCH_RUNNER_DATA_PATH = OSS_PATCH_BASE_IMAGES_PATH / "oss_patch_runner"
@@ -14,7 +14,7 @@ OSS_PATCH_WORK_DIR = Path.cwd() / ".oss-patch-work"
 
 # Default registry path
 # files(__package__) = "bug_fixing.src.oss_patch" → .parent.parent.parent = oss-crs root
-OSS_CRS_PATH = files(__package__).parent.parent.parent # NOTE: will be site-packages after pip install
+OSS_CRS_PATH = files(__package__).parent.parent.parent  # pyright: ignore[reportAttributeAccessIssue] # NOTE: will be site-packages after pip install
 OSS_PATCH_DIR = OSS_CRS_PATH / "bug_fixing"
 OSS_CRS_REGISTRY_PATH = OSS_CRS_PATH / "crs_registry"
 

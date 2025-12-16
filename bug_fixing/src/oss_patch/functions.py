@@ -78,7 +78,9 @@ def change_ownership_with_docker(target_path: Path) -> bool:
         return False
 
 
-def pull_project_source(project_path: Path, dst_path: Path, use_gitcache: bool = False) -> bool:
+def pull_project_source(
+    project_path: Path, dst_path: Path, use_gitcache: bool = False
+) -> bool:
     assert project_path.exists()
 
     if not _clone_project_repo(project_path, dst_path, use_gitcache):
@@ -92,7 +94,9 @@ def pull_project_source(project_path: Path, dst_path: Path, use_gitcache: bool =
     return True
 
 
-def _clone_project_repo(project_path: Path, dst_path: Path, use_gitcache: bool = False) -> bool:
+def _clone_project_repo(
+    project_path: Path, dst_path: Path, use_gitcache: bool = False
+) -> bool:
     proj_yaml_path = project_path / "project.yaml"
     if not proj_yaml_path.exists():
         logger.error(f'Target project "{proj_yaml_path}" not found')

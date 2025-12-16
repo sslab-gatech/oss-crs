@@ -24,7 +24,9 @@ def _copy_oss_fuzz_if_needed(
     """Copy OSS-Fuzz to work directory."""
     if dest_oss_fuzz_dir.exists():
         if not overwrite:
-            logger.info(f"OSS-Fuzz already exists at {dest_oss_fuzz_dir}, skipping copy")
+            logger.info(
+                f"OSS-Fuzz already exists at {dest_oss_fuzz_dir}, skipping copy"
+            )
             return True
         logger.info(f"Overwriting existing OSS-Fuzz at {dest_oss_fuzz_dir}")
         shutil.rmtree(dest_oss_fuzz_dir)
@@ -87,7 +89,9 @@ class OSSPatch:
 
             if dest_project_path.exists():
                 if not overwrite:
-                    logger.info(f"Project already exists at {dest_project_path}, skipping copy")
+                    logger.info(
+                        f"Project already exists at {dest_project_path}, skipping copy"
+                    )
                 else:
                     logger.info(f"Overwriting existing project at {dest_project_path}")
                     shutil.rmtree(dest_project_path)
