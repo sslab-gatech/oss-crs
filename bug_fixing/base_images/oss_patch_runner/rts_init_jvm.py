@@ -54,6 +54,12 @@ RTS_TOOLS = {
 MAVEN_NAMESPACE = "http://maven.apache.org/POM/4.0.0"
 SUREFIRE_VERSION = "2.22.2"
 
+# OpenClover internal class exclude pattern
+# OpenClover generates inner classes for each class (test or application code)
+# These classes (e.g., TestUtils$__CLR2_6_34a4agh7gevmc) must be excluded from surefire
+# See: https://openclover.org/doc/manual/latest/maven--using-with-surefire-and-inner-test-classes.html
+OPENCLOVER_EXCLUDE_PATTERN = "**/*$__CLR*"
+
 # JcgEks artifacts download URLs (order matters: parent -> core -> plugin)
 JCGEKS_ARTIFACTS = [
     # 1. Parent POM (must be installed first, no jar)
@@ -1099,6 +1105,17 @@ def init_rts(
                 print(f"[WARNING] Failed to add excludes to: {pom_path}")
     else:
         print("[INFO] No EXCLUDE_TESTS patterns found in test.sh")
+
+    # Step 5c: Add OpenClover internal class exclusion pattern
+    # OpenClover generates inner classes (e.g., TestUtils$__CLR*) that must be excluded
+    if tool_name == "openclover":
+        print(f"[INFO] Step 5c: Adding OpenClover internal class exclusion pattern...")
+        openclover_excludes = [OPENCLOVER_EXCLUDE_PATTERN]
+        for pom_path in pom_files:
+            if add_excludes_to_surefire(pom_path, openclover_excludes):
+                print(f"[INFO] Added OpenClover excludes to: {pom_path}")
+            else:
+                print(f"[WARNING] Failed to add OpenClover excludes to: {pom_path}")
 
     # Step 6: Commit changes to git
     print("[INFO] Step 6: Committing changes to git...")
