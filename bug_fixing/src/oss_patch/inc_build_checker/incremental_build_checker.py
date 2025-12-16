@@ -81,11 +81,6 @@ class IncrementalBuildChecker:
             shutil.rmtree(proj_src_path)
         pull_project_source(self.project_path, proj_src_path)
 
-        # Check RTS compatibility
-        if with_rts and self.project_builder.project_lang != "jvm":
-            logger.warning("RTS is only supported for JVM projects, disabling RTS")
-            with_rts = False
-
         logger.info(
             f'create project builder image: "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}"'
         )
