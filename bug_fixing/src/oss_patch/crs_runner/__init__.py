@@ -241,8 +241,8 @@ class OSSPatchCRSRunner:
             "--network=host",  # @NOTE: LiteLLM does not work properly without this option.
             f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:/crs-docker",
             f"-v {OSS_PATCH_CRS_SYSTEM_IMAGES}:{DEFAULT_DOCKER_ROOT_DIR}",
-            f"-v {self.work_dir}:/work",
-            f"-v {self.out_dir}:/out",
+            f"-v {self.work_dir.resolve()}:/work",
+            f"-v {self.out_dir.resolve()}:/out",
         ]
 
         # # Mount harness source to predetermined path if provided
@@ -324,8 +324,8 @@ class OSSPatchCRSRunner:
         # runner_command = (
         #     f"docker run --rm --privileged --network=host "
         #     f"-v {OSS_PATCH_CRS_DOCKER_ASSETS}:{DEFAULT_DOCKER_ROOT_DIR} "
-        #     f"-v {source_path}:/cp-sources "
-        #     f"-v {pov_path}:/testcase "
+        #     f"-v {source_path.resolve()}:/cp-sources "
+        #     f"-v {pov_path.resolve()}:/testcase "
         #     f"{get_runner_image_name(self.project_name)} "
         #     f'sh -c "{build_fuzzers_command} && {reproduce_command}"'
         # )
