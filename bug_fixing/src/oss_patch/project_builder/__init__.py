@@ -395,7 +395,15 @@ class OSSPatchProjectBuilder:
         return True
 
     def _detect_incremental_build(self, volume_name: str) -> bool:
-        # Check if the project_builder image contains `/usr/local/bin/replay_build.sh`
+        '''
+        Check if the project_builder image contains `/usr/local/bin/replay_build.sh`
+
+        NOTE OSS-Fuzz's replay_build.sh generation now may fail,
+             so users of this function should not assume CAPTURE_REPLAY_BUILD
+             will result in replay_build.sh existing.
+             Similarly, REPLAY_ENABLED now works without replay_build.sh
+             by fallbacking to build.sh.
+        '''
         if not docker_image_exists_in_volume(
             get_builder_image_name(self.oss_fuzz_path, self.project_name), volume_name
         ):
@@ -419,7 +427,9 @@ class OSSPatchProjectBuilder:
         else:
             return False
 
-    def _take_incremental_build_snapshot_for_c(self, source_path: Path) -> bool:
+    def _take_incremental_build_snapshot_for_c(
+            self, source_path: Path, rts_enabled: bool = False
+    ) -> bool:
         # if not self._detect_incremental_build(volume_name):
         #     logger.info(
         #         "`replay_build.sh` not detected, incremental build feature disabled."
@@ -454,7 +464,15 @@ class OSSPatchProjectBuilder:
         )
 
         # Run test.sh after compile to preserve test build artifacts
-        container_cmd = base_cmd + f" && bash {new_src_dir}/test.sh"
+        if rts_enabled:
+            # Add RTS initialization after compile
+            # rts_init_c.py is mounted to root (/), test.sh is expected to be in $SRC/
+            rts_cmd = (
+                f" && python3 /rts_init_c.py {new_workdir} || :; bash {new_src_dir}/test.sh"
+            )
+            container_cmd = base_cmd + rts_cmd
+        else:
+            container_cmd = base_cmd + f" && bash {new_src_dir}/test.sh"
         logger.info("Will run test.sh after compile to preserve build artifacts")
 
         # Build volume mounts (test.sh mounted to $SRC/test.sh)
@@ -464,6 +482,9 @@ class OSSPatchProjectBuilder:
             f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
             f"-v={test_sh_path}:/src/test.sh:ro "
         )
+        if rts_enabled:
+            rts_init_path = OSS_PATCH_RUNNER_DATA_PATH / "rts_init_c.py"
+            volume_mounts += f"-v={rts_init_path}:/rts_init_c.py:ro "
 
         try:
             create_container_command = (
@@ -535,12 +556,19 @@ class OSSPatchProjectBuilder:
                 logger.error("docker start command has failed")
                 return False
 
-            # Commit with :inc tag to distinguish from original image
-            commit_command = (
-                f"docker container commit "
+            # Build commit command with environment variables
+            env_options = (
                 f'-c "ENV REPLAY_ENABLED=1" '
                 f'-c "ENV CAPTURE_REPLAY_SCRIPT=" '
                 f'-c "ENV SRC={new_src_dir}" '
+            )
+            if rts_enabled:
+                env_options += f'-c "ENV RTS_ON=1" '
+
+            # Commit with :inc tag to distinguish from original image
+            commit_command = (
+                f"docker container commit "
+                f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
                 f"{container_name} {builder_image_name}:inc"
@@ -771,7 +799,9 @@ class OSSPatchProjectBuilder:
             return False
 
         if self.project_lang in ["c", "c++"]:
-            return self._take_incremental_build_snapshot_for_c(source_path)
+            return self._take_incremental_build_snapshot_for_c(
+                source_path, rts_enabled
+            )
         elif self.project_lang == "jvm":
             return self._take_incremental_build_snapshot_for_java(
                 source_path, rts_enabled, rts_tool
