@@ -462,7 +462,7 @@ class OSSPatchProjectBuilder:
             f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
             f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
             f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
-            f"-v={test_sh_path}:{new_src_dir}/test.sh:ro "
+            f"-v={test_sh_path}:/src/test.sh:ro "
         )
 
         try:
@@ -631,7 +631,7 @@ class OSSPatchProjectBuilder:
                 f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
                 f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
                 f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
-                f"-v={test_sh_path}:{new_src_dir}/test.sh:ro "
+                f"-v={test_sh_path}:/src/test.sh:ro "
                 f"-v={self.oss_fuzz_path}/build/tmp/{self.project_name}/:/tmp/ "
                 f"-v={extension_path}:/tmp/extensions.xml:ro "
             )
