@@ -468,7 +468,7 @@ class OSSPatchProjectBuilder:
             # Add RTS initialization after compile
             # rts_init_c.py is mounted to root (/), test.sh is expected to be in $SRC/
             rts_cmd = (
-                f" && python3 /rts_init_c.py {new_workdir} || :; bash {new_src_dir}/test.sh"
+                f" && python3 /rts_init_c.py {new_workdir} && bash {new_src_dir}/test.sh"
             )
             container_cmd = base_cmd + rts_cmd
         else:

@@ -35,7 +35,7 @@ def install_apt_packages():
 def build_ctags(ctags_dir: str = "/tmp/ctags"):
     """Build universal-ctags from source for macrodef field and JSON support."""
     run(["rm", "-rf", ctags_dir])
-    run(["git", "clone", CTAGS_REPO, ctags_dir])
+    run(["git", "clone", "--depth=1", CTAGS_REPO, ctags_dir])
     run(["./autogen.sh"], cwd=ctags_dir)
     run(["./configure"], cwd=ctags_dir)
     run("make -j$(nproc)", cwd=ctags_dir, shell=True)
@@ -51,7 +51,7 @@ def install_poetry():
 def clone_binary_rts(install_dir: str = "/opt/binary-rts"):
     """Clone binary-rts repo (includes pintools-rts) and install CLI dependencies."""
     run(["rm", "-rf", install_dir])
-    run(["git", "clone", BINARY_RTS_REPO, install_dir])
+    run(["git", "clone", "--depth=1", BINARY_RTS_REPO, install_dir])
     run(["poetry", "install", "--no-interaction"], cwd=f"{install_dir}/binaryrts/cli")
 
 
