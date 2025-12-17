@@ -111,7 +111,9 @@ services:
   # CRS Runner {{ loop.index }} - {{ crs.name }}
   {{ crs.name }}_runner:
     image: {{ crs.name }}_runner
+{%- if not crs.host_docker_builder %}
     privileged: true
+{%- endif %}
     shm_size: 2g
     environment:
 {{ litellm_url_env() }}
@@ -123,6 +125,9 @@ services:
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
       - CRS_TARGET={{ project }}
       - CRS_NAME={{ crs.name }}
+{%- if crs.host_docker_builder %}
+      - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}
+{%- endif %}
 {{ crs_network() }}
     build:
       context: {{ crs.path }}
@@ -132,6 +137,9 @@ services:
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
       - {{ volume_name('keys_data', crs.name) }}:/keys:ro
+{%- if crs.host_docker_builder %}
+      - /var/run/docker.sock:/var/run/docker.sock
+{%- endif %}
 {%- if harness_source %}
       - {{ harness_source }}:/harness-source:ro
 {%- endif %}
