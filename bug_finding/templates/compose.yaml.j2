@@ -65,7 +65,7 @@ services:
         condition: service_healthy
     environment:
 {{ litellm_url_env() }}
-{%- if crs.dind or crs.host_docker_builder %}
+{%- if crs.dind %}
       - PARENT_IMAGE={{ parent_image_prefix }}/{{ project }}
 {%- endif %}
       - FUZZING_ENGINE={{ engine }}
