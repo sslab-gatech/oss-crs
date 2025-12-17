@@ -333,6 +333,9 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
         crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
         crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
 
+        # Get host_docker_builder flag from CRS config-crs.yaml
+        crs_host_docker_builder = crs_pkg_data.get(crs_name, {}).get('host_docker_builder', False)
+
         # Get volumes from CRS config-crs.yaml
         crs_volumes = crs_pkg_data.get(crs_name, {}).get('volumes', [])
 
@@ -343,6 +346,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
             'memory_limit': format_memory(crs_memory_mb),
             'suffix': 'runner',
             'dind': crs_dind,
+            'host_docker_builder': crs_host_docker_builder,
             'volumes': crs_volumes
         })
 
@@ -393,6 +397,9 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
             crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
             crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
 
+            # Get host_docker_builder flag from CRS config-crs.yaml
+            crs_host_docker_builder = crs_pkg_data.get(crs_name, {}).get('host_docker_builder', False)
+
             # Get volumes from CRS config-crs.yaml
             crs_volumes = crs_pkg_data.get(crs_name, {}).get('volumes', [])
 
@@ -403,6 +410,7 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
                 'memory_limit': format_memory(crs_memory),
                 'suffix': 'runner',
                 'dind': crs_dind,
+                'host_docker_builder': crs_host_docker_builder,
                 'volumes': crs_volumes
             })
 

@@ -56,7 +56,7 @@ services:
     profiles:
       - {{ crs.name }}_builder
     image: {{ project }}_{{ crs.name }}_builder{% if source_tag %}:{{ source_tag }}{% endif %}
-{%- if crs.dind %}
+{%- if crs.dind and not crs.host_docker_builder %}
     privileged: true
 {%- endif %}
     shm_size: 2g
@@ -90,6 +90,9 @@ services:
       - {{ volume_name('keys_data', crs.name) }}:/keys:ro
 {%- if crs.dind %}
       - {{ build_dir }}/crs/parent-images/{{ project }}.tar:/project-image.tar:ro
+{%- endif %}
+{%- if crs.host_docker_builder %}
+      - /var/run/docker.sock:/var/run/docker.sock
 {%- endif %}
 {%- for vol in crs.volumes %}
       - {{ vol }}
