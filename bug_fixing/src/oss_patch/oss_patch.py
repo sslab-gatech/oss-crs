@@ -126,6 +126,7 @@ class OSSPatch:
         rts_tool: str = "jcgeks",
         source_path: Path | None = None,
         log_file: Path | None = None,
+        skip_clone: bool = False,
     ) -> bool:
         oss_fuzz_path = oss_fuzz_path.resolve()
         if source_path:
@@ -136,4 +137,4 @@ class OSSPatch:
         )
 
         # Run incremental build test (with RTS if requested)
-        return checker.test(with_rts=with_rts, rts_tool=rts_tool)
+        return checker.test(with_rts=with_rts, rts_tool=rts_tool, skip_clone=skip_clone)

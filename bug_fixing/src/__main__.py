@@ -84,7 +84,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         logger.info(f"Logging to: {log_file}")
         result = oss_patch.test_inc_build(
             Path(args.oss_fuzz), with_rts=args.with_rts, rts_tool=args.rts_tool,
-            log_file=log_file
+            log_file=log_file, skip_clone=args.skip_clone
         )
     # elif args.command == "run_pov":
     #     oss_patch = OSSPatch(args.project)
@@ -216,6 +216,12 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         "--log-dir",
         default=None,
         help="Directory to save log files. Default: {work_dir}/logs/",
+    )
+    test_inc_build_parser.add_argument(
+        "--skip-clone",
+        action="store_true",
+        default=False,
+        help="Skip source code cloning and use existing code at {work_dir}/project-src.",
     )
 
     test_project_parser = subparsers.add_parser(

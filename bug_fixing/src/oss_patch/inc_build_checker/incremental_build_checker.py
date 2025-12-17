@@ -66,20 +66,27 @@ class IncrementalBuildChecker:
             log_file=log_file,
         )
 
-    def test(self, with_rts: bool = False, rts_tool: str = "jcgeks") -> bool:
+    def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False) -> bool:
         """Test incremental build (and optionally RTS) for a project.
 
         Args:
             with_rts: If True, also run RTS benchmark (JVM projects only)
             rts_tool: RTS tool to use (ekstazi, jcgeks, or openclover)
+            skip_clone: If True, use existing source code instead of cloning fresh
         """
-        logger.info(f"Preparing project source code for {self.project_name}")
-
         proj_src_path = self.work_dir / "project-src"
-        if proj_src_path.exists():
-            change_ownership_with_docker(proj_src_path)
-            shutil.rmtree(proj_src_path)
-        pull_project_source(self.project_path, proj_src_path)
+
+        if skip_clone:
+            logger.info(f"Skipping source code clone, using existing code at {proj_src_path}")
+            if not proj_src_path.exists():
+                logger.error(f"Source code path does not exist: {proj_src_path}")
+                return False
+        else:
+            logger.info(f"Preparing project source code for {self.project_name}")
+            if proj_src_path.exists():
+                change_ownership_with_docker(proj_src_path)
+                shutil.rmtree(proj_src_path)
+            pull_project_source(self.project_path, proj_src_path)
 
         logger.info(
             f'create project builder image: "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}"'
