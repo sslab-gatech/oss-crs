@@ -65,7 +65,7 @@ services:
         condition: service_healthy
     environment:
 {{ litellm_url_env() }}
-{%- if crs.dind %}
+{%- if crs.dind or crs.host_docker_builder %}
       - PARENT_IMAGE={{ parent_image_prefix }}/{{ project }}
 {%- endif %}
       - FUZZING_ENGINE={{ engine }}
@@ -127,6 +127,9 @@ services:
       - CRS_NAME={{ crs.name }}
 {%- if crs.host_docker_builder %}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}
+{%- if not external_litellm %}
+      - CRS_EXTERNAL_NETWORK={{ config_hash }}_crs_network
+{%- endif %}
 {%- endif %}
 {{ crs_network() }}
     build:
