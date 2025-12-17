@@ -1,0 +1,9 @@
+crs-multilang:
+  models: []
+  dependencies:
+    - dind
+  modes:
+    - full
+    - delta
+  volumes:
+    - ${CRS_CACHE_DIR}:/cache/images:ro

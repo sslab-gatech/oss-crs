@@ -1,0 +1,12 @@
+workers:
+  local:
+    cpuset: "0-7"
+    memory: "16G"
+
+llm:
+  max_budget: 0
+
+crs:
+  crs-multilang:
+    workers:
+      - local
