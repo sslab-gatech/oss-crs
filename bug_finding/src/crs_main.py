@@ -739,10 +739,11 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
     atexit.register(cleanup)
 
     # Only pass the run compose file (litellm is in separate project)
+    # --build ensures image is rebuilt if source files (run.sh, docker-compose.yml) changed
     compose_cmd = ['docker', 'compose',
                   '-p', run_project,
                   '-f', str(compose_file),
-                  'up', '--abort-on-container-exit']
+                  'up', '--build', '--abort-on-container-exit']
     try:
         subprocess.check_call(compose_cmd)
     except subprocess.CalledProcessError:

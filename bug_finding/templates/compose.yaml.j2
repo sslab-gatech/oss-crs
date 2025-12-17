@@ -132,6 +132,7 @@ services:
       - CRS_NAME={{ crs.name }}
 {%- if crs.host_docker_builder %}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}
+      - HOST_ARTIFACT_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}
 {%- if not external_litellm %}
       - CRS_EXTERNAL_NETWORK={{ config_hash }}_crs_network
 {%- endif %}
