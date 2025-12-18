@@ -1,0 +1,5 @@
+name: crs-multilang-dind
+type: bug-finding
+source:
+  url: https://github.com/anthropics/crs-multilang-public
+  ref: dind

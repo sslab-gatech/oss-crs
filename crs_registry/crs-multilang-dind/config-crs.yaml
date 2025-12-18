@@ -1,0 +1,12 @@
+crs-multilang-dind:
+  models: []
+  dependencies:
+    # Uses Docker-in-Docker for complete isolation
+    # Pre-built image cache mounted at /cache/images
+    - dind
+  modes:
+    - full
+    - delta
+  volumes:
+    # Pre-built image cache (set HOST_CACHE_DIR in .env to absolute host path)
+    - ${HOST_CACHE_DIR}:/cache/images:ro
