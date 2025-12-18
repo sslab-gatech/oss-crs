@@ -216,9 +216,48 @@ The `mock-dind` CRS is provided as an example of the docker image exporting and 
 
 ### Delta mode
 
-In delta mode, when OSS-CRS is provided the `--diff` option, 
+In delta mode, when OSS-CRS is provided the `--diff` option,
 the diff file will be mounted inside the container as `/ref.diff`.
 The CRS may assume the diff has already been applied to the source code.
+
+### Ensemble mode and shared seeds
+
+When multiple CRS instances run on the same worker (ensemble mode), OSS-CRS automatically enables cross-CRS seed sharing. This allows CRS implementations to share discovered test inputs with each other, improving overall fuzzing coverage.
+
+**Container mount structure**:
+```
+/seed_share_dir/
+├── atlantis-c-libafl/    # :rw for atlantis-c-libafl, :ro for others
+├── crs-libfuzzer/        # :rw for crs-libfuzzer, :ro for others
+└── ...
+```
+
+Each CRS container receives:
+- **Read-write access** to its own directory: `/seed_share_dir/{own_crs_name}/`
+- **Read-only access** to other CRS directories: `/seed_share_dir/{other_crs_name}/`
+
+**CRS developer contract**:
+
+To participate in seed sharing, CRS implementations should:
+1. **Write seeds to**: `/seed_share_dir/{own_crs_name}/` - Store discovered interesting test inputs here
+2. **Read seeds from**: `/seed_share_dir/*/` - Periodically scan all subdirectories for new seeds from other CRS instances
+3. **Optional**: Create subdirectories like `/seed_share_dir/{own_crs_name}/coverage_shared_dir/` for coverage data if integrating with SARIF
+
+**Example compose configuration** (auto-generated):
+```yaml
+crs-libfuzzer_runner:
+  volumes:
+    - <path-to-build>/out/crs-libfuzzer/json-c:/out
+    - <hash>_keys_data_crs-libfuzzer:/keys:ro
+    # Shared seeds - own directory is rw, others are ro
+    - <path-to-build>/shared/json-c/crs-libfuzzer:/seed_share_dir/crs-libfuzzer:rw
+    - <path-to-build>/shared/json-c/atlantis-c-libafl:/seed_share_dir/atlantis-c-libafl:ro
+```
+
+**Notes**:
+- The `/seed_share_dir/` mount only exists when ensemble mode is active (>1 CRS on same worker)
+- CRS implementations should gracefully handle the case when `/seed_share_dir/` does not exist
+- Seed sharing is enabled by default for ensemble mode but can be disabled with `--no-shared-seed-dir`
 
 ## Operator configuration files
 

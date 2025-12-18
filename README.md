@@ -213,6 +213,39 @@ uv run oss-bugfind-crs build --external-litellm example_configs/atlantis-c-libaf
 uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-c-libafl json-c json_array_fuzzer
 ```
 
+### Shared Seed Directory (`--shared-seed-dir`, `--no-shared-seed-dir`)
+
+Enable cross-CRS seed sharing for ensemble mode. When multiple CRS instances run on the same worker, they can share discovered seeds to improve overall fuzzing coverage.
+
+**Auto-detection (default)**: When running an ensemble configuration with more than one CRS on the same worker, shared seed directories are automatically created at `build/shared/{project}/`.
+
+```bash
+# Ensemble mode - shared seeds auto-enabled
+uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer
+# Creates: build/shared/json-c/atlantis-c-libafl/
+#          build/shared/json-c/crs-libfuzzer/
+```
+
+**Explicit path**: Override the default shared seed directory location.
+
+```bash
+uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
+    --shared-seed-dir /custom/shared/path
+```
+
+**Disable sharing**: Opt out of automatic shared seed directory creation.
+
+```bash
+uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
+    --no-shared-seed-dir
+```
+
+**Mount structure inside containers**:
+- Each CRS gets read-write access to its own directory: `/seed_share_dir/{crs_name}/`
+- Each CRS gets read-only access to other CRS directories: `/seed_share_dir/{other_crs_name}/`
+
+This enables CRS implementations to periodically sync discovered seeds across the ensemble while preventing write conflicts.
+
 ### Custom project path
 
 Provide a custom OSS-Fuzz compatible project directory with `--project-path`.
