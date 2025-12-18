@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from .crs_main import build_crs, run_crs
+from .utils import set_gitcache
 
 
 def main():
@@ -104,9 +105,8 @@ def main():
     # Resolve source oss-fuzz directory if provided (for copying)
     source_oss_fuzz_dir = args.oss_fuzz_dir.resolve() if args.oss_fuzz_dir else None
 
-    # Set gitcache mode for render_compose
-    from . import render_compose
-    render_compose.set_gitcache(args.gitcache)
+    # Set gitcache mode
+    set_gitcache(args.gitcache)
 
     if args.command == 'build':
         # Build kwargs, only including non-None optional arguments

@@ -17,8 +17,8 @@ from importlib.resources import files
 
 from dotenv import dotenv_values
 
-
 from . import render_compose
+from .utils import run_git
 
 logger = logging.getLogger(__name__)
 
@@ -150,8 +150,8 @@ def _clone_oss_fuzz_if_needed(oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = No
     try:
         # Create parent directory if needed
         oss_fuzz_dir.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.check_call([
-            'git', 'clone', 'https://github.com/google/oss-fuzz',
+        run_git([
+            'clone', 'https://github.com/google/oss-fuzz',
             str(oss_fuzz_dir)
         ])
         logging.info(f"Successfully cloned OSS-Fuzz to {oss_fuzz_dir}")
@@ -296,8 +296,8 @@ def _clone_project_source(project_name: str, oss_fuzz_dir: Path, build_dir: Path
     # Clone with depth 1 and recursive submodules
     logger.info(f"Cloning {main_repo} to {clone_dest}")
     try:
-        subprocess.check_call([
-            'git', 'clone',
+        run_git([
+            'clone',
             '--depth', '1',
             '--recursive',
             main_repo,

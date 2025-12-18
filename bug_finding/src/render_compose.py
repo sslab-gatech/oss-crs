@@ -21,29 +21,13 @@ from typing import Dict, Any, List, Optional, Tuple
 
 from jinja2 import Template
 
+from .utils import run_git
+
 TEMPLATE_DIR = files(__package__).parent / "templates"
 KEY_PROVISIONER_DIR = files(__package__).parent / "key_provisioner"
 
 # Configure logging (INFO level won't show by default)
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
-
-# Global gitcache setting
-USE_GITCACHE = False
-
-
-def set_gitcache(enabled: bool):
-    """Set global gitcache mode."""
-    global USE_GITCACHE
-    USE_GITCACHE = enabled
-
-
-def run_git(args: List[str], **kwargs) -> subprocess.CompletedProcess:
-    """Run git command, optionally with gitcache prefix."""
-    if USE_GITCACHE:
-        cmd = f"gitcache git {' '.join(args)}"
-        return subprocess.run(cmd, shell=True, check=True, **kwargs)
-    else:
-        return subprocess.run(['git'] + args, check=True, **kwargs)
 
 
 @dataclass
