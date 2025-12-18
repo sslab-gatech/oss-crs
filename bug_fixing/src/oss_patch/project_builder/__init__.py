@@ -495,7 +495,7 @@ class OSSPatchProjectBuilder:
                 f"--env=SANITIZER={sanitizer} "
                 f"--env=CCACHE_DIR=/workspace/ccache "
                 f"--env=FUZZING_LANGUAGE={self.project_lang} "
-                f"--env=CAPTURE_REPLAY_SCRIPT=1 "
+                # f"--env=CAPTURE_REPLAY_SCRIPT=1 "
                 f"--name={container_name} "
                 f"{volume_mounts}"
                 f"{builder_image_name} "
