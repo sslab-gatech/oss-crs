@@ -614,7 +614,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
                               source_path: str = None, harness_source: str = None,
                               diff_path: str = None,
                               project_image_prefix: str = 'gcr.io/oss-fuzz',
-                              external_litellm: bool = False) -> str:
+                              external_litellm: bool = False,
+                              shared_seed_dir: str = None) -> str:
     """Render the compose template for a specific worker."""
     if not template_path.exists():
         raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -654,7 +655,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
         harness_source=harness_source,
         diff_path=diff_path,
         parent_image_prefix=project_image_prefix,
-        external_litellm=external_litellm
+        external_litellm=external_litellm,
+        shared_seed_dir=shared_seed_dir
     )
 
     return rendered
@@ -749,9 +751,13 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
                        source_path: str = None, env_file: str = None,
                        harness_source: str = None,
                        diff_path: str = None,
-                       external_litellm: bool = False) -> Tuple[str, str]:
+                       external_litellm: bool = False,
+                       shared_seed_dir: str = None) -> Tuple[str, str]:
     """
     Programmatic interface for run mode.
+
+    Args:
+        shared_seed_dir: Optional base directory for shared seeds between CRS instances
 
     Returns:
       Tuple of (config_hash, crs_build_dir)
@@ -830,7 +836,8 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         source_path=source_path,
         harness_source=harness_source,
         diff_path=diff_path,
-        external_litellm=external_litellm
+        external_litellm=external_litellm,
+        shared_seed_dir=shared_seed_dir
     )
 
     output_file = output_dir / f"compose-{worker}.yaml"
