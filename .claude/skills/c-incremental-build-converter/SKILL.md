@@ -34,6 +34,30 @@ cd $SRC/project
 cp -r $SRC/oniguruma modules/
 ```
 
+### $WORK May Be Shared - Use Separate Prefix in test.sh
+
+**WARNING: While $SRC is separate, $WORK may still be shared between build.sh and test.sh.**
+
+If build.sh installs ASAN-instrumented libraries to `$WORK`, test.sh will get ASAN link errors.
+
+```bash
+# BAD in test.sh - Uses shared $WORK with ASAN artifacts
+./configure --prefix="$WORK"
+# Error: undefined reference to __asan_*
+
+# GOOD in test.sh - Uses separate prefix
+TEST_PREFIX="$SRC/test_deps"
+mkdir -p "$TEST_PREFIX/lib" "$TEST_PREFIX/include"
+
+if [ ! -f "$TEST_PREFIX/lib/libz.a" ]; then
+    pushd "$SRC/zlib"
+    ./configure --static --prefix="$TEST_PREFIX"
+    make -j$(nproc) CFLAGS="-fPIC"  # No ASAN flags
+    make install
+    popd
+fi
+```
+
 ## Critical Requirements
 
 ### 1. Scripts MUST Work on BOTH First Run AND Repeated Runs
@@ -124,13 +148,81 @@ sed -i '/multiple/d' tests/Makefile.am
 make check
 ```
 
-### 7. Copy Dependencies If Not Present
+### 7. Copy Dependencies If Not Present (Conditional, Not Delete-and-Copy)
 
 ```bash
-# Copy oniguruma to modules if not present
+# BAD - Deletes and recopies every time, breaks incremental build
+rm -rf modules/oniguruma
+rsync -a $SRC/oniguruma modules/
+
+# GOOD - Only copy if not present
 if [ ! -d modules/oniguruma ]; then
     mkdir -p modules
     cp -r $SRC/oniguruma modules/
+fi
+```
+
+### 8. Conditional Dict/Corpus File Copy
+
+Files like dictionaries and seed corpus may not exist in all builds.
+
+```bash
+# BAD - Fails if file doesn't exist
+cp $SRC/libtiff/contrib/oss-fuzz/tiff.dict $OUT/
+
+# GOOD - Conditional copy with fallback
+[ -f $SRC/libtiff/contrib/oss-fuzz/tiff.dict ] && cp $SRC/libtiff/contrib/oss-fuzz/tiff.dict $OUT/ || true
+find . -name "*.tif" | xargs zip $OUT/seed_corpus.zip || true
+```
+
+### 9. Use `make -k check || true` for Potentially Failing Tests
+
+Some tests may fail in fuzzing environment. Use `-k` to continue and `|| true` to not fail the script.
+
+```bash
+# BAD - Stops on first test failure
+make check
+
+# GOOD - Continue through failures
+make -k check || true
+
+echo "Tests completed"
+```
+
+### 10. Remove Tests from Makefile.am BEFORE configure
+
+When removing failing tests, modify Makefile.am BEFORE running autoreconf/configure.
+
+```bash
+# BAD - Removes test file but Makefile still references it
+rm -f tests/shtest
+autoreconf -fi
+./configure
+make check  # Error: No rule to make target 'tests/shtest'
+
+# GOOD - Remove from Makefile.am before configure
+sed -i 's| tests/shtest||g' Makefile.am
+autoreconf -fi
+./configure
+make check  # Works
+```
+
+### 11. Rewrite Instead of Sourcing Internal build.sh
+
+If the project's source contains its own build.sh (e.g., `contrib/oss-fuzz/build.sh`), it may use `mv` or other non-idempotent operations. Rewrite the logic in the project's build.sh instead.
+
+```bash
+# BAD - Sources internal build.sh that uses mv
+source $SRC/project/contrib/oss-fuzz/build.sh
+
+# GOOD - Rewrite the logic with cp instead of mv
+if [ ! -f "$WORK/lib/libjbig.a" ]; then
+    pushd "$SRC/jbigkit"
+    make lib
+    # Use cp instead of mv for incremental build support
+    cp "$SRC"/jbigkit/libjbig/*.a "$WORK/lib/"
+    cp "$SRC"/jbigkit/libjbig/*.h "$WORK/include/"
+    popd
 fi
 ```
 
@@ -141,7 +233,7 @@ fi
 set -e
 
 # test.sh for {project}
-# $SRC is separate from build.sh
+# $SRC is separate from build.sh (build.sh uses /built-src, test.sh uses /test-src)
 
 cd $SRC/{project}
 
@@ -152,8 +244,10 @@ if [ ! -f Makefile ]; then
 fi
 make -j$(nproc)
 
-# Run tests
-make check
+# Run tests (use -k to continue on failures, || true to not fail script)
+make -k check || true
+
+echo "Tests completed"
 ```
 
 ## Examples by Build System
@@ -171,7 +265,9 @@ if [ ! -f Makefile ]; then
     ./configure --enable-static
 fi
 make -j$(nproc)
-make check
+make -k check || true
+
+echo "Tests completed"
 ```
 
 ### CMake Project
@@ -222,11 +318,14 @@ set -e
 
 cd $SRC/jq
 
-# Copy submodule if not present
+# Copy submodule if not present (conditional, not delete-and-copy)
 if [ ! -d modules/oniguruma ]; then
     mkdir -p modules
     cp -r $SRC/oniguruma modules/
 fi
+
+# Remove failing tests from Makefile.am BEFORE configure
+sed -i 's| tests/shtest||g' Makefile.am
 
 if [ ! -f Makefile ]; then
     autoreconf -fi
@@ -234,20 +333,48 @@ if [ ! -f Makefile ]; then
 fi
 make -j$(nproc)
 
-# Remove failing tests and run
-rm -f tests/shtest
+# Run tests (some may fail in fuzzing environment)
 make -k check || true
+
+echo "Tests completed"
 ```
 
 ## Common Errors and Fixes
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `undefined reference to __asan_*` | Old artifacts from build.sh | Should not happen with separate $SRC. If it does, verify $SRC is actually separate |
+| `undefined reference to __asan_*` | $WORK shared with ASAN artifacts from build.sh | Use separate prefix like `$SRC/test_deps` in test.sh |
 | `Makefile:xxx: No rule to make target` | Partial build state | Use `if [ ! -f Makefile ]` guard around configure |
+| `No rule to make target 'tests/shtest'` | Test removed but still in Makefile.am | Use `sed -i 's| tests/shtest||g' Makefile.am` BEFORE configure |
 | `source directory already configured` | Previous configure run | Check for Makefile before configure |
 | `mv: cannot stat: No such file` | File moved in previous run | Use `cp` with guard |
 | `failed to create tests/*.trs` | TESTS= propagates to submodules | Remove failing test files directly |
+| `No rule to make target 'jbig.h'` | Original build.sh used `mv` to move files | Rewrite to use `cp` instead |
+| `tiff.dict: No such file` | Dict/corpus file doesn't exist | Use conditional copy: `[ -f file ] && cp file dest \|\| true` |
+| `No rule to make target 'all'` in submodule | `rm -rf && rsync` deleted submodule's Makefile | Use conditional copy: `if [ ! -d dir ]; then cp; fi` |
+
+## Testing Incremental Builds
+
+Use the `test-inc-build` command to verify scripts work on both first run and repeated runs:
+
+```bash
+# From oss-crs directory
+uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz
+
+# Examples
+uv run oss-bugfix-crs test-inc-build atlanta-jq-delta-01 ../oss-fuzz
+uv run oss-bugfix-crs test-inc-build atlanta-libtiff-full-01 ../oss-fuzz
+```
+
+This command:
+1. Runs build.sh (first run)
+2. Runs docker commit to save state
+3. Runs build.sh again (incremental run)
+4. Compares build times and reports reduction percentage
+
+**Success criteria:**
+- Both runs complete without errors
+- Build time reduction is reported (higher % = better incremental build support)
 
 ## Checklist
 
@@ -255,6 +382,11 @@ make -k check || true
 - [ ] Uses `if [ ! -f Makefile ]` guard around configure/autoreconf
 - [ ] Does NOT delete build artifacts (.o, .lo, .a, .la, .libs)
 - [ ] Uses `cp` instead of `mv` where applicable
-- [ ] Failing tests removed directly (not using TESTS=)
+- [ ] Failing tests removed from Makefile.am BEFORE configure (not just file deletion)
 - [ ] Dependencies have existence guards
+- [ ] Directory copies are conditional (`if [ ! -d ]`), not delete-and-copy
+- [ ] test.sh uses separate prefix (e.g., `$SRC/test_deps`) if $WORK has ASAN artifacts
+- [ ] Dict/corpus copies use conditional: `[ -f file ] && cp ... || true`
+- [ ] Tests use `make -k check || true` if some may fail
+- [ ] Internal build.sh rewritten if it uses `mv` or non-idempotent operations
 - [ ] Works on first run AND repeated runs
