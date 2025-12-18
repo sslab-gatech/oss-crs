@@ -213,7 +213,7 @@ uv run oss-bugfind-crs build --external-litellm example_configs/atlantis-c-libaf
 uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-c-libafl json-c json_array_fuzzer
 ```
 
-### Shared Seed Directory (`--shared-seed-dir`, `--no-shared-seed-dir`)
+### Shared Seed Directory (`--shared-seed-dir`, `--disable-shared-seed`)
 
 Enable cross-CRS seed sharing for ensemble mode. When multiple CRS instances run on the same worker, they can share discovered seeds to improve overall fuzzing coverage.
 
@@ -239,7 +239,7 @@ uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
 
 ```bash
 uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
-    --no-shared-seed-dir
+    --disable-shared-seed
 ```
 
 **Mount structure inside containers**:

@@ -1,8 +1,9 @@
 crs-multilang:
   models: []
-  # No dind dependency - uses host docker socket directly
-  # Parent image is already on host daemon, no tarball save/load needed
-  host_docker_builder: true
+  dependencies:
+    # Uses host docker socket directly (no dind)
+    # Parent image is already on host daemon, no tarball save/load needed
+    - host_docker_builder
   modes:
     - full
     - delta

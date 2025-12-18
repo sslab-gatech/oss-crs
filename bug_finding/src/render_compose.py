@@ -376,12 +376,10 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
         used_cpus.update(crs_cpus_set)
         used_memory_mb += crs_memory_mb
 
-        # Get dind flag from CRS config-crs.yaml dependencies
+        # Get dind and host_docker_builder flags from CRS config-crs.yaml dependencies
         crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
         crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
-
-        # Get host_docker_builder flag from CRS config-crs.yaml
-        crs_host_docker_builder = crs_pkg_data.get(crs_name, {}).get('host_docker_builder', False)
+        crs_host_docker_builder = 'host_docker_builder' in crs_dependencies if crs_dependencies else False
 
         # Get volumes from CRS config-crs.yaml
         crs_volumes = crs_pkg_data.get(crs_name, {}).get('volumes', [])
@@ -440,12 +438,10 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
             else:
                 crs_memory = memory_per_crs
 
-            # Get dind flag from CRS config-crs.yaml dependencies
+            # Get dind and host_docker_builder flags from CRS config-crs.yaml dependencies
             crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
             crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
-
-            # Get host_docker_builder flag from CRS config-crs.yaml
-            crs_host_docker_builder = crs_pkg_data.get(crs_name, {}).get('host_docker_builder', False)
+            crs_host_docker_builder = 'host_docker_builder' in crs_dependencies if crs_dependencies else False
 
             # Get volumes from CRS config-crs.yaml
             crs_volumes = crs_pkg_data.get(crs_name, {}).get('volumes', [])

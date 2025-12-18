@@ -616,7 +616,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             harness_source: Path = None,
             diff_path: Path = None,
             external_litellm: bool = False, source_oss_fuzz_dir: Path = None,
-            shared_seed_dir: Path = None, no_shared_seed_dir: bool = False):
+            shared_seed_dir: Path = None, disable_shared_seed: bool = False):
     """
     Run CRS using docker compose.
 
@@ -639,7 +639,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
         external_litellm: Use external LiteLLM instance (default: False)
         source_oss_fuzz_dir: Optional source OSS-Fuzz directory to copy from (Path, already resolved)
         shared_seed_dir: Optional base directory for shared seeds (Path, already resolved)
-        no_shared_seed_dir: Disable automatic shared seed directory for ensemble mode
+        disable_shared_seed: Disable automatic shared seed directory for ensemble mode
 
     Returns:
         bool: True if successful, False otherwise
@@ -662,7 +662,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
 
     # Determine shared_seed_dir for ensemble mode
     final_shared_seed_dir = None
-    if not no_shared_seed_dir:
+    if not disable_shared_seed:
         if shared_seed_dir:
             # User-provided path - append harness name
             final_shared_seed_dir = shared_seed_dir / fuzzer_name

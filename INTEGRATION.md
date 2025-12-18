@@ -98,10 +98,11 @@ crs-multilang:
     - /shared/cache:/cache:rw
 ```
 
-For CRS that need to spawn Docker containers using the host Docker daemon, use `host_docker_builder`:
+For CRS that need to spawn Docker containers using the host Docker daemon, add `host_docker_builder` to dependencies:
 ```yaml
 crs-multilang:
-  host_docker_builder: true
+  dependencies:
+    - host_docker_builder
 ```
 See [Host Docker Socket Mode](#host-docker-socket-mode-host_docker_builder) for details and security considerations.
 
@@ -236,7 +237,8 @@ An alternative to DinD for CRS that need to spawn Docker containers. Instead of 
 **Configuration** (`config-crs.yaml`):
 ```yaml
 crs-multilang:
-  host_docker_builder: true
+  dependencies:
+    - host_docker_builder
 ```
 
 **Behavior**:
@@ -262,7 +264,7 @@ crs-multilang:
 > - Mount host filesystems
 > - Execute commands with host-level privileges
 >
-> Only use `host_docker_builder: true` with trusted CRS implementations. This option is intended for controlled environments where the CRS code is trusted.
+> Only use `host_docker_builder` with trusted CRS implementations. This option is intended for controlled environments where the CRS code is trusted.
 
 **CRS developer requirements**:
 - Use `HOST_WORK_DIR`, `HOST_OUT_DIR`, `HOST_ARTIFACT_DIR` environment variables when constructing Docker volume mounts
@@ -330,7 +332,7 @@ crs-libfuzzer_runner:
 **Notes**:
 - The `/seed_share_dir/` mount only exists when ensemble mode is active (>1 CRS on same worker)
 - CRS implementations should gracefully handle the case when `/seed_share_dir/` does not exist
-- Seed sharing is enabled by default for ensemble mode but can be disabled with `--no-shared-seed-dir`
+- Seed sharing is enabled by default for ensemble mode but can be disabled with `--disable-shared-seed`
 - Seeds are organized by harness name on the host to prevent mixing seeds from different fuzzers
 
 ## Operator configuration files
