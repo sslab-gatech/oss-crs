@@ -1,7 +1,7 @@
 workers:
   local:
-    cpuset: "0-15"
-    memory: "32G"
+    cpuset: "0-31"
+    memory: "64G"
 
 llm:
   max_budget: 0
