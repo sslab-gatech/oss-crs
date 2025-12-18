@@ -359,9 +359,17 @@ All `CRS_*` variables are extracted from `.env` and passed to containers as envi
 
 ## Output format
 
-For supporting the benchmarks RFC, the `/out` directory should be organized as follows:
+OSS-CRS provides two output directories with distinct purposes:
+
+### Directory Structure
+
 ```
-/out/                           # CRS output directory (container)
+/out/                           # Build outputs (can be cleaned during rebuilds)
+├── fuzzers/                    # Built fuzzer binaries
+├── build-artifacts/            # Intermediate build files
+└── ...
+
+/artifacts/                     # Fuzzing results (persistent - survives rebuilds)
 ├── povs/                       # POVs discovered (required for bug finding CRS)
 │   ├── pov_001                 # Binary blob (test input that triggers vulnerability)
 │   ├── pov_002                 # Binary blob
@@ -375,6 +383,21 @@ For supporting the benchmarks RFC, the `/out` directory should be organized as f
     ├── intermediate-results.json
     └── debug-trace.log
 ```
+
+### Why Two Directories?
+
+- **`/out`**: For build-time outputs (compiled fuzzers, instrumented binaries). This directory can be cleaned during rebuilds (e.g., oss-fuzz's `helper.py build_fuzzers --clean` runs `rm -rf /out/*`).
+- **`/artifacts`**: For run-time results (POVs, corpus, coverage data). This directory persists across rebuilds to prevent data loss.
+
+**Important**: CRS implementations should write fuzzing results (POVs, corpus) to `/artifacts/`, not `/out/`, to ensure results survive across build cycles.
+
+### Host Path Mapping
+
+| Container Path | Host Path |
+|----------------|-----------|
+| `/out` | `build/out/{crs_name}/{project}/` |
+| `/work` | `build/work/{crs_name}/{project}/` |
+| `/artifacts` | `build/artifacts/{crs_name}/{project}/` |
 
 
 # OSS-PATCH

@@ -64,6 +64,7 @@ services:
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
       - {{ build_dir }}/work/{{ crs.name }}/{{ project }}:/work
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}:/artifacts
 {%- if crs.dind %}
       - {{ build_dir }}/crs/parent-images/{{ project }}.tar:/project-image.tar:ro
 {%- endif %}
@@ -147,6 +148,7 @@ services:
         - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}:/artifacts
 {%- if not external_litellm %}
       - {{ volume_name('keys_data', crs.name) }}:/keys:ro
 {%- endif %}
