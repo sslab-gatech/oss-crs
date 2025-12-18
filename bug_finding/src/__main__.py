@@ -83,6 +83,10 @@ def main():
                             help='Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)')
     run_parser.add_argument('--gitcache', action='store_true',
                             help='Use gitcache for git clone operations')
+    run_parser.add_argument('--shared-seed-dir', type=Path, default=None,
+                            help='Base directory for shared seeds (default: build/shared/{project}/ for ensemble)')
+    run_parser.add_argument('--no-shared-seed-dir', action='store_true',
+                            help='Disable automatic shared seed directory for ensemble mode')
 
     args = parser.parse_args()
 
@@ -177,6 +181,11 @@ def main():
             run_kwargs['diff_path'] = diff_path
         if source_oss_fuzz_dir:
             run_kwargs['source_oss_fuzz_dir'] = source_oss_fuzz_dir
+
+        # Shared seed directory options
+        if args.shared_seed_dir:
+            run_kwargs['shared_seed_dir'] = args.shared_seed_dir.resolve()
+        run_kwargs['no_shared_seed_dir'] = getattr(args, 'no_shared_seed_dir', False)
 
         result = run_crs(**run_kwargs)
     else:
