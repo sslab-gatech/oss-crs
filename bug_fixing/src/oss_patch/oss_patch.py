@@ -153,7 +153,7 @@ class OSSPatch:
             litellm_api_key,
             litellm_api_base,
             hints_dir,
-            "full",
+            "full", # TODO: support delta mode
         )
 
     # # Testing purpose function
