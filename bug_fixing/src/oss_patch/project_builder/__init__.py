@@ -442,10 +442,11 @@ class OSSPatchProjectBuilder:
             self.oss_fuzz_path, self.project_name
         )
 
+        old_workdir = _workdir_from_dockerfile(project_path, self.project_name)
         new_src_dir = "/built-src"
-        new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir, 1
-        )
+        new_workdir = old_workdir.replace("/src", new_src_dir, 1)
+        test_src_dir = "/test-src"
+        test_workdir = old_workdir.replace("/src", test_src_dir, 1)
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
         # test.sh is required
@@ -466,15 +467,16 @@ class OSSPatchProjectBuilder:
         patch_apply_sh_path = OSS_PATCH_RUNNER_DATA_PATH / "patch_apply.sh"
 
         # Run test.sh after compile to preserve test build artifacts
+        patch_apply_test_cmd = f"bash /patch_apply.sh && pushd {test_workdir} && SRC=/test-src bash {new_src_dir}/test.sh && popd"
         if rts_enabled:
             # Add RTS initialization after compile
             # rts_init_c.py is mounted to root (/), test.sh is expected to be in $SRC/
             rts_cmd = (
-                f" && python3 /rts_init_c.py {new_workdir} || :; bash /patch_apply.sh && SRC=/test-src bash {new_src_dir}/test.sh"
+                f" && python3 /rts_init_c.py {new_workdir} || :; {patch_apply_test_cmd}"
             )
             container_cmd = base_cmd + rts_cmd
         else:
-            container_cmd = base_cmd + f" && bash /patch_apply.sh && SRC=/test-src bash {new_src_dir}/test.sh"
+            container_cmd = base_cmd + f" && {patch_apply_test_cmd}"
         logger.info("Will run test.sh after compile to preserve build artifacts")
 
         # Build volume mounts (test.sh mounted to $SRC/test.sh)
@@ -614,10 +616,12 @@ class OSSPatchProjectBuilder:
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
         )
+
+        old_workdir = _workdir_from_dockerfile(project_path, self.project_name)
         new_src_dir = "/built-src"
-        new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir, 1
-        )
+        new_workdir = old_workdir.replace("/src", new_src_dir, 1)
+        test_src_dir = "/test-src"
+        test_workdir = old_workdir.replace("/src", test_src_dir, 1)
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
         extension_path = OSS_PATCH_RUNNER_DATA_PATH / "extensions.xml"
@@ -639,16 +643,18 @@ class OSSPatchProjectBuilder:
 
         patch_apply_sh_path = OSS_PATCH_RUNNER_DATA_PATH / "patch_apply.sh"
 
+        # Run test.sh after compile to preserve test build artifacts
+        patch_apply_test_cmd = f"bash /patch_apply.sh && pushd {test_workdir} && SRC=/test-src bash {new_src_dir}/test.sh && popd"
         if rts_enabled:
             # Add RTS initialization after compile
             # rts_init_jvm.py and rts_config_jvm.py are copied to root (/)
             # test.sh is expected to be in $SRC/
             rts_cmd = (
-                f" && python3 /rts_init_jvm.py {new_workdir} --tool {rts_tool} && bash /patch_apply.sh && bash {new_src_dir}/test.sh"
+                f" && python3 /rts_init_jvm.py {new_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
             )
             container_cmd = base_cmd + rts_cmd
         else:
-            container_cmd = base_cmd + f" && bash /patch_apply.sh && bash {new_src_dir}/test.sh"
+            container_cmd = base_cmd + f" && {patch_apply_test_cmd}"
 
         # Validate RTS files early if enabled
         if rts_enabled:
