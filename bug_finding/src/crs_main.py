@@ -351,10 +351,7 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
         logger.error("Cannot use --clone with source_path (mutually exclusive)")
         return False
 
-    # Check if litellm keys are provided
-    if external_litellm and not _verify_external_litellm(config_dir):
-        logger.error("LITELLM_URL or LITELLM_KEY is not provided in the environment")
-        return False
+    # Note: No need to verify external_litellm during build - LiteLLM is only used during run
 
     if not _clone_oss_fuzz_if_needed(oss_fuzz_dir, source_oss_fuzz_dir):
         return False
@@ -459,27 +456,11 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
         logger.error('compose-build.yaml was not generated at: %s', compose_file)
         return False
 
-    # Project names for separate compose projects
-    litellm_project = f'crs-litellm-{config_hash}'
+    # Project name for build compose
     build_project = f'crs-build-{config_hash}'
 
-    # Start LiteLLM services in detached mode as separate project (unless using external)
-    if not external_litellm:
-        litellm_compose_file = crs_build_dir / 'compose-litellm.yaml'
-        if not litellm_compose_file.exists():
-            logger.error('compose-litellm.yaml was not generated at: %s', litellm_compose_file)
-            return False
-
-        logger.info('Starting LiteLLM services (project: %s)', litellm_project)
-        litellm_up_cmd = ['docker', 'compose', '-p', litellm_project,
-                          '-f', str(litellm_compose_file), 'up', '-d']
-        try:
-            subprocess.check_call(litellm_up_cmd)
-        except subprocess.CalledProcessError:
-            logger.error('Failed to start LiteLLM services')
-            return False
-    else:
-        logger.info('Using external LiteLLM instance')
+    # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services
+    # LiteLLM is only started during run phase
 
     # Run docker compose up for each build profile
     completed_profiles = []
@@ -597,12 +578,6 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
                           '-p', build_project,
                           '-f', str(compose_file),
                           'down', '--remove-orphans'])
-
-        # Stop LiteLLM services but keep them for reuse (unless using external)
-        if not external_litellm:
-            logger.info('Stopping LiteLLM services')
-            subprocess.run(['docker', 'compose', '-p', litellm_project,
-                           '-f', str(litellm_compose_file), 'stop'])
 
     return True
 
