@@ -30,20 +30,34 @@ KEY_PROVISIONER_DIR = files(__package__).parent / "key_provisioner"
 logging.basicConfig(level=logging.WARNING, format='%(message)s')
 
 
-def check_image_exists(image_name: str) -> bool:
+def check_image_exists(image_name: str, check_any_tag: bool = False) -> bool:
     """Check if Docker image exists locally.
 
     Args:
         image_name: Full Docker image name (e.g., 'json-c_crs-multilang_builder:abc123')
+        check_any_tag: If True and image_name has no tag, check if any image with that name exists
 
     Returns:
         True if image exists locally, False otherwise
     """
+    # First try exact match
     result = subprocess.run(
         ['docker', 'image', 'inspect', image_name],
         capture_output=True
     )
-    return result.returncode == 0
+    if result.returncode == 0:
+        return True
+
+    # If check_any_tag is True and no tag specified, check for any tag
+    if check_any_tag and ':' not in image_name:
+        result = subprocess.run(
+            ['docker', 'images', '-q', image_name],
+            capture_output=True,
+            text=True
+        )
+        return bool(result.stdout.strip())
+
+    return False
 
 
 @dataclass
@@ -780,7 +794,8 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         if source_tag:
             builder_image += f":{source_tag}"
 
-        if not check_image_exists(builder_image):
+        # Use check_any_tag=True when no source_tag, to find images built with source_path
+        if not check_image_exists(builder_image, check_any_tag=(source_tag is None)):
             raise FileNotFoundError(
                 f"CRS builder image not found: {builder_image}. "
                 f"Please run 'oss-crs build' first to build the CRS."
