@@ -613,6 +613,7 @@ class OSSPatchProjectBuilder:
         project_path = self.oss_fuzz_path / "projects" / self.project_name
         sanitizer = "address"
 
+        old_workdir = _workdir_from_dockerfile(project_path, self.project_name)
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
         )
@@ -650,7 +651,7 @@ class OSSPatchProjectBuilder:
             # rts_init_jvm.py and rts_config_jvm.py are copied to root (/)
             # test.sh is expected to be in $SRC/
             rts_cmd = (
-                f" && python3 /rts_init_jvm.py {new_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
+                f" && python3 /rts_init_jvm.py {old_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
             )
             container_cmd = base_cmd + rts_cmd
         else:
