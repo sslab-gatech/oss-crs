@@ -456,6 +456,7 @@ class OSSPatchProjectBuilder:
         # Build container command
         base_cmd = (
             f"export PATH=/ccache/bin:\\$PATH && "
+            f"rm -rf {old_workdir} && cp -r /local-source-mount {old_workdir} && "
             f"rsync -av \\$SRC/ {new_src_dir} && "
             f"export SRC={new_src_dir} && "
             f"cd {new_workdir} && "
@@ -483,7 +484,7 @@ class OSSPatchProjectBuilder:
         volume_mounts = (
             f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
             f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
-            f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
+            f"-v={source_path}:/local-source-mount "
             f"-v={test_sh_path}:/src/test.sh:ro "
             f"-v={patch_apply_sh_path}:/patch_apply.sh:ro "
         )
@@ -633,6 +634,7 @@ class OSSPatchProjectBuilder:
 
         # Build the container command
         base_cmd = (
+            f"rm -rf {old_workdir} && cp -r /local-source-mount {old_workdir} && "
             f"rsync -av \\$SRC/ {new_src_dir} && "
             f"export SRC={new_src_dir} && "
             f"cd {new_workdir} && "
@@ -670,7 +672,7 @@ class OSSPatchProjectBuilder:
             volume_mounts = (
                 f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
                 f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
-                f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
+                f"-v={source_path}:/local-source-mount "
                 f"-v={test_sh_path}:/src/test.sh:ro "
                 f"-v={self.oss_fuzz_path}/build/tmp/{self.project_name}/:/tmp/ "
                 f"-v={extension_path}:/tmp/extensions.xml:ro "
