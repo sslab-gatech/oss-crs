@@ -56,11 +56,27 @@ def clone_binary_rts(install_dir: str = "/opt/binary-rts"):
 
 
 def build_pintools_rts(binary_rts_dir: str = "/opt/binary-rts", pin_root: str = "/opt/pin"):
-    """Build pintools-rts Pin tool and listener library."""
+    """Build pintools-rts Pin tool and listener library.
+
+    Note: The listener library is built with libc++ to match oss-fuzz's stdlib.
+    The Pin tool itself uses gcc (via pin-g++ wrapper) which is fine since it
+    runs in a separate process.
+    """
     pintools_dir = f"{binary_rts_dir}/pintools-rts"
+    listener_dir = f"{pintools_dir}/pin_listener"
     env = {**dict(__import__("os").environ), "PIN_ROOT": pin_root}
+
+    # Build Pin tool (functrace.so) - uses pin-g++ wrapper (gcc-based)
     run("make -j$(nproc)", cwd=pintools_dir, shell=True, env=env)
-    run("make listener", cwd=pintools_dir, shell=True)
+
+    # Build listener library with clang++ and libc++ to match oss-fuzz
+    run(["clang", "-c", "-fPIC", "-O2", "-o", "pin_annotations.o", "pin_annotations.c"],
+        cwd=listener_dir)
+    run(["clang++", "-std=c++17", "-stdlib=libc++", "-c", "-fPIC", "-O2",
+         "-I.", "-o", "pin_test_listener.o", "pin_test_listener.cpp"],
+        cwd=listener_dir)
+    run(["ar", "rcs", "libpin_listener.a", "pin_annotations.o", "pin_test_listener.o"],
+        cwd=listener_dir)
 
 
 def install_pin(install_dir: str = "/opt/pin"):
