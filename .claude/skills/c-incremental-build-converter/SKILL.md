@@ -424,6 +424,34 @@ Use the `test-inc-build` command to verify scripts work on both first run and re
 uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz
 ```
 
+### CRITICAL: Prevent Context Limit Errors
+
+**DO NOT analyze the entire test output.** Test logs can be very long and cause context limit errors.
+
+**Follow this pattern:**
+
+1. **Run tests and capture to log file:**
+   ```bash
+   uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz 2>&1 | tee /tmp/{project_name}_test.log
+   echo "Exit code: $?"
+   ```
+
+2. **Check exit code FIRST:**
+   - Exit code 0 = success, move on
+   - Exit code non-zero = failure, proceed to step 3
+
+3. **On failure, read ONLY the last 100 lines:**
+   ```bash
+   tail -100 /tmp/{project_name}_test.log
+   ```
+
+4. **Identify error patterns and apply fixes** from the Common Errors table below.
+
+**NEVER:**
+- Read or analyze the entire log file
+- Include full test output in context
+- Load logs before checking exit code
+
 ### AIXCC Projects: Use Full Path Prefix
 
 **IMPORTANT: For AIXCC projects, use the `aixcc/c/` or `aixcc/jvm/` prefix in the project name.**

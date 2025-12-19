@@ -58,6 +58,37 @@ uv run oss-bugfix-crs test-inc-build project-3 ../oss-fuzz &
 wait
 ```
 
+### Step 5: Handle Test Failures (IMPORTANT - Context Limit Prevention)
+
+**CRITICAL: To prevent context limit errors, do NOT analyze the entire test output.**
+
+When running tests:
+
+1. **Run tests in background** and wait for exit code:
+   ```bash
+   uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz 2>&1 | tee /tmp/{project_name}_test.log
+   echo "Exit code: $?"
+   ```
+
+2. **Check exit code FIRST** - If exit code is 0, the test passed. Move on.
+
+3. **On failure, read ONLY the last 100 lines of the log:**
+   ```bash
+   tail -100 /tmp/{project_name}_test.log
+   ```
+
+4. **Focus on error patterns in the tail output:**
+   - Look for `Error:`, `FAILED`, `undefined reference`, `No rule to make target`
+   - Identify the specific failure point
+   - Apply targeted fixes based on the error patterns in the skill
+
+**DO NOT:**
+- Read the entire log file
+- Analyze all test output before checking exit code
+- Include full logs in your context
+
+**This approach prevents context limit errors by only loading relevant failure information.**
+
 ## Common Fix Patterns
 
 ### For test.sh - Use Out-of-Tree Build
