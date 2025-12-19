@@ -934,6 +934,71 @@ def add_includes_to_surefire(pom_path: str, include_patterns: List[str]) -> bool
         return False
 
 
+def has_existing_clover(root: ET.Element, ns: str) -> bool:
+    """
+    Check if clover is already present in the pom.xml as a plugin or dependency.
+
+    Checks for:
+    - org.openclover:clover-maven-plugin (OpenClover)
+    - org.apache.maven.plugins:maven-clover-plugin (old Clover 2.4)
+    - com.atlassian.clover:* (Atlassian Clover)
+    - Any artifact containing 'clover' in build/plugins
+
+    Args:
+        root: Root element of the pom.xml
+        ns: Maven namespace string
+
+    Returns:
+        True if clover is already present, False otherwise
+    """
+    clover_group_ids = {"org.openclover", "org.apache.maven.plugins", "com.atlassian.clover"}
+    clover_artifact_patterns = {"clover-maven-plugin", "maven-clover-plugin", "clover"}
+
+    # Check plugins in build/plugins
+    for plugin in root.findall(".//" + ns + "plugin"):
+        group_id = plugin.find(ns + "groupId")
+        artifact_id = plugin.find(ns + "artifactId")
+
+        # Try without namespace if not found
+        if group_id is None:
+            group_id = plugin.find("groupId")
+        if artifact_id is None:
+            artifact_id = plugin.find("artifactId")
+
+        group_text = group_id.text.strip() if group_id is not None and group_id.text else ""
+        artifact_text = artifact_id.text.strip() if artifact_id is not None and artifact_id.text else ""
+
+        # Check if it's a clover plugin
+        if group_text in clover_group_ids and "clover" in artifact_text.lower():
+            return True
+        if artifact_text in clover_artifact_patterns:
+            return True
+        if "clover" in artifact_text.lower() and "plugin" in artifact_text.lower():
+            return True
+
+    # Check dependencies
+    for dep in root.findall(".//" + ns + "dependency"):
+        group_id = dep.find(ns + "groupId")
+        artifact_id = dep.find(ns + "artifactId")
+
+        # Try without namespace if not found
+        if group_id is None:
+            group_id = dep.find("groupId")
+        if artifact_id is None:
+            artifact_id = dep.find("artifactId")
+
+        group_text = group_id.text.strip() if group_id is not None and group_id.text else ""
+        artifact_text = artifact_id.text.strip() if artifact_id is not None and artifact_id.text else ""
+
+        # Check if it's a clover dependency
+        if group_text in clover_group_ids:
+            return True
+        if "clover" in artifact_text.lower():
+            return True
+
+    return False
+
+
 def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> bool:
     """Add RTS tool plugin and configure surefire excludesFile in a pom.xml file."""
     ns = "{" + MAVEN_NAMESPACE + "}"
@@ -942,6 +1007,11 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
         tree = ET.parse(pom_path)
         root = tree.getroot()
         ET.register_namespace("", MAVEN_NAMESPACE)
+
+        # Skip OpenClover injection if clover is already present
+        if tool_name == "openclover" and has_existing_clover(root, ns):
+            print(f"[INFO] Clover already exists in {pom_path}, skipping OpenClover injection")
+            return True
 
         # Find build element (must exist)
         build = root.find(ns + "build")
