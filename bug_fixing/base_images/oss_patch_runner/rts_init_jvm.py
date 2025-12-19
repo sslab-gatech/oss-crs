@@ -624,8 +624,11 @@ def create_rts_plugin(tool_name: str) -> ET.Element:
     if tool_name == "openclover":
         # OpenClover uses different configuration - snapshot for test optimization
         configuration = ET.SubElement(plugin, "configuration")
-        snapshot = ET.SubElement(configuration, "snapshot")
-        snapshot.text = "${user.home}/.clover/clover.snapshot"
+        # snapshot = ET.SubElement(configuration, "snapshot")
+        # snapshot.text = "${user.home}/.clover/clover.snapshot"
+        # Use method-level instrumentation for faster instrumentation and smaller overhead
+        instrumentation = ET.SubElement(configuration, "instrumentation")
+        instrumentation.text = "method"
     else:
         # Ekstazi and JcgEks use select/restore goals
         executions = ET.SubElement(plugin, "executions")
