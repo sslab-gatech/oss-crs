@@ -163,8 +163,8 @@ class IncrementalBuildChecker:
             )
 
             with open(build_log_path, "w") as f:
-                f.write(stdout.decode())
-                f.write(stderr.decode())
+                f.write(stdout.decode(errors='replace'))
+                f.write(stderr.decode(errors='replace'))
 
             return False
 
@@ -196,8 +196,8 @@ class IncrementalBuildChecker:
             )
 
             with open(build_log_path, "w") as f:
-                f.write(stdout.decode())
-                f.write(stderr.decode())
+                f.write(stdout.decode(errors='replace'))
+                f.write(stderr.decode(errors='replace'))
 
             return False
 
@@ -252,7 +252,7 @@ class IncrementalBuildChecker:
                     stdout.decode(errors='replace'), self.project_builder.project_lang
                 ):
                     logger.error(f'crash is not detected for "{pov_name}"')
-                    print(stdout.decode())
+                    print(stdout.decode(errors='replace'))
                     return False
 
                 patch_path = aixcc_dir / "patches" / harness_name / f"{pov_name}.diff"
@@ -299,8 +299,8 @@ class IncrementalBuildChecker:
                 if result:
                     stdout, stderr = result
                     logger.error(f"Test execution failed for {pov_name}")
-                    logger.error(f"stdout: {stdout.decode()}")
-                    logger.error(f"stderr: {stderr.decode()}")
+                    logger.error(f"stdout: {stdout.decode(errors='replace')}")
+                    logger.error(f"stderr: {stderr.decode(errors='replace')}")
                     return False
 
                 logger.info(f"Test time ({rts_label}, {pov_name}): {test_time:.2f}s")
@@ -335,8 +335,8 @@ class IncrementalBuildChecker:
         if result:
             stdout, stderr = result
             logger.error("Baseline test execution failed")
-            logger.error(f"stdout: {stdout.decode()}")
-            logger.error(f"stderr: {stderr.decode()}")
+            logger.error(f"stdout: {stdout.decode(errors='replace')}")
+            logger.error(f"stderr: {stderr.decode(errors='replace')}")
             return False
 
         logger.info(f"Baseline test time: {self.baseline_test_time:.2f}s")
