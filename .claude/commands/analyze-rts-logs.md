@@ -37,6 +37,7 @@ Use the `rts-log-analyzer` skill to perform comprehensive log analysis.
 3. **Extract Details** - Get specific error messages, failed test methods, and exception types
 4. **Include Stack Traces** - Show relevant stack trace snippets
 5. **Generate Detailed Report** - Provide actionable information per project
+6. **Generate CSV Report** - Create `rts_analysis_results.csv` with structured results
 
 ### Key grep patterns to use:
 
@@ -170,6 +171,40 @@ java.lang.IllegalAccessException: class X cannot access a member of class Y
 
 **Root Cause:** RTS cannot find pom.xml at expected location
 **Suggested Fix:** Check project path configuration
+```
+
+---
+
+## CSV Output
+
+After analysis, generate a CSV file `rts_analysis_results.csv` with these columns:
+
+| Column | Description |
+|--------|-------------|
+| `project_name` | Project name from log file |
+| `status` | `passed`, `failed`, or `warning` |
+| `error_category` | Specific error category (see below) |
+| `error_message` | Detailed error message |
+| `failed_tests` | Semicolon-separated failed test methods |
+| `suggested_fix` | Recommended fix action |
+
+### Error Categories
+
+Create descriptive categories based on actual errors. Examples:
+- `BUILD_FAILURE`, `TEST_FAILURE`, `COMPILATION_ERROR`
+- `MISSING_DEPENDENCY`, `MISSING_FILE`, `TIMEOUT`
+- `SEGFAULT`, `MEMORY_ERROR`, `LINKER_ERROR` (C/C++)
+- `MODULE_ACCESS_ERROR`, `LICENSE_CHECK_FAILURE`, `PLUGIN_ERROR` (Java)
+
+Avoid overly generic categories like `ERROR`, `FAILURE`, or `UNKNOWN`.
+
+### Sample CSV
+
+```csv
+project_name,status,error_category,error_message,failed_tests,suggested_fix
+atlanta-jackson-databind-delta-01,failed,MODULE_ACCESS_ERROR,"IllegalAccessException: cannot access member",ClassUtilTest.testFindEnumType,Add --add-opens java.base/java.util=ALL-UNNAMED
+atlanta-json-c-delta-01,failed,SEGFAULT,"Segmentation fault in json_object_get_string","",Check null pointer handling
+atlanta-zookeeper-delta-01,passed,,"",,
 ```
 
 ---

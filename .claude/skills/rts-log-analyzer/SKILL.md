@@ -1,7 +1,7 @@
 ---
 name: rts-log-analyzer
 description: Analyze OSS-Fuzz incremental build and JVM RTS (Regression Test Selection) test logs. Use when user mentions RTS logs, test failures, build failures, log analysis, or when working with *.log files from JVM RTS tests. Extracts errors, failed test classes, and categorizes issues.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash, Write
 ---
 
 # RTS Log Analyzer Skill
@@ -300,3 +300,117 @@ Action: Focus on that specific log file, extract ALL failed test methods, except
 
 User: "Which test classes are failing?"
 Action: Extract all failed test class names AND their specific test methods across all logs
+
+## Step 6: Generate CSV Report
+
+After analysis, ALWAYS generate a CSV report file named `rts_analysis_results.csv` in the analysis directory.
+
+### CSV Format
+
+The CSV must include these columns:
+```
+project_name,status,error_category,error_message,failed_tests,suggested_fix
+```
+
+### Column Definitions
+
+| Column | Description | Example Values |
+|--------|-------------|----------------|
+| `project_name` | Name of the project from log file | `atlanta-jackson-databind-delta-01` |
+| `status` | Test result status | `passed`, `failed`, `warning` |
+| `error_category` | Specific error classification (not generic) | See Error Categories below |
+| `error_message` | Detailed error message (escaped for CSV) | `IllegalAccessException: cannot access member...` |
+| `failed_tests` | Comma-separated list of failed test classes/methods | `ClassUtilTest.testFindEnumType;ZKUtilTest.testBar` |
+| `suggested_fix` | Recommended fix action | `Add --add-opens java.base/java.util=ALL-UNNAMED` |
+
+### Error Categories
+
+Create descriptive error categories based on the actual error found. Categories should be:
+- **Specific and descriptive** - Describe the actual root cause
+- **Language-agnostic when possible** - Work for both C and Java projects
+- **Consistent** - Use similar naming for similar errors across projects
+
+**Examples of good categories:**
+- `BUILD_FAILURE` - General build failure
+- `TEST_FAILURE` - Test execution failure
+- `COMPILATION_ERROR` - Source code compilation error
+- `MISSING_DEPENDENCY` - Missing library or dependency
+- `MISSING_FILE` - Required file not found
+- `TIMEOUT` - Build or test timeout
+- `CONFIGURATION_ERROR` - Build/test configuration issue
+- `SEGFAULT` - Segmentation fault (C/C++)
+- `MEMORY_ERROR` - Memory-related errors (C/C++)
+- `LINKER_ERROR` - Linking errors (C/C++)
+- `MODULE_ACCESS_ERROR` - JDK module access issues (Java)
+- `LICENSE_CHECK_FAILURE` - License validation failure (Java)
+- `PLUGIN_ERROR` - Build plugin errors (Java)
+
+**DO NOT use overly generic categories like:**
+- `ERROR` - Too vague
+- `FAILURE` - Too vague
+- `UNKNOWN` - Only as last resort
+
+### CSV Generation Example
+
+```python
+# Use Python to generate CSV with proper escaping
+import csv
+
+results = [
+    {
+        "project_name": "atlanta-jackson-databind-delta-01",
+        "status": "failed",
+        "error_category": "MODULE_ACCESS_ERROR",
+        "error_message": "IllegalAccessException: cannot access member of class java.util.EnumSet",
+        "failed_tests": "ClassUtilTest.testFindEnumType;StackTraceElementTest.testCustomStackTraceDeser",
+        "suggested_fix": "Add --add-opens java.base/java.util=ALL-UNNAMED to surefire argLine"
+    },
+    {
+        "project_name": "atlanta-json-c-delta-01",
+        "status": "failed",
+        "error_category": "SEGFAULT",
+        "error_message": "Segmentation fault in json_object_get_string",
+        "failed_tests": "",
+        "suggested_fix": "Check null pointer handling"
+    },
+    {
+        "project_name": "atlanta-zookeeper-delta-01",
+        "status": "passed",
+        "error_category": "",
+        "error_message": "",
+        "failed_tests": "",
+        "suggested_fix": ""
+    }
+]
+
+with open('rts_analysis_results.csv', 'w', newline='', encoding='utf-8') as f:
+    writer = csv.DictWriter(f, fieldnames=["project_name", "status", "error_category", "error_message", "failed_tests", "suggested_fix"])
+    writer.writeheader()
+    writer.writerows(results)
+```
+
+### CSV Output Rules
+
+1. **ALWAYS escape special characters** - Use proper CSV escaping for quotes and commas in error messages
+2. **Use semicolon (;) separator** for multiple failed tests within the `failed_tests` column
+3. **Empty values** for passed projects - Leave `error_category`, `error_message`, `failed_tests`, `suggested_fix` empty for passed projects
+4. **Include ALL projects** - Both passed and failed projects should be in the CSV
+5. **Sort by status** - Failed projects first, then warnings, then passed
+
+### Sample CSV Output
+
+```csv
+project_name,status,error_category,error_message,failed_tests,suggested_fix
+atlanta-jackson-databind-delta-01,failed,MODULE_ACCESS_ERROR,"IllegalAccessException: cannot access member of class java.util.EnumSet",ClassUtilTest.testFindEnumType;StackTraceElementTest.testCustomStackTraceDeser,Add --add-opens java.base/java.util=ALL-UNNAMED
+atlanta-json-c-delta-01,failed,SEGFAULT,"Segmentation fault in json_object_get_string","",Check null pointer handling
+atlanta-libxml2-delta-01,failed,MISSING_DEPENDENCY,"cannot find -lz: No such file or directory","",Install zlib-dev package
+atlanta-zookeeper-delta-01,passed,,"",,
+atlanta-commons-io-delta-01,passed,,"",,
+```
+
+### When to Generate CSV
+
+- Generate CSV at the END of analysis, after all logs have been processed
+- Save to the same directory as the log files
+- Report the CSV file path to the user
+- If a previous `rts_analysis_results.csv` exists, overwrite it with fresh results
