@@ -1107,7 +1107,7 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
 
 def configure_surefire_settings(project_path: str) -> None:
     """Configure surefire settings for RTS compatibility."""
-    delete_surefire_config_element(project_path, "argLine")
+    # delete_surefire_config_element(project_path, "argLine")
     #delete_surefire_config_element(project_path, "parallel")
     
     delete_surefire_config_element(project_path, "reuseForks", "true")
