@@ -417,81 +417,73 @@ make -k check || true
 
 ## Testing Incremental Builds
 
-Use the `test-inc-build` command to verify scripts work on both first run and repeated runs:
+**CRITICAL: Use the `test-inc-build` subagent via Task tool to prevent context limit errors.**
 
-```bash
-# From oss-crs directory
-uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz
+The subagent runs tests, analyzes logs internally, and returns only essential summary information.
+
+### Single Project Test
+
 ```
-
-### CRITICAL: Prevent Context Limit Errors
-
-**DO NOT analyze the entire test output.** Test logs can be very long and cause context limit errors.
-
-**Follow this pattern:**
-
-1. **Run tests and capture to log file:**
-   ```bash
-   uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz 2>&1 | tee /tmp/{project_name}_test.log
-   echo "Exit code: $?"
-   ```
-
-2. **Check exit code FIRST:**
-   - Exit code 0 = success, move on
-   - Exit code non-zero = failure, proceed to step 3
-
-3. **On failure, read ONLY the last 100 lines:**
-   ```bash
-   tail -100 /tmp/{project_name}_test.log
-   ```
-
-4. **Identify error patterns and apply fixes** from the Common Errors table below.
-
-**NEVER:**
-- Read or analyze the entire log file
-- Include full test output in context
-- Load logs before checking exit code
+Task tool:
+  subagent_type: "test-inc-build"
+  description: "Test incremental build"
+  prompt: "Run incremental build test for {project_name} with oss-fuzz path ../oss-fuzz"
+```
 
 ### AIXCC Projects: Use Full Path Prefix
 
 **IMPORTANT: For AIXCC projects, use the `aixcc/c/` or `aixcc/jvm/` prefix in the project name.**
 
-Do NOT create symlinks. The tool expects the full path prefix:
+Examples:
+- `aixcc/c/afc-sqlite3-delta-01`
+- `aixcc/c/atlanta-libjpeg-full-01`
+- `aixcc/jvm/afc-jenkins-delta-01`
 
-```bash
-# C/C++ AIXCC projects - use aixcc/c/ prefix
-uv run oss-bugfix-crs test-inc-build aixcc/c/afc-sqlite3-delta-01 ../oss-fuzz
-uv run oss-bugfix-crs test-inc-build aixcc/c/atlanta-libjpeg-full-01 ../oss-fuzz
-uv run oss-bugfix-crs test-inc-build aixcc/c/afc-shadowsocks-full-01 ../oss-fuzz
+### Parallel Testing Multiple Projects
 
-# JVM AIXCC projects - use aixcc/jvm/ prefix
-uv run oss-bugfix-crs test-inc-build aixcc/jvm/afc-jenkins-delta-01 ../oss-fuzz
-uv run oss-bugfix-crs test-inc-build aixcc/jvm/atlanta-tika-full-01 ../oss-fuzz
+Use Task tool with `run_in_background: true` in a single message:
+
+```
+Task tool (run_in_background: true):
+  subagent_type: "test-inc-build"
+  prompt: "Run incremental build test for aixcc/c/afc-libexif-delta-01 with oss-fuzz path ../oss-fuzz"
+
+Task tool (run_in_background: true):
+  subagent_type: "test-inc-build"
+  prompt: "Run incremental build test for aixcc/c/afc-libexif-delta-02 with oss-fuzz path ../oss-fuzz"
+
+Then use TaskOutput to retrieve results from each agent.
 ```
 
-This command:
+### What the Test Does
+
 1. Runs build.sh (first run)
 2. Runs docker commit to save state
 3. Runs build.sh again (incremental run)
 4. Compares build times and reports reduction percentage
 
+### Subagent Return Format
+
+**On Success:**
+```
+## Result: SUCCESS
+**Project:** {project_name}
+**Build Time Reduction:** {percentage}%
+**Summary:** Incremental build working correctly.
+```
+
+**On Failure:**
+```
+## Result: FAILED
+**Project:** {project_name}
+**Error Type:** {category}
+**Error Message:** {exact error, max 10 lines}
+**Suggested Fix:** {brief fix}
+```
+
 **Success criteria:**
 - Both runs complete without errors
 - Build time reduction is reported (higher % = better incremental build support)
-
-### Parallel Testing Multiple Projects
-
-When testing multiple projects, use **background tasks** to run tests in parallel:
-
-```bash
-# Run multiple tests in parallel using background tasks (with aixcc/c/ prefix)
-uv run oss-bugfix-crs test-inc-build aixcc/c/afc-libexif-delta-01 ../oss-fuzz &
-uv run oss-bugfix-crs test-inc-build aixcc/c/afc-libexif-delta-02 ../oss-fuzz &
-uv run oss-bugfix-crs test-inc-build aixcc/c/afc-libexif-delta-03 ../oss-fuzz &
-wait  # Wait for all background tasks to complete
-```
-
-**In Claude Code:** Use the `run_in_background` parameter when calling the Bash tool to launch tests in parallel, then use `TaskOutput` to retrieve results when complete.
 
 ## Checklist
 

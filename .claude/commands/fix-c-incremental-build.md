@@ -40,54 +40,61 @@ Apply fixes based on the skill guidelines. Key principles:
 - **Use conditional execution** - `[ -f Makefile ] || ./configure`
 - **Use `cp` not `mv`** - For idempotent operations
 
-### Step 4: Test the Fixes
+### Step 4: Test the Fixes Using Subagent
 
-Test using the `test-inc-build` command:
+**CRITICAL: Use the `test-inc-build` subagent via Task tool instead of running uv run directly.**
 
-```bash
-uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz
+This approach prevents context limit errors by having the subagent analyze the logs and return only essential information.
+
+**Single project test:**
+```
+Task tool:
+  subagent_type: "test-inc-build"
+  description: "Test incremental build"
+  prompt: "Run incremental build test for {project_name} with oss-fuzz path ../oss-fuzz"
 ```
 
-**For multiple projects, use parallel testing:**
+**For multiple projects, launch parallel subagents in a single message:**
+```
+Task tool (run_in_background: true):
+  subagent_type: "test-inc-build"
+  prompt: "Run incremental build test for project-1 with oss-fuzz path ../oss-fuzz"
 
-```bash
-# Run tests in parallel as background tasks
-uv run oss-bugfix-crs test-inc-build project-1 ../oss-fuzz &
-uv run oss-bugfix-crs test-inc-build project-2 ../oss-fuzz &
-uv run oss-bugfix-crs test-inc-build project-3 ../oss-fuzz &
-wait
+Task tool (run_in_background: true):
+  subagent_type: "test-inc-build"
+  prompt: "Run incremental build test for project-2 with oss-fuzz path ../oss-fuzz"
+
+Task tool (run_in_background: true):
+  subagent_type: "test-inc-build"
+  prompt: "Run incremental build test for project-3 with oss-fuzz path ../oss-fuzz"
+
+Then use TaskOutput to retrieve results from each agent.
 ```
 
-### Step 5: Handle Test Failures (IMPORTANT - Context Limit Prevention)
+### Step 5: Handle Subagent Results
 
-**CRITICAL: To prevent context limit errors, do NOT analyze the entire test output.**
+The `test-inc-build` subagent returns a concise summary:
 
-When running tests:
+**On Success:**
+- Project name
+- Build time reduction percentage
+- Confirmation that incremental build works
 
-1. **Run tests in background** and wait for exit code:
-   ```bash
-   uv run oss-bugfix-crs test-inc-build {project_name} ../oss-fuzz 2>&1 | tee /tmp/{project_name}_test.log
-   echo "Exit code: $?"
-   ```
+**On Failure:**
+- Project name
+- Error type (categorized)
+- Exact error message (max 10 lines)
+- Suggested fix
 
-2. **Check exit code FIRST** - If exit code is 0, the test passed. Move on.
+Based on the subagent's failure report:
+1. Apply the suggested fix
+2. Re-run the test via subagent
+3. Repeat until success
 
-3. **On failure, read ONLY the last 100 lines of the log:**
-   ```bash
-   tail -100 /tmp/{project_name}_test.log
-   ```
-
-4. **Focus on error patterns in the tail output:**
-   - Look for `Error:`, `FAILED`, `undefined reference`, `No rule to make target`
-   - Identify the specific failure point
-   - Apply targeted fixes based on the error patterns in the skill
-
-**DO NOT:**
-- Read the entire log file
-- Analyze all test output before checking exit code
-- Include full logs in your context
-
-**This approach prevents context limit errors by only loading relevant failure information.**
+**This approach prevents context limit errors by:**
+- Having subagent analyze full logs internally
+- Returning only essential error information
+- Keeping each test result under 30 lines
 
 ## Common Fix Patterns
 
