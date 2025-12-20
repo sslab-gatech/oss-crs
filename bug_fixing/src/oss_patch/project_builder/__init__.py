@@ -207,10 +207,11 @@ class OSSPatchProjectBuilder:
         self,
         source_path: Path | None = None,
         use_inc_image: bool = False,
+        sanitizer: str = "address",
     ) -> tuple[bytes, bytes] | None:
         # logger.info(f'Execute `build_fuzzers` command for "{self.project_name}"')
 
-        command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers {self.project_name}"
+        command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers --sanitizer {sanitizer} {self.project_name}"
 
         if source_path:
             command += f" {source_path}"
@@ -428,7 +429,7 @@ class OSSPatchProjectBuilder:
             return False
 
     def _take_incremental_build_snapshot_for_c(
-            self, source_path: Path, rts_enabled: bool = False
+            self, source_path: Path, rts_enabled: bool = False, sanitizer: str = "address"
     ) -> bool:
         # if not self._detect_incremental_build(volume_name):
         #     logger.info(
@@ -436,7 +437,6 @@ class OSSPatchProjectBuilder:
         #     )
         #     return False
         project_path = self.oss_fuzz_path / "projects" / self.project_name
-        sanitizer = "address"
 
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
@@ -609,10 +609,9 @@ class OSSPatchProjectBuilder:
             )
 
     def _take_incremental_build_snapshot_for_java(
-        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks"
+        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks", sanitizer: str = "address"
     ) -> bool:
         project_path = self.oss_fuzz_path / "projects" / self.project_name
-        sanitizer = "address"
 
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
@@ -792,9 +791,9 @@ class OSSPatchProjectBuilder:
             )
 
     def take_incremental_build_snapshot(
-        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks"
+        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks", sanitizer: str = "address"
     ) -> bool:
-        logger.info("Taking a snapshot for incremental build...")
+        logger.info(f"Taking a snapshot for incremental build (sanitizer={sanitizer})...")
         assert self.oss_fuzz_path.exists()
         assert self.project_path
 
@@ -814,11 +813,11 @@ class OSSPatchProjectBuilder:
 
         if self.project_lang in ["c", "c++"]:
             return self._take_incremental_build_snapshot_for_c(
-                source_path, rts_enabled
+                source_path, rts_enabled, sanitizer
             )
         elif self.project_lang == "jvm":
             return self._take_incremental_build_snapshot_for_java(
-                source_path, rts_enabled, rts_tool
+                source_path, rts_enabled, rts_tool, sanitizer
             )
         else:
             logger.error(

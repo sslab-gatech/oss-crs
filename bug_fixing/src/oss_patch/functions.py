@@ -454,3 +454,40 @@ def extract_java_exception_report(full_log: str) -> str | None:
         return None
 
     return full_log[match.start() :]
+
+
+def get_cpv_config(project_path: Path, harness_name: str, cpv_name: str) -> dict | None:
+    config_path = project_path / ".aixcc" / "config.yaml"
+
+    if not config_path.exists():
+        logger.warning(f"Config file not found: {config_path}")
+        return None
+
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.warning(f"Failed to parse config.yaml: {e}")
+        return None
+
+    if not config or "harness_files" not in config:
+        return None
+
+    for harness in config.get("harness_files", []):
+        if harness.get("name") != harness_name:
+            continue
+
+        cpvs = harness.get("cpvs", [])
+        for cpv in cpvs:
+            if cpv.get("name") == cpv_name:
+                return {
+                    "sanitizer": cpv.get("sanitizer", "address"),
+                    "error_token": cpv.get("error_token"),
+                }
+
+        # Harness found but no matching CPV - return None
+        return None
+
+    return None
+
+

@@ -11,6 +11,7 @@ from bug_fixing.src.oss_patch.functions import (
     reset_repository,
     change_ownership_with_docker,
     pull_project_source,
+    get_cpv_config,
 )
 
 from bug_fixing.src.oss_patch.inc_build_checker.rts_checker import analysis_log
@@ -18,7 +19,11 @@ from bug_fixing.src.oss_patch.inc_build_checker.rts_checker import analysis_log
 logger = logging.getLogger(__name__)
 
 
-def _detect_crash_report(stdout: str, language: str) -> bool:
+def _detect_crash_report(stdout: str, language: str, error_token: str | None = None) -> bool:
+    if error_token:
+        if error_token in stdout:
+            return True
+
     if language in ["c", "c++"]:
         return extract_sanitizer_report(stdout) is not None
     elif language == "jvm":
@@ -54,6 +59,8 @@ class IncrementalBuildChecker:
 
         self.build_time_without_inc_build: float | None = None
         self.build_time_with_inc_build: float | None = None
+        self.snapshot_sanitizer: str = "address"  # sanitizer used for snapshot
+        self.sanitizer_mismatches: list[tuple[str, str]] = []  # [(pov_name, pov_sanitizer), ...]
 
         assert self.oss_fuzz_path.exists()
         assert self.project_path.exists()
@@ -65,6 +72,57 @@ class IncrementalBuildChecker:
             project_path=self.project_path,
             log_file=log_file,
         )
+
+    def _collect_pov_sanitizers(self) -> set[str]:
+        """Collect all unique sanitizers required by POVs.
+
+        Returns:
+            Set of sanitizer names (e.g., {"address"} or {"address", "memory"})
+        """
+        sanitizers = set()
+        aixcc_dir = self.project_path / ".aixcc"
+        povs_dir = aixcc_dir / "povs"
+
+        if not povs_dir.exists():
+            logger.warning(f"POVs directory not found: {povs_dir}")
+            return {"address"}  # default
+
+        for pov_per_harness_dir in povs_dir.iterdir():
+            harness_name = pov_per_harness_dir.name
+
+            for pov_path in pov_per_harness_dir.iterdir():
+                pov_name = pov_path.name
+                cpv_config = get_cpv_config(self.project_path, harness_name, pov_name)
+                if cpv_config:
+                    sanitizer = cpv_config.get("sanitizer", "address")
+                    sanitizers.add(sanitizer)
+                else:
+                    sanitizers.add("address")
+
+        if not sanitizers:
+            sanitizers.add("address")
+
+        return sanitizers
+
+    def _determine_snapshot_sanitizer(self) -> str:
+        """Determine which sanitizer to use for the snapshot.
+
+        Returns:
+            Single sanitizer if all POVs use the same one, otherwise "address"
+        """
+        sanitizers = self._collect_pov_sanitizers()
+        logger.info(f"Collected sanitizers from POVs: {sanitizers}")
+
+        if len(sanitizers) == 1:
+            sanitizer = sanitizers.pop()
+            logger.info(f"All POVs use the same sanitizer: {sanitizer}")
+            return sanitizer
+        else:
+            logger.warning(
+                f"Multiple sanitizers required by POVs: {sanitizers}. "
+                f"Using 'address' for snapshot (default)."
+            )
+            return "address"
 
     def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False) -> bool:
         """Test incremental build (and optionally RTS) for a project.
@@ -97,6 +155,9 @@ class IncrementalBuildChecker:
         image_build_time = time.time() - cur_time
         logger.info(f"Docker image build time: {image_build_time}")
 
+        # Determine which sanitizer to use for snapshot
+        self.snapshot_sanitizer = self._determine_snapshot_sanitizer()
+
         # Step 3: Measure build time without inc build
         if not self._measure_time_without_inc_build(proj_src_path):
             return False
@@ -106,9 +167,9 @@ class IncrementalBuildChecker:
             return False
 
         # Step 4: Take snapshot (with RTS init if enabled)
-        logger.info(f"Now taking a snapshot for incremental build")
+        logger.info(f"Now taking a snapshot for incremental build (sanitizer={self.snapshot_sanitizer})")
         if not self.project_builder.take_incremental_build_snapshot(
-            proj_src_path, rts_enabled=with_rts, rts_tool=rts_tool
+            proj_src_path, rts_enabled=with_rts, rts_tool=rts_tool, sanitizer=self.snapshot_sanitizer
         ):
             logger.error(f"Taking incremental build snapshot has failed")
             return False
@@ -230,6 +291,7 @@ class IncrementalBuildChecker:
 
         # Initialize test results list for averaging
         self.test_results = []  # List of (pov_name, test_time, stats)
+        self.sanitizer_mismatches = []  # Reset mismatches list
 
         for pov_per_harness_dir in povs_dir.iterdir():
             harness_name = pov_per_harness_dir.name
@@ -241,15 +303,37 @@ class IncrementalBuildChecker:
                     return False
 
                 pov_name = pov_path.name
+
+                # Get CPV-specific config (sanitizer, error_token) from config.yaml
+                # pov_name is the same as cpv_name (e.g., "cpv_0")
+                sanitizer = "address"  # default
+                error_token = None
+
+                cpv_config = get_cpv_config(self.project_path, harness_name, pov_name)
+                if cpv_config:
+                    sanitizer = cpv_config.get("sanitizer", "address")
+                    error_token = cpv_config.get("error_token")
+                    logger.info(f'Using CPV config for {pov_name}: sanitizer={sanitizer}, error_token={error_token}')
+                else:
+                    logger.info(f'No CPV config found for {harness_name}/{pov_name}, using defaults')
+
+                # Warn if POV sanitizer differs from snapshot sanitizer
+                if sanitizer != self.snapshot_sanitizer:
+                    logger.warning(
+                        f'POV "{pov_name}" requires sanitizer "{sanitizer}" but inc build snapshot '
+                        f'was built with "{self.snapshot_sanitizer}". Results may be inaccurate.'
+                    )
+                    self.sanitizer_mismatches.append((f"{harness_name}/{pov_name}", sanitizer))
+
                 logger.info(
-                    f'Checking "{pov_name}" for crash with incremental build...'
+                    f'Checking "{pov_name}" for crash with incremental build (sanitizer={sanitizer})...'
                 )
-                if self.project_builder.build_fuzzers(source_path, use_inc_image=True):
+                if self.project_builder.build_fuzzers(source_path, use_inc_image=True, sanitizer=sanitizer):
                     return False
                 stdout, _, retcode = self._run_pov(harness_name, pov_path)
 
                 if retcode == 0 or not _detect_crash_report(
-                    stdout.decode(errors='replace'), self.project_builder.project_lang
+                    stdout.decode(errors='replace'), self.project_builder.project_lang, error_token
                 ):
                     logger.error(f'crash is not detected for "{pov_name}"')
                     print(stdout.decode(errors='replace'))
@@ -265,9 +349,9 @@ class IncrementalBuildChecker:
 
                 _clean_oss_fuzz_out(self.oss_fuzz_path, self.project_name)
 
-                logger.info(f'Building with patch "{patch_path.name}"')
+                logger.info(f'Building with patch "{patch_path.name}" (sanitizer={sanitizer})')
                 cur_time = time.time()
-                if self.project_builder.build_fuzzers(source_path, use_inc_image=True):
+                if self.project_builder.build_fuzzers(source_path, use_inc_image=True, sanitizer=sanitizer):
                     return False
 
                 build_time_with_patch = time.time() - cur_time
@@ -277,7 +361,7 @@ class IncrementalBuildChecker:
 
                 stdout, _, retcode = self._run_pov(harness_name, pov_path)
 
-                if retcode != 0 and _detect_crash_report(stdout.decode(errors='replace'), self.project_builder.project_lang):
+                if retcode != 0 and _detect_crash_report(stdout.decode(errors='replace'), self.project_builder.project_lang, error_token):
                     logger.error(
                         f'crash is detected for "{pov_name}" with a patch "{patch_path}"'
                     )
@@ -404,6 +488,17 @@ class IncrementalBuildChecker:
         log_and_collect(f"Test Benchmark Results ({mode_label}):")
         log_and_collect("=" * 60)
 
+        # Sanitizer configuration
+        log_and_collect("[Sanitizer Configuration]")
+        log_and_collect(f"  Snapshot built with: {self.snapshot_sanitizer}")
+        if self.sanitizer_mismatches:
+            log_and_collect(f"  POVs with different sanitizers: {len(self.sanitizer_mismatches)}")
+            for pov_name, pov_sanitizer in self.sanitizer_mismatches:
+                log_and_collect(f"    - {pov_name}: {pov_sanitizer}")
+        else:
+            log_and_collect(f"  All POVs use: {self.snapshot_sanitizer}")
+        log_and_collect("-" * 60)
+
         # Build time comparison
         log_and_collect("[Build Time Comparison]")
         if self.build_time_without_inc_build is not None:
@@ -475,12 +570,21 @@ class IncrementalBuildChecker:
             log_and_collect(f"  Baseline - Total Runs: {baseline_tests:.1f}, Failures: {baseline_failures}, Errors: {baseline_errors}, Skipped: {baseline_skips}")
             log_and_collect(f"  {mode_label} (avg) - Total Runs: {avg_tests:.1f}, Failures: {avg_failures:.1f}, Errors: {avg_errors:.1f}, Skipped: {avg_skips:.1f}")
 
+            # Warnings section (RTS-specific and sanitizer mismatches)
+            log_and_collect("-" * 60)
+            log_and_collect("[Warnings]")
+            has_warning = False
+
+            # Warning: Sanitizer mismatches
+            if self.sanitizer_mismatches:
+                log_and_collect(
+                    f"  WARNING: {len(self.sanitizer_mismatches)} POV(s) require different sanitizer than "
+                    f"snapshot (built with '{self.snapshot_sanitizer}'). Results may be inaccurate."
+                )
+                has_warning = True
+
             # RTS-specific warnings
             if with_rts:
-                log_and_collect("-" * 60)
-                log_and_collect("[Warnings]")
-                has_warning = False
-
                 # Warning: RTS selected zero tests
                 if avg_tests == 0:
                     log_and_collect("  WARNING: RTS selected 0 tests - all tests were skipped!")
@@ -491,8 +595,8 @@ class IncrementalBuildChecker:
                     log_and_collect("  WARNING: RTS did not reduce test count - same as baseline!")
                     has_warning = True
 
-                if not has_warning:
-                    log_and_collect("  No warnings.")
+            if not has_warning:
+                log_and_collect("  No warnings.")
 
         log_and_collect("=" * 60)
 
