@@ -12,7 +12,8 @@ from .utils import set_gitcache
 
 def main():
     """Main entry point for CRS CLI."""
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+    # FIXME: does not work
+    # logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     parser = argparse.ArgumentParser(
         description='CRS (Cyber Reasoning System) build and run tool'

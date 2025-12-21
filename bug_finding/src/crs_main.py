@@ -733,6 +733,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
 
     def cleanup():
         """Cleanup function for compose files"""
+        logger.info('cleanup')
         subprocess.run(compose_down_cmd)
         if not external_litellm:
             litellm_compose_file = crs_build_dir / 'compose-litellm.yaml'
@@ -743,6 +744,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
         if chown:
             uid = os.getuid()
             gid = os.getgid()
+            logger.info(f'Changing ownership of {build_dir} to {uid}:{gid}')
             chown_cmd = [
                 'docker', 'run', '--rm',
                 '-v', f'{build_dir}:/target',
