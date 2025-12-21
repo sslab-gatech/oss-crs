@@ -81,8 +81,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             Path(args.out),
         )
         # FIXME: Bandaid solution for permission issues when runner executes as root
-        if args.chown:
-            change_ownership_with_docker(Path(args.out))
+        change_ownership_with_docker(Path(args.out))
     elif args.command == "test-inc-build":
         oss_patch = OSSPatch(args.project)
         result = oss_patch.test_inc_build(Path(args.oss_fuzz))
@@ -186,11 +185,6 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     )
     run_crs_parser.add_argument(
         "--litellm-key", help="The API key for litellm (env: LITELLM_API_KEY)"
-    )
-    run_crs_parser.add_argument(
-        "--chown",
-        action="store_true",
-        help="Change ownership of output directory to current user after run",
     )
 
     run_pov_parser = subparsers.add_parser(

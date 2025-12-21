@@ -591,8 +591,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             harness_source: Path = None,
             diff_path: Path = None,
             external_litellm: bool = False, source_oss_fuzz_dir: Path = None,
-            shared_seed_dir: Path = None, disable_shared_seed: bool = False,
-            chown: bool = False):
+            shared_seed_dir: Path = None, disable_shared_seed: bool = False):
     """
     Run CRS using docker compose.
 
@@ -616,7 +615,6 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
         source_oss_fuzz_dir: Optional source OSS-Fuzz directory to copy from (Path, already resolved)
         shared_seed_dir: Optional base directory for shared seeds (Path, already resolved)
         disable_shared_seed: Disable automatic shared seed directory for ensemble mode
-        chown: Change ownership of build directory to current user during cleanup (default: False)
 
     Returns:
         bool: True if successful, False otherwise
@@ -740,18 +738,17 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             litellm_stop_cmd = ['docker', 'compose', '-p', litellm_project,
                                '-f', str(litellm_compose_file), 'stop']
             subprocess.run(litellm_stop_cmd)
-        # Change ownership using docker to avoid sudo
-        if chown:
-            uid = os.getuid()
-            gid = os.getgid()
-            logger.info(f'Changing ownership of {build_dir} to {uid}:{gid}')
-            chown_cmd = [
-                'docker', 'run', '--rm',
-                '-v', f'{build_dir}:/target',
-                'alpine',
-                'chown', '-R', f'{uid}:{gid}', '/target'
-            ]
-            subprocess.run(chown_cmd)
+        # FIXME: Bandaid solution for permission issues when runner executes as root
+        uid = os.getuid()
+        gid = os.getgid()
+        logger.info(f'Changing ownership of {build_dir} to {uid}:{gid}')
+        chown_cmd = [
+            'docker', 'run', '--rm',
+            '-v', f'{build_dir}:/target',
+            'alpine',
+            'chown', '-R', f'{uid}:{gid}', '/target'
+        ]
+        subprocess.run(chown_cmd)
 
     def signal_handler(signum, frame):
         """Handle termination signals"""
