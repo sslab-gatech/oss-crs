@@ -213,7 +213,10 @@ class IncrementalBuildChecker:
 
         # measure consumed time
         cur_time = time.time()
-        build_fail_logs = self.project_builder.build_fuzzers(source_path)
+        build_fail_logs = self.project_builder.build_fuzzers(
+            source_path,
+            sanitizer=self.snapshot_sanitizer
+        )
         self.build_time_without_inc_build = time.time() - cur_time
 
         if build_fail_logs:
@@ -246,7 +249,11 @@ class IncrementalBuildChecker:
 
         # measure consumed time
         cur_time = time.time()
-        build_fail_logs = self.project_builder.build_fuzzers(source_path, use_inc_image=True)
+        build_fail_logs = self.project_builder.build_fuzzers(
+            source_path,
+            use_inc_image=True,
+            sanitizer=self.snapshot_sanitizer
+        )
         self.build_time_with_inc_build = time.time() - cur_time
 
         if build_fail_logs:
