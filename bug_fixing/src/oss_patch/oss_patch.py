@@ -58,6 +58,7 @@ class OSSPatch:
         registry_path: Path | None = None,
         overwrite: bool = False,
         use_gitcache: bool = False,
+        force_rebuild: bool = False,
     ) -> bool:
         # TODO: better dectection to skip building
         assert self.crs_name
@@ -71,6 +72,7 @@ class OSSPatch:
             local_crs=local_crs,
             registry_path=registry_path,
             use_gitcache=use_gitcache,
+            force_rebuild=force_rebuild,
         )
         if not crs_builder.build():
             return False
@@ -123,6 +125,7 @@ class OSSPatch:
             self.project_name,
             oss_fuzz_path,
             project_path=project_path,
+            force_rebuild=force_rebuild,
         )
         if not project_builder.build(source_path):
             return False

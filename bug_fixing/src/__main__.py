@@ -54,6 +54,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             _get_path_or_none(args.registry),
             args.overwrite,
             args.gitcache,
+            args.force_rebuild,
         )
     elif args.command == "run":
         # Resolve litellm config: CLI args > env vars
@@ -157,6 +158,11 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         "--gitcache",
         action="store_true",
         help="Use gitcache for git clone and submodule operations",
+    )
+    build_crs_parser.add_argument(
+        "--force-rebuild",
+        action="store_true",
+        help="Force rebuild images even if they already exist",
     )
 
     build_crs_parser.set_defaults(clean=False)

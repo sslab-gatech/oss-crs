@@ -37,6 +37,7 @@ class OSSPatchCRSBuilder:
         local_crs: Path | None = None,
         registry_path: Path | None = None,
         use_gitcache: bool = False,
+        force_rebuild: bool = False,
     ):
         self.crs_name = crs_name
         self.work_dir = work_dir
@@ -44,15 +45,17 @@ class OSSPatchCRSBuilder:
         # Default to crs_registry using importlib.resources (same as bug_finding)
         self.registry_path = registry_path if registry_path else OSS_CRS_REGISTRY_PATH
         self.use_gitcache = use_gitcache
+        self.force_rebuild = force_rebuild
 
     def build(self, volume_name: str = OSS_PATCH_CRS_SYSTEM_IMAGES) -> bool:
         # Check if CRS image already exists before doing any work
-        crs_image_name = get_crs_image_name(self.crs_name)
-        if docker_image_exists_in_volume(crs_image_name, volume_name):
-            logger.info(
-                f'CRS image "{crs_image_name}" already exists in "{volume_name}". Skipping build for {self.crs_name}.'
-            )
-            return True
+        if not self.force_rebuild:
+            crs_image_name = get_crs_image_name(self.crs_name)
+            if docker_image_exists_in_volume(crs_image_name, volume_name):
+                logger.info(
+                    f'CRS image "{crs_image_name}" already exists in "{volume_name}". Skipping build for {self.crs_name}.'
+                )
+                return True
 
         logger.info(f'Getting CRS metadata for "{self.crs_name}"...')
         result = self._get_crs_yamls()

@@ -146,11 +146,13 @@ class OSSPatchProjectBuilder:
         project_name: str,
         oss_fuzz_path: Path,
         project_path: Path,
+        force_rebuild: bool = False,
     ):
         self.work_dir = work_dir
         self.project_name = project_name
         self.oss_fuzz_path = oss_fuzz_path.resolve()
         self.project_path = project_path
+        self.force_rebuild = force_rebuild
 
         assert self.project_path.exists()
         assert (self.project_path / "project.yaml").exists()
@@ -291,11 +293,12 @@ class OSSPatchProjectBuilder:
         )
 
         # FIXME: move up
-        if docker_image_exists(builder_image_name):
-            logger.info(
-                f'The image "{builder_image_name}" already exists. Skip building it.'
-            )
-            return True
+        if not self.force_rebuild:
+            if docker_image_exists(builder_image_name):
+                logger.info(
+                    f'The image "{builder_image_name}" already exists. Skip building it.'
+                )
+                return True
 
         logger.info(f'Building the image "{builder_image_name}"...')
 
