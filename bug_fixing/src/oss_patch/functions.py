@@ -195,6 +195,7 @@ def load_images_to_volume(images: list[str], volume_name: str) -> bool:
                 logger.error(f'"{image_name}" does not exist in docker daemon')
                 return False
 
+            # TODO: skip save if already exists
             subprocess.run(
                 f"docker save -o {images_path / image_name.split('/')[-1]}.tar {image_name}",
                 shell=True,
@@ -202,6 +203,7 @@ def load_images_to_volume(images: list[str], volume_name: str) -> bool:
                 stderr=subprocess.DEVNULL,
             )
 
+        # TODO: skip save if already exists
         docker_load_cmd = (
             f"docker run --privileged --rm "
             f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:{DEFAULT_DOCKER_ROOT_DIR} "

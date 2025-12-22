@@ -59,6 +59,7 @@ class OSSPatch:
         overwrite: bool = False,
         use_gitcache: bool = False,
     ) -> bool:
+        # TODO: better dectection to skip building
         assert self.crs_name
 
         if not prepare_docker_cache_builder():
@@ -115,7 +116,7 @@ class OSSPatch:
             pull_project_source(project_path, source_path, use_gitcache)
 
         assert source_path.exists()
-        assert is_git_repository(source_path)
+        assert is_git_repository(source_path) # FIXME: should support non-git source
 
         project_builder = OSSPatchProjectBuilder(
             self.work_dir,

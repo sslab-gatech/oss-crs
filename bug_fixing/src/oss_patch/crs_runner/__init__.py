@@ -95,6 +95,7 @@ class OSSPatchCRSRunner:
             if not self._prepare_runner_image(context_dir):
                 return False
 
+            # TODO: optimize speed; caching
             if not load_images_to_volume(
                 [
                     get_builder_image_name(oss_fuzz_path, self.project_name),

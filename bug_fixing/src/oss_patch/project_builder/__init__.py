@@ -290,6 +290,7 @@ class OSSPatchProjectBuilder:
             self.oss_fuzz_path, self.project_name
         )
 
+        # FIXME: move up
         if docker_image_exists(builder_image_name):
             logger.info(
                 f'The image "{builder_image_name}" already exists. Skip building it.'
