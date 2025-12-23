@@ -98,6 +98,7 @@ class OSSPatchCRSRunner:
 
     def _construct_run_context(self, oss_fuzz_path: Path, source_path: Path) -> bool:
         if self.run_context_dir.exists():
+            change_ownership_with_docker(self.run_context_dir)
             shutil.rmtree(self.run_context_dir)
         self.run_context_dir.mkdir()
 
