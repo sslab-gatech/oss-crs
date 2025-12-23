@@ -217,7 +217,7 @@ class OSSPatchProjectBuilder:
             command += f" {source_path}"
 
         if use_inc_image:
-            command += " --docker_image_tag inc --no-build-image"
+            command += f" --docker_image_tag inc-{sanitizer} --no-build-image"
 
         proc = _run_subprocess_with_logging(command, log_file=self.log_file)
 
@@ -232,6 +232,7 @@ class OSSPatchProjectBuilder:
         rts_enabled: bool = False,
         log_file: Path | None = None,
         use_inc_image: bool = False,
+        sanitizer: str = "address",
     ) -> tuple[bytes, bytes] | None:
         """Run tests for the project using oss-fuzz helper.py run_test.
 
@@ -254,7 +255,7 @@ class OSSPatchProjectBuilder:
             command += " --rts"
 
         if use_inc_image:
-            command += " --docker_image_tag inc"
+            command += f" --docker_image_tag inc-{sanitizer}"
 
         proc = _run_subprocess_with_logging(command, log_file=self.log_file)
 
@@ -571,13 +572,13 @@ class OSSPatchProjectBuilder:
             if rts_enabled:
                 env_options += f'-c "ENV RTS_ON=1" '
 
-            # Commit with :inc tag to distinguish from original image
+            # Commit with :inc-{sanitizer} tag to distinguish from original image
             commit_command = (
                 f"docker container commit "
                 f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
-                f"{container_name} {builder_image_name}:inc"
+                f"{container_name} {builder_image_name}:inc-{sanitizer}"
             )
 
             proc = subprocess.run(
@@ -753,13 +754,13 @@ class OSSPatchProjectBuilder:
                 env_options += f'-c "ENV RTS_ON=1" '
                 env_options += f'-c "ENV RTS_TOOL={rts_tool}" '
 
-            # Commit with :inc tag to distinguish from original image
+            # Commit with :inc-{sanitizer} tag to distinguish from original image
             commit_command = (
                 f"docker container commit "
                 f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
-                f"{container_name} {builder_image_name}:inc"
+                f"{container_name} {builder_image_name}:inc-{sanitizer}"
             )
 
             proc = subprocess.run(

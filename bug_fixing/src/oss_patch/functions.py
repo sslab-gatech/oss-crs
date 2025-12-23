@@ -438,13 +438,23 @@ def prepare_docker_cache_builder() -> bool:
 
 
 def extract_sanitizer_report(full_log: str) -> str | None:
-    match = re.search(r"==\d+==", full_log)
+    # Detect ASAN (==123==) or UBSAN (runtime error:)
+    match = re.search(r"(==\d+==|runtime error:)", full_log)
 
     if match is None:
         # fail-safe: return the full crash log as it is.
         return None
 
-    return full_log[match.start() :]
+    start_idx = match.start()
+    # For UBSan runtime errors, we try to include the file path at the beginning of the line
+    if "runtime error:" in match.group():
+        line_start = full_log.rfind('\n', 0, start_idx)
+        if line_start != -1:
+            start_idx = line_start + 1
+        else:
+            start_idx = 0
+
+    return full_log[start_idx:]
 
 
 def extract_java_exception_report(full_log: str) -> str | None:
