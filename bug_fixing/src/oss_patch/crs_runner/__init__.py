@@ -9,6 +9,7 @@ from bug_fixing.src.oss_patch.functions import (
     run_command,
     create_docker_volume,
     docker_image_exists,
+    docker_image_exists_in_volume,
     load_images_to_volume,
     get_builder_image_name,
     get_base_runner_image_name,
@@ -49,6 +50,26 @@ def _cleanup_dir(target_dir: Path):
         else:
             item.unlink()
 
+
+def _disable_force_build_in_oss_fuzz(oss_fuzz_path: Path):
+    helper_path = oss_fuzz_path / "infra/helper.py"
+
+    helper_script = helper_path.read_text()
+
+    helper_path.write_text(
+        helper_script.replace("build_project_image=True", "build_project_image=False")
+    )
+
+
+def _check_force_build_in_oss_fuzz(oss_fuzz_path: Path) -> bool:
+    helper_path = oss_fuzz_path / "infra/helper.py"
+
+    if "build_project_image=True" in helper_path.read_text():
+        return False
+
+    return True
+
+
 class OSSPatchCRSRunner:
     def __init__(self, project_name: str, work_dir: Path, out_dir: Path | None = None):
         self.project_name = project_name
@@ -85,6 +106,8 @@ class OSSPatchCRSRunner:
         ):
             return False
 
+        _disable_force_build_in_oss_fuzz(self.oss_fuzz_path)
+
         self._write_runner_metadata()
 
         return True
@@ -93,7 +116,6 @@ class OSSPatchCRSRunner:
         self,
         oss_fuzz_path: Path,
         source_path: Path,
-        context_dir: Path = OSS_PATCH_BUILD_CONTEXT_DIR,
     ) -> bool:
         if not self._prepare_docker_volumes():
             return False
@@ -101,11 +123,18 @@ class OSSPatchCRSRunner:
         if not self._construct_run_context(oss_fuzz_path, source_path):
             return False
 
+        images_to_load = [
+            get_builder_image_name(oss_fuzz_path, self.project_name),
+            get_base_runner_image_name(oss_fuzz_path),
+        ]
         # TODO: optimize speed; caching
         if not load_images_to_volume(
             [
-                get_builder_image_name(oss_fuzz_path, self.project_name),
-                get_base_runner_image_name(oss_fuzz_path),
+                image_name
+                for image_name in images_to_load
+                if not docker_image_exists_in_volume(
+                    image_name, OSS_PATCH_DOCKER_IMAGES_FOR_CRS
+                )
             ],
             OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
         ):
@@ -115,7 +144,6 @@ class OSSPatchCRSRunner:
             return False
 
         return True
-
 
     def _prepare_docker_volumes(self) -> bool:
         if not create_docker_volume(OSS_PATCH_DOCKER_IMAGES_FOR_CRS):
@@ -243,8 +271,15 @@ class OSSPatchCRSRunner:
     def _run_crs_against_povs(
         self, crs_name: str, litellm_api_key: str, litellm_api_base: str
     ) -> bool:
-        assert self.out_dir
         # Run the CRS container
+
+        assert self.out_dir
+
+        if not _check_force_build_in_oss_fuzz(self.oss_fuzz_path):
+            logger.error(
+                f"OSS-Fuzz's forciful image build is enabled, which prevents our CRS using incremental build"
+            )
+            return False
 
         if not self.oss_fuzz_path.exists():
             logger.error(
