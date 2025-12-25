@@ -66,18 +66,41 @@ cd $SRC/project
 cp -r $SRC/oniguruma modules/
 ```
 
-### $WORK May Be Shared - Use Separate Prefix in test.sh
+### AVOID $WORK - Use $SRC Subdirectories for All Build Artifacts
 
-**WARNING: While $SRC is separate, $WORK may still be shared between build.sh and test.sh.**
+**CRITICAL: Avoid using $WORK for build-related directories. Use $SRC subdirectories instead.**
 
-If build.sh installs ASAN-instrumented libraries to `$WORK`, test.sh will get ASAN link errors.
+`$WORK` is shared between build.sh and test.sh, which causes problems:
+1. ASAN-instrumented libraries from build.sh conflict with test.sh
+2. CMake paths recorded in $WORK become invalid when $SRC changes
+3. Build artifacts from different environments can corrupt each other
+
+**Always use `$SRC` subdirectories for:**
+- Build directories (out-of-source builds)
+- Install prefixes (for cmake/configure --prefix)
+- Dependency installations
+
+```bash
+# BAD - Uses $WORK which is shared
+BUILD_DIR="$WORK/build"
+cmake "$SRC/project" -DCMAKE_INSTALL_PREFIX=$WORK
+
+# GOOD - Uses $SRC subdirectories
+BUILD_DIR="$SRC/project_build"
+INSTALL_DIR="$SRC/project_install"
+mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+cd "$BUILD_DIR"
+cmake "$SRC/project" -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+```
+
+**In test.sh, also use $SRC subdirectories:**
 
 ```bash
 # BAD in test.sh - Uses shared $WORK with ASAN artifacts
 ./configure --prefix="$WORK"
 # Error: undefined reference to __asan_*
 
-# GOOD in test.sh - Uses separate prefix
+# GOOD in test.sh - Uses separate prefix under $SRC
 TEST_PREFIX="$SRC/test_deps"
 mkdir -p "$TEST_PREFIX/lib" "$TEST_PREFIX/include"
 
@@ -89,6 +112,28 @@ if [ ! -f "$TEST_PREFIX/lib/libz.a" ]; then
     popd
 fi
 ```
+
+### test.sh Does NOT Need Sanitizers - Disable Them Explicitly
+
+**IMPORTANT: test.sh runs unit tests, NOT fuzzing. Sanitizers are NOT needed and cause conflicts.**
+
+During incremental build testing, build.sh compiles with ASAN/sanitizer flags. When test.sh runs in the SAME directory, the object files from build.sh are ASAN-instrumented. If test.sh tries to link against these objects without ASAN runtime, you get undefined reference errors.
+
+### build.sh and test.sh Artifacts Should NOT Be Shared
+
+**CRITICAL: Build artifacts from build.sh should NOT be reused in test.sh.**
+
+During incremental build testing:
+1. build.sh runs with ASAN flags → creates ASAN-instrumented `.o` files
+2. test.sh runs in the SAME `$SRC` directory
+3. If test.sh tries to use existing `.o` files, linking fails
+
+**The artifacts are incompatible because:**
+- build.sh: Compiles with `-fsanitize=address -fsanitize-address-use-after-scope -fsanitize=fuzzer-no-link`
+- test.sh: Needs to link without sanitizer runtime
+
+
+**DO NOT use `|| true` to ignore link failures** - this hides the real problem. Fix the root cause by ensuring clean separation of build artifacts.
 
 ## Critical Requirements
 
@@ -526,7 +571,8 @@ Then use TaskOutput to retrieve results from each agent.
 - [ ] Failing tests removed from Makefile.am BEFORE configure (not just file deletion)
 - [ ] Dependencies have existence guards
 - [ ] Directory copies are conditional (`if [ ! -d ]`), not delete-and-copy
-- [ ] test.sh uses separate prefix (e.g., `$SRC/test_deps`) if $WORK has ASAN artifacts
+- [ ] Uses `$SRC` subdirectories instead of `$WORK` for build dirs and install prefixes
+- [ ] test.sh uses separate prefix (e.g., `$SRC/test_deps`) if dependencies needed
 - [ ] Dict/corpus copies use conditional: `[ -f file ] && cp ... || true`
 - [ ] Tests use `make -k check || true` if some may fail
 - [ ] Internal build.sh rewritten if it uses `mv` or non-idempotent operations
