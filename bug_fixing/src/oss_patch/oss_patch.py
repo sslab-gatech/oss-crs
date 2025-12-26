@@ -9,6 +9,8 @@ from .functions import (
     pull_project_source,
     is_git_repository,
     change_ownership_with_docker,
+    get_project_rts_config,
+    resolve_rts_config,
 )
 import logging
 import shutil
@@ -177,18 +179,54 @@ class OSSPatch:
         self,
         oss_fuzz_path: Path,
         with_rts: bool = False,
-        rts_tool: str = "jcgeks",
+        rts_tool: str | None = None,
         source_path: Path | None = None,
         log_file: Path | None = None,
         skip_clone: bool = False,
+        skip_baseline: bool = False,
     ) -> bool:
         oss_fuzz_path = oss_fuzz_path.resolve()
         if source_path:
             source_path = source_path.resolve()
 
+        project_path = oss_fuzz_path / "projects" / self.project_name
+
+        # Load project configuration from project.yaml
+        project_config = get_project_rts_config(project_path)
+        logger.info(f"Project config from project.yaml: {project_config}")
+
+        # Resolve final configuration (CLI overrides project.yaml)
+        inc_build_enabled, effective_rts_mode = resolve_rts_config(
+            with_rts, rts_tool, project_config
+        )
+
+        logger.info(f"Final config: inc_build={inc_build_enabled}, rts_mode={effective_rts_mode}")
+
+        # Create the checker
         checker = IncrementalBuildChecker(
             oss_fuzz_path, self.project_name, self.work_dir, log_file=log_file
         )
 
-        # Run incremental build test (with RTS if requested)
-        return checker.test(with_rts=with_rts, rts_tool=rts_tool, skip_clone=skip_clone)
+        # Choose workflow based on configuration
+        if not inc_build_enabled:
+            # Workflow A: No incremental build
+            logger.warning(
+                "Incremental build is DISABLED for this project (inc_build=false in project.yaml). "
+                "Running baseline-only workflow without creating snapshots."
+            )
+            return checker.test_without_inc_build(skip_clone=skip_clone)
+        else:
+            # Workflow B or C: Incremental build enabled
+            effective_with_rts = effective_rts_mode != "none"
+
+            if effective_with_rts:
+                logger.info(f"Running incremental build + RTS workflow (rts_mode={effective_rts_mode})")
+            else:
+                logger.info("Running incremental build workflow (rts_mode=none)")
+
+            return checker.test(
+                with_rts=effective_with_rts,
+                rts_tool=effective_rts_mode if effective_with_rts else "jcgeks",
+                skip_clone=skip_clone,
+                skip_baseline=skip_baseline
+            )

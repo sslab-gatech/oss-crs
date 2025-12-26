@@ -99,13 +99,14 @@ class IncrementalBuildChecker:
 
         return sanitizers
 
-    def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False) -> bool:
+    def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False, skip_baseline: bool = False) -> bool:
         """Test incremental build (and optionally RTS) for a project.
 
         Args:
             with_rts: If True, also run RTS benchmark (JVM projects only)
             rts_tool: RTS tool to use (ekstazi, jcgeks, or openclover)
             skip_clone: If True, use existing source code instead of cloning fresh
+            skip_baseline: If True, skip baseline build and test measurement
         """
         proj_src_path = self.work_dir / "project-src"
 
@@ -135,12 +136,24 @@ class IncrementalBuildChecker:
         logger.info(f"Required sanitizers: {self.required_sanitizers}")
 
         # Step 3: Measure build time without inc build (use first sanitizer)
-        if not self._measure_time_without_inc_build(proj_src_path, sanitizer=self.required_sanitizers[0]):
-            return False
+        if skip_baseline:
+            logger.info("Skipping baseline build measurement (--skip-baseline)")
+            # Still need to clean source code before snapshot
+            change_ownership_with_docker(proj_src_path)
+            if not reset_repository(proj_src_path):
+                logger.error(f"Reset of {proj_src_path} has failed...")
+                return False
+            logger.info("Source code cleaned before snapshot")
+        else:
+            if not self._measure_time_without_inc_build(proj_src_path, sanitizer=self.required_sanitizers[0]):
+                return False
 
-        # # Step 3a: Measure baseline test time (before snapshot)
-        if not self._measure_baseline_test_time(proj_src_path):
-            return False
+        # Step 3a: Measure baseline test time (before snapshot)
+        if skip_baseline:
+            logger.info("Skipping baseline test measurement (--skip-baseline)")
+        else:
+            if not self._measure_baseline_test_time(proj_src_path):
+                return False
 
         # Step 4: Take snapshot for each required sanitizer
         for sanitizer in self.required_sanitizers:
@@ -163,16 +176,130 @@ class IncrementalBuildChecker:
         logger.info(f"Incremental build is working correctly for {self.project_name}")
 
         # Step 7: Print summary
-        self._print_test_summary(with_rts=with_rts)
+        self._print_test_summary(with_rts=with_rts, skip_baseline=skip_baseline)
 
         return True
+
+    def test_without_inc_build(self, skip_clone: bool = False) -> bool:
+        """Test workflow without incremental build (inc_build=false).
+
+        This simplified workflow:
+        1. Prepares source code
+        2. Builds Docker image
+        3. Runs build_fuzzers once (baseline)
+        4. Runs test.sh once (baseline)
+        5. Verifies POVs work correctly using original image
+
+        No snapshots are created, no incremental images used.
+
+        Args:
+            skip_clone: If True, use existing source code instead of cloning fresh
+        """
+        proj_src_path = self.work_dir / "project-src"
+
+        if skip_clone:
+            logger.info(f"Skipping source code clone, using existing code at {proj_src_path}")
+            if not proj_src_path.exists():
+                logger.error(f"Source code path does not exist: {proj_src_path}")
+                return False
+        else:
+            logger.info(f"Preparing project source code for {self.project_name}")
+            if proj_src_path.exists():
+                change_ownership_with_docker(proj_src_path)
+                shutil.rmtree(proj_src_path)
+            pull_project_source(self.project_path, proj_src_path)
+
+        logger.info(
+            f'create project builder image: "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}"'
+        )
+
+        cur_time = time.time()
+        self.project_builder.build(proj_src_path, inc_build_enabled=False)
+        image_build_time = time.time() - cur_time
+        logger.info(f"Docker image build time: {image_build_time}")
+
+        # Get required sanitizers from project.yaml
+        self.required_sanitizers = self._get_required_sanitizers()
+        logger.info(f"Required sanitizers: {self.required_sanitizers}")
+
+        # Step 3: Build fuzzers (baseline, use first sanitizer)
+        if not self._measure_time_without_inc_build(proj_src_path, sanitizer=self.required_sanitizers[0]):
+            return False
+
+        # Step 4: Measure baseline test time
+        if not self._measure_baseline_test_time(proj_src_path):
+            return False
+
+        # Step 5: Check against POVs (using original image, no incremental build)
+        logger.info("Verifying POVs using original image (no incremental build)...")
+        if not self._check_against_povs(proj_src_path, with_rts=False, use_inc_image=False):
+            return False
+
+        logger.info(f"Baseline workflow completed successfully for {self.project_name}")
+
+        # Print summary (simplified for non-inc-build mode)
+        self._print_baseline_summary()
+
+        return True
+
+    def _print_baseline_summary(self):
+        """Print summary for baseline (non-incremental build) workflow."""
+        summary_lines = []
+
+        def log_and_collect(msg: str):
+            logger.info(msg)
+            summary_lines.append(msg)
+
+        log_and_collect("=" * 60)
+        log_and_collect("Test Benchmark Results (Baseline - No Incremental Build):")
+        log_and_collect("=" * 60)
+
+        # Sanitizer configuration
+        log_and_collect("[Sanitizer Configuration]")
+        log_and_collect(f"  Required sanitizers: {self.required_sanitizers}")
+        log_and_collect("-" * 60)
+
+        # Build time
+        log_and_collect("[Build Time]")
+        if self.build_time_without_inc_build is not None:
+            log_and_collect(f"  Baseline build time: {self.build_time_without_inc_build:.2f}s")
+        log_and_collect("-" * 60)
+
+        # Test time
+        if hasattr(self, 'baseline_test_time'):
+            log_and_collect("[Test Time]")
+            log_and_collect(f"  Baseline test time: {self.baseline_test_time:.2f}s")
+
+        # Baseline test stats
+        if hasattr(self, 'baseline_test_stats'):
+            log_and_collect("-" * 60)
+            log_and_collect("[Test Results]")
+            baseline_tests = self.baseline_test_stats[0]
+            baseline_failures, baseline_errors, baseline_skips = self.baseline_test_stats[4]
+            log_and_collect(f"  Total tests: {baseline_tests}")
+            log_and_collect(f"  Failures: {baseline_failures}, Errors: {baseline_errors}, Skipped: {baseline_skips}")
+
+        # POV verification results
+        if hasattr(self, 'test_results') and self.test_results:
+            log_and_collect("-" * 60)
+            log_and_collect("[POV Verification Results]")
+            for pov_name, test_time, stats, sanitizer in self.test_results:
+                log_and_collect(f"  {pov_name} ({sanitizer}): PASSED")
+
+        log_and_collect("=" * 60)
+
+        # Save summary to file
+        summary_file = self.work_dir / "summary.txt"
+        with open(summary_file, "w") as f:
+            f.write("\n".join(summary_lines) + "\n")
+        logger.info(f"Summary saved to: {summary_file}")
 
     # Testing purpose function
     def _run_pov(
         self,
         harness_name: str,
         pov_path: Path,
-    ) -> tuple[bytes, bytes]:
+    ) -> tuple[bytes, bytes, int]:
         reproduce_command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} reproduce {self.project_name} {harness_name} {pov_path}"
 
         # print(runner_command)
@@ -224,8 +351,11 @@ class IncrementalBuildChecker:
 
         # measure consumed time
         cur_time = time.time()
-        build_fail_logs = self.project_builder.build_fuzzers(source_path, sanitizer=sanitizer, use_inc_image=True)
-        self.build_time_with_inc_build[sanitizer] = time.time() - cur_time
+        build_fail_logs = self.project_builder.build_fuzzers(source_path, use_inc_image=True, sanitizer=sanitizer)
+        build_time = time.time() - cur_time
+
+        # Store in dict per sanitizer
+        self.build_time_with_inc_build[sanitizer] = build_time
 
         if build_fail_logs:
             stdout, stderr = build_fail_logs
@@ -241,7 +371,7 @@ class IncrementalBuildChecker:
             return False
 
         logger.info(
-            f"Build time with incremental build ({sanitizer}): {self.build_time_with_inc_build[sanitizer]}"
+            f"Build time with incremental build ({sanitizer}): {self.build_time_with_inc_build[sanitizer]:.2f}s"
         )
 
         change_ownership_with_docker(source_path)
@@ -251,7 +381,14 @@ class IncrementalBuildChecker:
 
         return True
 
-    def _check_against_povs(self, source_path, with_rts: bool = False) -> bool:
+    def _check_against_povs(self, source_path, with_rts: bool = False, use_inc_image: bool = True) -> bool:
+        """Check POVs and optionally measure test time.
+
+        Args:
+            source_path: Path to the project source code
+            with_rts: If True, run RTS during test execution
+            use_inc_image: If True, use incremental build image. If False, use original image.
+        """
         aixcc_dir = self.oss_fuzz_path / "projects" / self.project_name / ".aixcc"
         if not aixcc_dir.exists():
             logger.error(
@@ -269,6 +406,8 @@ class IncrementalBuildChecker:
 
         # Initialize test results list for averaging
         self.test_results = []  # List of (pov_name, test_time, stats, sanitizer)
+
+        build_mode = "incremental build" if use_inc_image else "baseline"
 
         for pov_per_harness_dir in povs_dir.iterdir():
             harness_name = pov_per_harness_dir.name
@@ -295,9 +434,9 @@ class IncrementalBuildChecker:
                     logger.info(f'No CPV config found for {harness_name}/{pov_name}, using defaults')
 
                 logger.info(
-                    f'Checking "{pov_name}" for crash with incremental build (sanitizer={sanitizer})...'
+                    f'Checking "{pov_name}" for crash with {build_mode} (sanitizer={sanitizer})...'
                 )
-                if self.project_builder.build_fuzzers(source_path, use_inc_image=True, sanitizer=sanitizer):
+                if self.project_builder.build_fuzzers(source_path, use_inc_image=use_inc_image, sanitizer=sanitizer):
                     return False
                 stdout, _, retcode = self._run_pov(harness_name, pov_path)
 
@@ -322,12 +461,12 @@ class IncrementalBuildChecker:
 
                 logger.info(f'Building with patch "{patch_path.name}" (sanitizer={sanitizer})')
                 cur_time = time.time()
-                if self.project_builder.build_fuzzers(source_path, use_inc_image=True, sanitizer=sanitizer):
+                if self.project_builder.build_fuzzers(source_path, use_inc_image=use_inc_image, sanitizer=sanitizer):
                     return False
 
                 build_time_with_patch = time.time() - cur_time
                 logger.info(
-                    f'Build time with incremental build and patch ("{patch_path.name}"): {build_time_with_patch}'
+                    f'Build time with {build_mode} and patch ("{patch_path.name}"): {build_time_with_patch}'
                 )
 
                 stdout, _, retcode = self._run_pov(harness_name, pov_path)
@@ -341,16 +480,16 @@ class IncrementalBuildChecker:
                 else:
                     logger.info(f'crash is not detected for "{pov_name}" with a patch "{patch_path}"')
 
-                logger.info(f'Incremental build for "{pov_name}" has been validated')
+                logger.info(f'{build_mode.capitalize()} for "{pov_name}" has been validated')
 
                 # Measure test time after patch validation (with or without RTS)
-                rts_label = "with RTS" if with_rts else "with inc build"
+                rts_label = "with RTS" if with_rts else f"with {build_mode}"
                 log_file = self.work_dir / f"test_inc_{harness_name}_{pov_name}.log"
                 logger.info(f"Measuring test time ({rts_label}) for {pov_name}...")
 
                 cur_time = time.time()
                 result = self.project_builder.run_tests(
-                    source_path, rts_enabled=with_rts, log_file=log_file, use_inc_image=True, sanitizer=sanitizer
+                    source_path, rts_enabled=with_rts, log_file=log_file, use_inc_image=use_inc_image, sanitizer=sanitizer
                 )
                 test_time = time.time() - cur_time
 
@@ -447,7 +586,7 @@ class IncrementalBuildChecker:
 
         logger.info(f"Average test time ({len(self.test_results)} runs): {self.avg_test_time:.2f}s")
 
-    def _print_test_summary(self, with_rts: bool = False):
+    def _print_test_summary(self, with_rts: bool = False, skip_baseline: bool = False):
         """Print test benchmark summary and save to file."""
         mode_label = "with RTS" if with_rts else "with Inc Build"
 
@@ -472,12 +611,14 @@ class IncrementalBuildChecker:
 
         # Build time comparison
         log_and_collect("[Build Time Comparison]")
-        if self.build_time_without_inc_build is not None:
+        if skip_baseline:
+            log_and_collect("  Baseline build time: SKIPPED")
+        elif self.build_time_without_inc_build is not None:
             log_and_collect(f"  Build time (w/o inc build): {self.build_time_without_inc_build:.2f}s")
         if self.build_time_with_inc_build:
             for sanitizer, build_time in self.build_time_with_inc_build.items():
                 log_and_collect(f"  Build time (w/ inc build, {sanitizer}): {build_time:.2f}s")
-                if self.build_time_without_inc_build:
+                if not skip_baseline and self.build_time_without_inc_build:
                     build_speedup = self.build_time_without_inc_build / build_time
                     build_saved = self.build_time_without_inc_build - build_time
                     build_reduction = (build_saved / self.build_time_without_inc_build) * 100
@@ -501,14 +642,19 @@ class IncrementalBuildChecker:
 
         # Test time comparison (averages)
         log_and_collect(f"[Test Time Comparison] (avg over {num_runs} POV(s))")
-        log_and_collect(f"  Baseline (before snapshot): {self.baseline_test_time:.2f}s")
-        log_and_collect(f"  {mode_label} (avg after snapshot): {self.avg_test_time:.2f}s")
-        if self.baseline_test_time > 0 and self.avg_test_time > 0:
-            time_saved = self.baseline_test_time - self.avg_test_time
-            speedup = self.baseline_test_time / self.avg_test_time
-            reduction_pct = (time_saved / self.baseline_test_time) * 100
-            log_and_collect(f"  Avg time saved: {time_saved:.2f}s ({reduction_pct:.1f}% reduction)")
-            log_and_collect(f"  Avg speedup: {speedup:.2f}x")
+        if skip_baseline:
+            log_and_collect("  Baseline test time: SKIPPED")
+        elif hasattr(self, 'baseline_test_time'):
+            log_and_collect(f"  Baseline (before snapshot): {self.baseline_test_time:.2f}s")
+        if hasattr(self, 'avg_test_time'):
+            log_and_collect(f"  {mode_label} (avg after snapshot): {self.avg_test_time:.2f}s")
+        if not skip_baseline and hasattr(self, 'baseline_test_time') and hasattr(self, 'avg_test_time'):
+            if self.baseline_test_time > 0 and self.avg_test_time > 0:
+                time_saved = self.baseline_test_time - self.avg_test_time
+                speedup = self.baseline_test_time / self.avg_test_time
+                reduction_pct = (time_saved / self.baseline_test_time) * 100
+                log_and_collect(f"  Avg time saved: {time_saved:.2f}s ({reduction_pct:.1f}% reduction)")
+                log_and_collect(f"  Avg speedup: {speedup:.2f}x")
 
         # Test count comparison (from log analysis) - now using averages
         if hasattr(self, 'baseline_test_stats') and hasattr(self, 'avg_test_stats'):

@@ -511,6 +511,116 @@ def get_cpv_config(project_path: Path, harness_name: str, cpv_name: str) -> dict
     return None
 
 
+# Valid RTS modes per language
+VALID_RTS_MODES = {
+    "jvm": ["jcgeks", "openclover", "ekstazi", "none"],
+    "c": ["binaryrts", "none"],
+    "c++": ["binaryrts", "none"],
+}
+
+# Default RTS mode per language (when --with-rts is specified)
+DEFAULT_RTS_MODE = {
+    "jvm": "jcgeks",
+    "c": "binaryrts",
+    "c++": "binaryrts",
+}
+
+
+class RTSConfigError(Exception):
+    """Raised when RTS configuration is invalid."""
+    pass
+
+
+def get_project_rts_config(project_path: Path) -> dict:
+    """Get RTS and incremental build configuration from project.yaml.
+
+    Args:
+        project_path: Path to the project directory containing project.yaml
+
+    Returns:
+        dict with keys:
+            - 'inc_build': bool (default: True)
+            - 'rts_mode': str | None (value from project.yaml or None if not specified)
+            - 'language': str (jvm, c, c++)
+    """
+    project_yaml_path = project_path / "project.yaml"
+
+    if not project_yaml_path.exists():
+        logger.warning(f"project.yaml not found: {project_yaml_path}")
+        return {
+            "inc_build": True,
+            "rts_mode": None,
+            "language": "c",  # default
+        }
+
+    with open(project_yaml_path, "r") as f:
+        yaml_data = yaml.safe_load(f)
+
+    language = yaml_data.get("language", "c")
+    inc_build = yaml_data.get("inc_build", True)
+    rts_mode = yaml_data.get("rts_mode", None)
+
+    return {
+        "inc_build": inc_build,
+        "rts_mode": rts_mode,
+        "language": language,
+    }
+
+
+def resolve_rts_config(
+    cli_with_rts: bool,
+    cli_rts_tool: str | None,
+    project_config: dict
+) -> tuple[bool, str]:
+    """Resolve final inc_build and rts_mode values.
+
+    Priority:
+    1. CLI --rts-tool explicit value (overrides everything)
+    2. project.yaml rts_mode value
+    3. Default based on --with-rts flag and language
+
+    Args:
+        cli_with_rts: --with-rts flag from CLI
+        cli_rts_tool: --rts-tool value from CLI (None if not explicitly provided)
+        project_config: dict from get_project_rts_config()
+
+    Returns:
+        tuple of (inc_build_enabled, rts_mode)
+
+    Raises:
+        RTSConfigError: if rts_mode is invalid for the project language
+    """
+    inc_build = project_config.get("inc_build", True)
+    language = project_config.get("language", "c")
+    yaml_rts_mode = project_config.get("rts_mode")
+
+    # Determine effective rts_mode
+    if cli_rts_tool is not None:
+        # CLI override takes precedence
+        effective_rts_mode = cli_rts_tool
+    elif yaml_rts_mode is not None:
+        # Use project.yaml setting
+        effective_rts_mode = yaml_rts_mode
+    elif cli_with_rts:
+        # Default based on language when --with-rts is specified
+        effective_rts_mode = DEFAULT_RTS_MODE.get(language, "none")
+    else:
+        # No RTS
+        effective_rts_mode = "none"
+
+    # Validate rts_mode against language
+    valid_modes = VALID_RTS_MODES.get(language, ["none"])
+    if effective_rts_mode not in valid_modes:
+        raise RTSConfigError(
+            f"Invalid rts_mode '{effective_rts_mode}' for language '{language}'. "
+            f"Valid modes: {valid_modes}"
+        )
+
+    logger.info(f"Resolved config: inc_build={inc_build}, rts_mode={effective_rts_mode}, language={language}")
+
+    return (inc_build, effective_rts_mode)
+
+
 def get_git_commit_hash(repository_path: Path) -> str:
     repo = git.Repo(repository_path)
     return repo.head.object.hexsha

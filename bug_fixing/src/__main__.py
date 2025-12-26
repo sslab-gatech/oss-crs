@@ -107,7 +107,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         logger.info(f"Logging to: {log_file}")
         result = oss_patch.test_inc_build(
             Path(args.oss_fuzz), with_rts=args.with_rts, rts_tool=args.rts_tool,
-            log_file=log_file, skip_clone=args.skip_clone
+            log_file=log_file, skip_clone=args.skip_clone, skip_baseline=args.skip_baseline
         )
     # elif args.command == "run_pov":
     #     oss_patch = OSSPatch(args.project)
@@ -251,9 +251,11 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     )
     test_inc_build_parser.add_argument(
         "--rts-tool",
-        choices=["ekstazi", "jcgeks", "openclover"],
-        default="jcgeks",
-        help="RTS tool to use (default: jcgeks). Only used when --with-rts is specified.",
+        choices=["ekstazi", "jcgeks", "openclover", "binaryrts", "none"],
+        default=None,
+        help="RTS tool to use. Overrides project.yaml setting. "
+             "JVM: jcgeks|openclover|ekstazi|none, C: binaryrts|none. "
+             "If not specified, uses project.yaml 'rts_mode' or defaults based on language.",
     )
     test_inc_build_parser.add_argument(
         "--log-dir",
@@ -265,6 +267,12 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         action="store_true",
         default=False,
         help="Skip source code cloning and use existing code at {work_dir}/project-src.",
+    )
+    test_inc_build_parser.add_argument(
+        "--skip-baseline",
+        action="store_true",
+        default=False,
+        help="Skip baseline build and test measurement. Useful for re-running tests.",
     )
 
     test_project_parser = subparsers.add_parser(
