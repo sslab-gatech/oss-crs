@@ -99,7 +99,7 @@ class IncrementalBuildChecker:
 
         return sanitizers
 
-    def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False, skip_baseline: bool = False) -> bool:
+    def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False, skip_baseline: bool = False, skip_snapshot: bool = False) -> bool:
         """Test incremental build (and optionally RTS) for a project.
 
         Args:
@@ -107,6 +107,7 @@ class IncrementalBuildChecker:
             rts_tool: RTS tool to use (ekstazi, jcgeks, or openclover)
             skip_clone: If True, use existing source code instead of cloning fresh
             skip_baseline: If True, skip baseline build and test measurement
+            skip_snapshot: If True, skip creating incremental build snapshot (use existing snapshot)
         """
         proj_src_path = self.work_dir / "project-src"
 
@@ -156,13 +157,16 @@ class IncrementalBuildChecker:
                 return False
 
         # Step 4: Take snapshot for each required sanitizer
-        for sanitizer in self.required_sanitizers:
-            logger.info(f"Now taking a snapshot for incremental build (sanitizer={sanitizer})")
-            if not self.project_builder.take_incremental_build_snapshot(
-                proj_src_path, rts_enabled=with_rts, rts_tool=rts_tool, sanitizer=sanitizer
-            ):
-                logger.error(f"Taking incremental build snapshot for {sanitizer} has failed")
-                return False
+        if skip_snapshot:
+            logger.info("Skipping snapshot creation (--skip-snapshot)")
+        else:
+            for sanitizer in self.required_sanitizers:
+                logger.info(f"Now taking a snapshot for incremental build (sanitizer={sanitizer})")
+                if not self.project_builder.take_incremental_build_snapshot(
+                    proj_src_path, rts_enabled=with_rts, rts_tool=rts_tool, sanitizer=sanitizer
+                ):
+                    logger.error(f"Taking incremental build snapshot for {sanitizer} has failed")
+                    return False
 
         # Step 5: Measure build time with inc build for each sanitizer
         for sanitizer in self.required_sanitizers:
@@ -176,7 +180,7 @@ class IncrementalBuildChecker:
         logger.info(f"Incremental build is working correctly for {self.project_name}")
 
         # Step 7: Print summary
-        self._print_test_summary(with_rts=with_rts, skip_baseline=skip_baseline)
+        self._print_test_summary(with_rts=with_rts, skip_baseline=skip_baseline, skip_snapshot=skip_snapshot)
 
         return True
 
@@ -586,7 +590,7 @@ class IncrementalBuildChecker:
 
         logger.info(f"Average test time ({len(self.test_results)} runs): {self.avg_test_time:.2f}s")
 
-    def _print_test_summary(self, with_rts: bool = False, skip_baseline: bool = False):
+    def _print_test_summary(self, with_rts: bool = False, skip_baseline: bool = False, skip_snapshot: bool = False):
         """Print test benchmark summary and save to file."""
         mode_label = "with RTS" if with_rts else "with Inc Build"
 
@@ -604,9 +608,12 @@ class IncrementalBuildChecker:
         # Sanitizer configuration
         log_and_collect("[Sanitizer Configuration]")
         log_and_collect(f"  Required sanitizers: {self.required_sanitizers}")
-        log_and_collect(f"  Snapshots created: {len(self.required_sanitizers)}")
-        for sanitizer in self.required_sanitizers:
-            log_and_collect(f"    - :inc-{sanitizer}")
+        if skip_snapshot:
+            log_and_collect("  Snapshots created: SKIPPED (using existing)")
+        else:
+            log_and_collect(f"  Snapshots created: {len(self.required_sanitizers)}")
+            for sanitizer in self.required_sanitizers:
+                log_and_collect(f"    - :inc-{sanitizer}")
         log_and_collect("-" * 60)
 
         # Build time comparison

@@ -274,6 +274,12 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         default=False,
         help="Skip baseline build and test measurement. Useful for re-running tests.",
     )
+    test_inc_build_parser.add_argument(
+        "--skip-snapshot",
+        action="store_true",
+        default=False,
+        help="Skip creating incremental build snapshot. Useful when snapshot already exists.",
+    )
 
     test_project_parser = subparsers.add_parser(
         "check_povs",
