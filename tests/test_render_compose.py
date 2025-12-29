@@ -1,9 +1,17 @@
 """Tests for render_compose.py module."""
 
-import pytest
+import logging
 import tempfile
 from pathlib import Path
-from bug_finding.src.render_compose import parse_cpu_range, format_cpu_list, get_crs_env_vars
+
+from bug_finding.src.render_compose import (
+    expand_volume_vars,
+    format_cpu_list,
+    get_crs_env_vars,
+    get_dot_env_vars,
+    merge_env_vars,
+    parse_cpu_range,
+)
 
 
 class TestParseCpuRange:
@@ -153,3 +161,182 @@ class TestGetCrsEnvVars:
             )
             result = get_crs_env_vars(Path(tmpdir))
             assert result == []
+
+
+class TestGetDotEnvVars:
+    """Test get_dot_env_vars function."""
+
+    def test_loads_all_vars(self):
+        """Test that all vars are loaded as dict."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / ".env"
+            env_file.write_text(
+                "CRS_INPUT_GENS=given_fuzzer\n"
+                "POSTGRES_PASSWORD=secret\n"
+                "LITELLM_KEY=sk-123\n"
+            )
+            result = get_dot_env_vars(Path(tmpdir))
+            assert result == {
+                'CRS_INPUT_GENS': 'given_fuzzer',
+                'POSTGRES_PASSWORD': 'secret',
+                'LITELLM_KEY': 'sk-123'
+            }
+
+    def test_returns_empty_dict_when_no_env_file(self):
+        """Test that empty dict is returned when .env doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = get_dot_env_vars(Path(tmpdir))
+            assert result == {}
+
+    def test_handles_empty_env_file(self):
+        """Test handling of empty .env file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            env_file = Path(tmpdir) / ".env"
+            env_file.write_text("")
+            result = get_dot_env_vars(Path(tmpdir))
+            assert result == {}
+
+
+class TestMergeEnvVars:
+    """Test merge_env_vars function."""
+
+    def test_registry_only(self):
+        """Test merge with only registry env vars."""
+        registry_env = {'CRS_INPUT_GENS': 'given_fuzzer'}
+        dot_env = {}
+        result = merge_env_vars(registry_env, dot_env, 'test-crs', 'run')
+        assert result == {'CRS_INPUT_GENS': 'given_fuzzer'}
+
+    def test_dot_env_only(self):
+        """Test merge with only .env vars."""
+        registry_env = {}
+        dot_env = {'LITELLM_KEY': 'sk-123'}
+        result = merge_env_vars(registry_env, dot_env, 'test-crs', 'run')
+        assert result == {'LITELLM_KEY': 'sk-123'}
+
+    def test_no_conflict_merge(self):
+        """Test merge with no conflicts (different keys)."""
+        registry_env = {'CRS_INPUT_GENS': 'given_fuzzer'}
+        dot_env = {'LITELLM_KEY': 'sk-123', 'POSTGRES_PASSWORD': 'secret'}
+        result = merge_env_vars(registry_env, dot_env, 'test-crs', 'run')
+        assert result == {
+            'CRS_INPUT_GENS': 'given_fuzzer',
+            'LITELLM_KEY': 'sk-123',
+            'POSTGRES_PASSWORD': 'secret'
+        }
+
+    def test_dot_env_wins_on_conflict(self):
+        """Test that .env wins when there's a conflict."""
+        registry_env = {'CRS_INPUT_GENS': 'given_fuzzer'}
+        dot_env = {'CRS_INPUT_GENS': 'all_modules'}
+        result = merge_env_vars(registry_env, dot_env, 'test-crs', 'run')
+        assert result == {'CRS_INPUT_GENS': 'all_modules'}
+
+    def test_conflict_logs_warning(self, caplog):
+        """Test that conflict logs a warning."""
+        registry_env = {'CRS_INPUT_GENS': 'given_fuzzer'}
+        dot_env = {'CRS_INPUT_GENS': 'all_modules'}
+
+        with caplog.at_level(logging.WARNING):
+            merge_env_vars(registry_env, dot_env, 'test-crs', 'run')
+
+        assert 'overridden by .env' in caplog.text
+        assert 'given_fuzzer' in caplog.text
+        assert 'all_modules' in caplog.text
+
+    def test_no_warning_when_same_value(self, caplog):
+        """Test that no warning is logged when values are the same."""
+        registry_env = {'CRS_INPUT_GENS': 'given_fuzzer'}
+        dot_env = {'CRS_INPUT_GENS': 'given_fuzzer'}
+
+        with caplog.at_level(logging.WARNING):
+            result = merge_env_vars(registry_env, dot_env, 'test-crs', 'run')
+
+        assert 'overridden' not in caplog.text
+        assert result == {'CRS_INPUT_GENS': 'given_fuzzer'}
+
+    def test_multiple_conflicts(self, caplog):
+        """Test merge with multiple conflicts."""
+        registry_env = {
+            'CRS_INPUT_GENS': 'given_fuzzer',
+            'CRS_CACHE_DIR': '/default/cache'
+        }
+        dot_env = {
+            'CRS_INPUT_GENS': 'all_modules',
+            'CRS_CACHE_DIR': '/custom/cache',
+            'LITELLM_KEY': 'sk-123'
+        }
+
+        with caplog.at_level(logging.WARNING):
+            result = merge_env_vars(registry_env, dot_env, 'test-crs', 'build')
+
+        assert result == {
+            'CRS_INPUT_GENS': 'all_modules',
+            'CRS_CACHE_DIR': '/custom/cache',
+            'LITELLM_KEY': 'sk-123'
+        }
+        # Should have two warnings
+        assert caplog.text.count('overridden by .env') == 2
+
+    def test_empty_both(self):
+        """Test merge with both empty."""
+        result = merge_env_vars({}, {}, 'test-crs', 'run')
+        assert result == {}
+
+
+class TestExpandVolumeVars:
+    """Test expand_volume_vars function."""
+
+    def test_expands_braced_var(self):
+        """Test expansion of ${VAR} syntax."""
+        volumes = ['${HOST_CACHE_DIR}:/cache/images:ro']
+        env_vars = {'HOST_CACHE_DIR': '/tmp/cache'}
+        result = expand_volume_vars(volumes, env_vars)
+        assert result == ['/tmp/cache:/cache/images:ro']
+
+    def test_expands_unbraced_var(self):
+        """Test expansion of $VAR syntax."""
+        volumes = ['$HOST_CACHE_DIR:/cache/images:ro']
+        env_vars = {'HOST_CACHE_DIR': '/tmp/cache'}
+        result = expand_volume_vars(volumes, env_vars)
+        assert result == ['/tmp/cache:/cache/images:ro']
+
+    def test_keeps_unknown_var(self):
+        """Test that unknown variables are kept as-is."""
+        volumes = ['${UNKNOWN_VAR}:/cache:ro']
+        env_vars = {'HOST_CACHE_DIR': '/tmp/cache'}
+        result = expand_volume_vars(volumes, env_vars)
+        assert result == ['${UNKNOWN_VAR}:/cache:ro']
+
+    def test_expands_multiple_vars(self):
+        """Test expansion of multiple variables in one volume."""
+        volumes = ['${HOST_DIR}/${SUB_DIR}:/mount:rw']
+        env_vars = {'HOST_DIR': '/home', 'SUB_DIR': 'data'}
+        result = expand_volume_vars(volumes, env_vars)
+        assert result == ['/home/data:/mount:rw']
+
+    def test_multiple_volumes(self):
+        """Test expansion across multiple volumes."""
+        volumes = [
+            '${HOST_CACHE_DIR}:/cache:ro',
+            '/static/path:/other:rw',
+            '${DATA_DIR}:/data:rw'
+        ]
+        env_vars = {'HOST_CACHE_DIR': '/tmp/cache', 'DATA_DIR': '/mnt/data'}
+        result = expand_volume_vars(volumes, env_vars)
+        assert result == [
+            '/tmp/cache:/cache:ro',
+            '/static/path:/other:rw',
+            '/mnt/data:/data:rw'
+        ]
+
+    def test_empty_volumes(self):
+        """Test with empty volumes list."""
+        result = expand_volume_vars([], {'VAR': 'value'})
+        assert result == []
+
+    def test_no_vars_in_volume(self):
+        """Test volume without variables."""
+        volumes = ['/host/path:/container/path:ro']
+        result = expand_volume_vars(volumes, {'VAR': 'value'})
+        assert result == ['/host/path:/container/path:ro']
