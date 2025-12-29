@@ -1,3 +1,9 @@
+{# Environment variables are merged from:
+   - crs_registry/<crs>/config-crs.yaml (run_env/build_env)
+   - example_configs/<config>/.env
+   .env values override config-crs.yaml on conflict.
+#}
+
 {# Macro to generate LITELLM_URL environment variable #}
 {%- macro litellm_url_env() %}
 {%- if external_litellm %}
@@ -43,8 +49,8 @@ services:
       - PROJECT_NAME={{ project }}
       - FUZZING_LANGUAGE={{ project_language }}
       - HELPER=True
-{%- for var in crs_env_vars %}
-      - {{ var }}={{ '${' }}{{ var }}{{ ':-}' }}
+{%- for key, value in crs.build_env.items() %}
+      - {{ key }}={{ value }}
 {%- endfor %}
 {%- if crs.host_docker_builder %}
       - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}
@@ -130,8 +136,8 @@ services:
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
       - CRS_TARGET={{ project }}
       - CRS_NAME={{ crs.name }}
-{%- for var in crs_env_vars %}
-      - {{ var }}={{ '${' }}{{ var }}{{ ':-}' }}
+{%- for key, value in crs.run_env.items() %}
+      - {{ key }}={{ value }}
 {%- endfor %}
 {%- if crs.host_docker_builder %}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}
