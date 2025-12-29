@@ -67,6 +67,8 @@ class IncrementalBuildChecker:
         self.build_time_without_inc_build: float | None = None
         self.build_time_with_inc_build: dict[str, float] = {}  # {sanitizer: build_time}
         self.required_sanitizers: list[str] = []  # sanitizers from project.yaml
+        self.project_language: str = "c"  # language from project.yaml
+        self.test_mode: str | None = None  # test_mode from project.yaml
 
         assert self.oss_fuzz_path.exists()
         assert self.project_path.exists()
@@ -98,6 +100,27 @@ class IncrementalBuildChecker:
         logger.info(f"Sanitizers from project.yaml: {sanitizers}")
 
         return sanitizers
+
+    def _get_project_language_and_test_mode(self) -> tuple[str, str | None]:
+        """Get language and test_mode from project.yaml.
+
+        Returns:
+            Tuple of (language, test_mode) where test_mode can be None
+        """
+        project_yaml_path = self.project_path / "project.yaml"
+
+        if not project_yaml_path.exists():
+            logger.warning(f"project.yaml not found: {project_yaml_path}")
+            return ("c", None)  # defaults
+
+        with open(project_yaml_path, "r") as f:
+            project_yaml = yaml.safe_load(f)
+
+        language = project_yaml.get("language", "c")
+        test_mode = project_yaml.get("test_mode", None)
+        logger.info(f"Project config from project.yaml: language={language}, test_mode={test_mode}")
+
+        return (language, test_mode)
 
     def test(self, with_rts: bool = False, rts_tool: str = "jcgeks", skip_clone: bool = False, skip_baseline: bool = False, skip_snapshot: bool = False) -> bool:
         """Test incremental build (and optionally RTS) for a project.
@@ -135,6 +158,9 @@ class IncrementalBuildChecker:
         # Get required sanitizers from project.yaml
         self.required_sanitizers = self._get_required_sanitizers()
         logger.info(f"Required sanitizers: {self.required_sanitizers}")
+
+        # Get language and test_mode from project.yaml
+        self.project_language, self.test_mode = self._get_project_language_and_test_mode()
 
         # Step 3: Measure build time without inc build (use first sanitizer)
         if skip_baseline:
@@ -225,6 +251,9 @@ class IncrementalBuildChecker:
         # Get required sanitizers from project.yaml
         self.required_sanitizers = self._get_required_sanitizers()
         logger.info(f"Required sanitizers: {self.required_sanitizers}")
+
+        # Get language and test_mode from project.yaml
+        self.project_language, self.test_mode = self._get_project_language_and_test_mode()
 
         # Step 3: Build fuzzers (baseline, use first sanitizer)
         if not self._measure_time_without_inc_build(proj_src_path, sanitizer=self.required_sanitizers[0]):
@@ -509,7 +538,7 @@ class IncrementalBuildChecker:
                 # Analyze log
                 stats = None
                 if log_file.exists():
-                    stats = analysis_log(log_file)
+                    stats = analysis_log(log_file, language=self.project_language, test_mode=self.test_mode)
                     logger.info(
                         f"Tests run ({pov_name}): {stats[0]}, Total time: {stats[1]:.2f}s"
                     )
@@ -544,7 +573,7 @@ class IncrementalBuildChecker:
 
         # Analyze log
         if log_file.exists():
-            stats = analysis_log(log_file)
+            stats = analysis_log(log_file, language=self.project_language, test_mode=self.test_mode)
             self.baseline_test_stats = stats
             logger.info(f"Baseline tests run: {stats[0]}, Total time: {stats[1]:.2f}s")
 
@@ -680,11 +709,13 @@ class IncrementalBuildChecker:
                     selection_pct = (avg_tests / baseline_tests) * 100
                     log_and_collect(f"  Avg test selection rate: {selection_pct:.1f}%")
 
-            # Test class comparison
-            baseline_classes = len(self.baseline_test_stats[2])
-            avg_classes = len(self.avg_test_stats[2])
-            log_and_collect(f"  Baseline test classes: {baseline_classes}")
-            log_and_collect(f"  {mode_label} test classes (total unique): {avg_classes}")
+            # Test case/class comparison (terminology depends on language)
+            baseline_cases = len(self.baseline_test_stats[2])
+            avg_cases = len(self.avg_test_stats[2])
+            # Use appropriate terminology: "test classes" for JVM, "test cases" for C/C++
+            case_label = "test classes" if self.project_language == "jvm" else "test cases"
+            log_and_collect(f"  Baseline {case_label}: {baseline_cases}")
+            log_and_collect(f"  {mode_label} {case_label} (total unique): {avg_cases}")
 
             # Failure/Error/Skip comparison
             baseline_failures, baseline_errors, baseline_skips = self.baseline_test_stats[4]
