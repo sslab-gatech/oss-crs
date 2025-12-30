@@ -30,7 +30,7 @@ def _detect_crash_report(stdout: str, language: str, error_token: str | None = N
     elif language == "jvm":
         if "ERROR: libFuzzer:" in stdout:
             return True
-        elif "FuzzerSecurityIssueLow: Stack overflow" in stdout:
+        elif "FuzzerSecurityIssue" in stdout:
             return True
         else:
             return (extract_java_exception_report(stdout) is not None) or (extract_sanitizer_report(stdout) is not None)
