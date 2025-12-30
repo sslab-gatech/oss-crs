@@ -490,12 +490,12 @@ def _analysis_log_autotools(log_file: Path):
             count = int(summary_match.group(2))
 
             if stat_type == "TOTAL":
-                # Use summary TOTAL as authoritative test count
-                analysis_res[0] = count
+                # Accumulate TOTAL across multiple test blocks
+                analysis_res[0] += count
             elif stat_type == "FAIL":
-                analysis_res[4][0] = count  # failures
+                analysis_res[4][0] += count  # failures (accumulate across blocks)
             elif stat_type == "ERROR":
-                analysis_res[4][1] = count  # errors
+                analysis_res[4][1] += count  # errors (accumulate across blocks)
             elif stat_type == "SKIP" or stat_type == "XFAIL":
                 analysis_res[4][2] += count  # skipped (combine SKIP and XFAIL)
             continue
@@ -521,6 +521,9 @@ def _analysis_log_autotools(log_file: Path):
     if analysis_res[4][2] == 0 and skipped_tests:
         analysis_res[4][2] = len(skipped_tests)
 
-    logger.info(f"Autotools: {analysis_res[0]} tests, {analysis_res[4][0]} failures, {analysis_res[4][2]} skipped")
+    # Subtract skipped from test count - "tests run" should be non-skipped only
+    analysis_res[0] = analysis_res[0] - analysis_res[4][2]
+
+    logger.info(f"Autotools: {analysis_res[0]} tests run (non-skipped), {analysis_res[4][0]} failures, {analysis_res[4][2]} skipped")
 
     return analysis_res

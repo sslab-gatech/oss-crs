@@ -15,7 +15,7 @@ from bug_fixing.src.oss_patch.functions import (
     get_cpv_config,
 )
 
-from bug_fixing.src.oss_patch.inc_build_checker.rts_checker import analysis_log
+from bug_fixing.src.oss_patch.inc_build_checker.rts_checker import analysis_log, _parse_rts_markers
 
 logger = logging.getLogger(__name__)
 
@@ -699,6 +699,28 @@ class IncrementalBuildChecker:
 
             baseline_tests = self.baseline_test_stats[0]
             avg_tests = self.avg_test_stats[0]
+
+            # For RTS runs, check if [RTS] Total is available in any RTS log
+            # This provides accurate baseline count when test.sh reports gtest-level counts
+            # See docs/rts-output-standard.md
+            rts_total_override = False
+            if with_rts:
+                rts_total_from_logs = 0
+                for harness_pov, _, stats, _ in self.test_results:
+                    # Find the log file for this result
+                    harness_name, pov_name = harness_pov.rsplit("/", 1)
+                    log_file = self.work_dir / f"test_inc_{harness_name}_{pov_name}.log"
+                    if log_file.exists():
+                        rts_total, rts_selected, rts_excluded = _parse_rts_markers(log_file)
+                        if rts_total > 0:
+                            rts_total_from_logs = rts_total
+                            break  # Use first found [RTS] Total
+
+                # If [RTS] Total found and baseline seems wrong (e.g., baseline < RTS), use it
+                if rts_total_from_logs > 0 and (baseline_tests < avg_tests or rts_total_from_logs > baseline_tests):
+                    baseline_tests = rts_total_from_logs
+                    rts_total_override = True
+
             tests_diff = baseline_tests - avg_tests
 
             log_and_collect(f"  Baseline tests run: {baseline_tests:.1f}")
@@ -710,12 +732,16 @@ class IncrementalBuildChecker:
                     log_and_collect(f"  Avg test selection rate: {selection_pct:.1f}%")
 
             # Test case/class comparison (terminology depends on language)
-            baseline_cases = len(self.baseline_test_stats[2])
-            avg_cases = len(self.avg_test_stats[2])
-            # Use appropriate terminology: "test classes" for JVM, "test cases" for C/C++
-            case_label = "test classes" if self.project_language == "jvm" else "test cases"
-            log_and_collect(f"  Baseline {case_label}: {baseline_cases}")
-            log_and_collect(f"  {mode_label} {case_label} (total unique): {avg_cases}")
+            # Skip this when [RTS] Total override is used, as baseline_cases would be misleading
+            # (e.g., 52 ctest executables vs 13037 gtest cases)
+            if not rts_total_override:
+                # Exclude skipped tests from case count to match "tests run" semantics
+                baseline_cases = len(self.baseline_test_stats[2]) - self.baseline_test_stats[4][2]
+                avg_cases = len(self.avg_test_stats[2]) - int(self.avg_test_stats[3][2])
+                # Use appropriate terminology: "test classes" for JVM, "test cases" for C/C++
+                case_label = "test classes" if self.project_language == "jvm" else "test cases"
+                log_and_collect(f"  Baseline {case_label}: {baseline_cases}")
+                log_and_collect(f"  {mode_label} {case_label} (total unique): {avg_cases}")
 
             # Failure/Error/Skip comparison
             baseline_failures, baseline_errors, baseline_skips = self.baseline_test_stats[4]

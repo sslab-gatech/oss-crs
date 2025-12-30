@@ -54,5 +54,9 @@ ctest --output-on-failure
 
 The oss_patch parser will:
 1. Look for `[RTS] Total:`, `[RTS] Selected:`, `[RTS] Excluded:` lines
-2. If found, use these counts instead of test runner's native counts
-3. For baseline runs (no RTS), use `[RTS] Total` if present, otherwise use native counts
+2. If found, use `[RTS] Selected` as the RTS test count
+3. For baseline comparison, the summary generator extracts `[RTS] Total` from RTS logs
+   and uses it as the baseline count (since baseline cannot trace and doesn't have this info)
+
+This ensures accurate comparison even when baseline runs report ctest executables (52)
+while RTS runs report gtest cases (6233 selected out of 13037 total).
