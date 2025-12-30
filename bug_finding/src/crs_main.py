@@ -23,7 +23,7 @@ from .utils import run_git
 logger = logging.getLogger(__name__)
 
 # Default registry path
-DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / 'crs_registry'
+DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"
 
 
 def _fix_build_dir_permissions(build_dir: Path):
@@ -37,12 +37,18 @@ def _fix_build_dir_permissions(build_dir: Path):
     """
     uid = os.getuid()
     gid = os.getgid()
-    logger.info(f'Changing ownership of {build_dir} to {uid}:{gid}')
+    logger.info(f"Changing ownership of {build_dir} to {uid}:{gid}")
     chown_cmd = [
-        'docker', 'run', '--rm',
-        '-v', f'{build_dir}:/target',
-        'alpine',
-        'chown', '-R', f'{uid}:{gid}', '/target'
+        "docker",
+        "run",
+        "--rm",
+        "-v",
+        f"{build_dir}:/target",
+        "alpine",
+        "chown",
+        "-R",
+        f"{uid}:{gid}",
+        "/target",
     ]
     subprocess.run(chown_cmd)
 
@@ -54,11 +60,12 @@ def _get_absolute_path(path):
 
 def _get_command_string(command):
     """Returns a shell escaped command string."""
-    return ' '.join(shlex.quote(part) for part in command)
+    return " ".join(shlex.quote(part) for part in command)
 
 
 def _verify_external_litellm(config_dir: Path) -> bool:
     """Verifies LiteLLM environment variables."""
+
     def keys_in_dict(keys, dict_):
         return all(key in dict_ for key in keys)
 
@@ -75,13 +82,17 @@ def _verify_external_litellm(config_dir: Path) -> bool:
     return False
 
 
-def _build_project_image(project_name: str, oss_fuzz_dir: Path, architecture: str) -> bool:
+def _build_project_image(
+    project_name: str, oss_fuzz_dir: Path, architecture: str
+) -> bool:
     build_image_cmd = [
-        'python3', 'infra/helper.py',
-        'build_image',
-        '--no-pull',
-        '--architecture', architecture,
-        project_name
+        "python3",
+        "infra/helper.py",
+        "build_image",
+        "--no-pull",
+        "--architecture",
+        architecture,
+        project_name,
     ]
     try:
         subprocess.check_call(build_image_cmd, cwd=oss_fuzz_dir)
@@ -91,7 +102,9 @@ def _build_project_image(project_name: str, oss_fuzz_dir: Path, architecture: st
     return True
 
 
-def _save_parent_image_tarballs(crs_list: list, project_name: str, build_dir: Path, project_image_prefix: str):
+def _save_parent_image_tarballs(
+    crs_list: list, project_name: str, build_dir: Path, project_image_prefix: str
+):
     """
     Save parent image tarballs for CRS that need dind.
 
@@ -105,12 +118,12 @@ def _save_parent_image_tarballs(crs_list: list, project_name: str, build_dir: Pa
         str: Path to parent image tarball directory, or None if no dind CRS
     """
     # Check if any CRS needs dind
-    dind_crs = [crs for crs in crs_list if crs.get('dind', False)]
+    dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
     if not dind_crs:
         return None
 
     # Create parent-images directory
-    parent_images_dir = build_dir / 'crs' / 'parent-images'
+    parent_images_dir = build_dir / "crs" / "parent-images"
     parent_images_dir.mkdir(parents=True, exist_ok=True)
 
     # Parent image name
@@ -122,7 +135,7 @@ def _save_parent_image_tarballs(crs_list: list, project_name: str, build_dir: Pa
         logger.info(f"Parent image tarball already exists: {tarball_path}")
     else:
         logger.info(f"Saving parent image {parent_image} to {tarball_path}")
-        save_cmd = ['docker', 'save', parent_image, '-o', str(tarball_path)]
+        save_cmd = ["docker", "save", parent_image, "-o", str(tarball_path)]
         try:
             subprocess.check_call(save_cmd)
             logger.info(f"Successfully saved parent image to {tarball_path}")
@@ -133,7 +146,9 @@ def _save_parent_image_tarballs(crs_list: list, project_name: str, build_dir: Pa
     return str(parent_images_dir)
 
 
-def _clone_oss_fuzz_if_needed(oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = None) -> bool:
+def _clone_oss_fuzz_if_needed(
+    oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = None
+) -> bool:
     """
     Clone or copy OSS-Fuzz to the standard location if needed.
 
@@ -152,7 +167,9 @@ def _clone_oss_fuzz_if_needed(oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = No
     # If source directory provided, copy from it
     if source_oss_fuzz_dir:
         if not source_oss_fuzz_dir.exists():
-            logging.error(f"Source OSS-Fuzz directory does not exist: {source_oss_fuzz_dir}")
+            logging.error(
+                f"Source OSS-Fuzz directory does not exist: {source_oss_fuzz_dir}"
+            )
             return False
 
         logging.info(f"Copying OSS-Fuzz from {source_oss_fuzz_dir} to {oss_fuzz_dir}")
@@ -171,10 +188,7 @@ def _clone_oss_fuzz_if_needed(oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = No
     try:
         # Create parent directory if needed
         oss_fuzz_dir.parent.mkdir(parents=True, exist_ok=True)
-        run_git([
-            'clone', 'https://github.com/google/oss-fuzz',
-            str(oss_fuzz_dir)
-        ])
+        run_git(["clone", "https://github.com/google/oss-fuzz", str(oss_fuzz_dir)])
         logging.info(f"Successfully cloned OSS-Fuzz to {oss_fuzz_dir}")
         return True
     except subprocess.CalledProcessError:
@@ -182,7 +196,9 @@ def _clone_oss_fuzz_if_needed(oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = No
         return False
 
 
-def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_path: Path) -> bool:
+def _validate_crs_modes(
+    config_dir: Path, worker: str, registry_dir: Path, diff_path: Path
+) -> bool:
     """
     Validate that CRS mode requirements match the provided diff_path.
 
@@ -195,7 +211,7 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
     Returns:
         bool: True if validation passes, False otherwise
     """
-    config_resource_path = config_dir / 'config-resource.yaml'
+    config_resource_path = config_dir / "config-resource.yaml"
     if not config_resource_path.exists():
         logger.error(f"config-resource.yaml not found: {config_resource_path}")
         return False
@@ -204,7 +220,7 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
         resource_config = yaml.safe_load(f)
 
     # Get CRS configurations
-    crs_configs = resource_config.get('crs', {})
+    crs_configs = resource_config.get("crs", {})
     if not crs_configs:
         logger.error("No CRS defined in config-resource.yaml")
         return False
@@ -217,41 +233,47 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
     # Check each CRS assigned to this worker
     for crs_name, crs_config in crs_configs.items():
         # Check if this CRS is assigned to the worker
-        crs_workers = crs_config.get('workers', [])
+        crs_workers = crs_config.get("workers", [])
         if worker not in crs_workers:
             continue
 
         # Load config-crs.yaml for this CRS
-        crs_config_yaml_path = registry_dir / crs_name / 'config-crs.yaml'
+        crs_config_yaml_path = registry_dir / crs_name / "config-crs.yaml"
         if not crs_config_yaml_path.exists():
-            logger.warning(f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}, skipping mode validation")
+            logger.warning(
+                f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}, skipping mode validation"
+            )
             continue
 
         try:
             with open(crs_config_yaml_path) as f:
                 crs_config_data = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            logger.warning(f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}, skipping mode validation")
+            logger.warning(
+                f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}, skipping mode validation"
+            )
             continue
 
         # Extract CRS-specific config
         if not crs_config_data or crs_name not in crs_config_data:
-            logger.warning(f"CRS '{crs_name}' config not found in config-crs.yaml, skipping mode validation")
+            logger.warning(
+                f"CRS '{crs_name}' config not found in config-crs.yaml, skipping mode validation"
+            )
             continue
 
         crs_data = crs_config_data[crs_name]
         # Handle both dict and list formats
         if not isinstance(crs_data, dict):
             # Empty list or other format - treat as both modes supported
-            supported_modes = ['full', 'delta']
+            supported_modes = ["full", "delta"]
         else:
             # Get supported modes (default to both if not specified)
-            supported_modes = crs_data.get('modes', ['full', 'delta'])
+            supported_modes = crs_data.get("modes", ["full", "delta"])
         if not isinstance(supported_modes, list):
             supported_modes = [supported_modes]
 
         # Validate mode requirements
-        if 'delta' in supported_modes and 'full' not in supported_modes:
+        if "delta" in supported_modes and "full" not in supported_modes:
             # CRS only supports delta mode - diff is required
             if not diff_path:
                 logger.error(
@@ -259,7 +281,7 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
                     f"Please provide a diff file with --diff."
                 )
                 return False
-        elif 'full' in supported_modes and 'delta' not in supported_modes:
+        elif "full" in supported_modes and "delta" not in supported_modes:
             # CRS only supports full mode - diff must not be specified
             if diff_path:
                 logger.error(
@@ -272,7 +294,9 @@ def _validate_crs_modes(config_dir: Path, worker: str, registry_dir: Path, diff_
     return True
 
 
-def _clone_project_source(project_name: str, oss_fuzz_dir: Path, build_dir: Path) -> bool:
+def _clone_project_source(
+    project_name: str, oss_fuzz_dir: Path, build_dir: Path
+) -> bool:
     """
     Clone project source based on main_repo in project.yaml.
 
@@ -284,7 +308,7 @@ def _clone_project_source(project_name: str, oss_fuzz_dir: Path, build_dir: Path
     Returns:
         bool: True if successful, False otherwise
     """
-    project_yaml_path = oss_fuzz_dir / 'projects' / project_name / 'project.yaml'
+    project_yaml_path = oss_fuzz_dir / "projects" / project_name / "project.yaml"
 
     # Validate project.yaml exists
     if not project_yaml_path.exists():
@@ -299,13 +323,13 @@ def _clone_project_source(project_name: str, oss_fuzz_dir: Path, build_dir: Path
         logger.error(f"Failed to parse project.yaml: {e}")
         return False
 
-    main_repo = project_config.get('main_repo')
+    main_repo = project_config.get("main_repo")
     if not main_repo:
         logger.error(f"main_repo not found in {project_yaml_path}")
         return False
 
     # Clone to build/src/{project_name}
-    clone_dest = build_dir / 'src' / project_name
+    clone_dest = build_dir / "src" / project_name
 
     if clone_dest.exists():
         logger.info(f"Source already exists at {clone_dest}, skipping clone")
@@ -317,13 +341,7 @@ def _clone_project_source(project_name: str, oss_fuzz_dir: Path, build_dir: Path
     # Clone with depth 1 and recursive submodules
     logger.info(f"Cloning {main_repo} to {clone_dest}")
     try:
-        run_git([
-            'clone',
-            '--depth', '1',
-            '--recursive',
-            main_repo,
-            str(clone_dest)
-        ])
+        run_git(["clone", "--depth", "1", "--recursive", main_repo, str(clone_dest)])
         logger.info(f"Successfully cloned source to {clone_dest}")
         return True
     except subprocess.CalledProcessError:
@@ -331,14 +349,24 @@ def _clone_project_source(project_name: str, oss_fuzz_dir: Path, build_dir: Path
         return False
 
 
-def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir: Path,
-              engine: str = 'libfuzzer', sanitizer: str = 'address',
-              architecture: str = 'x86_64', source_path: Path = None,
-              project_path: Path = None, overwrite: bool = False, clone: bool = False,
-              check_project_fn = None,
-              registry_dir: Path = DEFAULT_REGISTRY_DIR,
-              project_image_prefix: str = 'gcr.io/oss-fuzz',
-              external_litellm: bool = False, source_oss_fuzz_dir: Path = None):
+def build_crs(
+    config_dir: Path,
+    project_name: str,
+    oss_fuzz_dir: Path,
+    build_dir: Path,
+    engine: str = "libfuzzer",
+    sanitizer: str = "address",
+    architecture: str = "x86_64",
+    source_path: Path = None,
+    project_path: Path = None,
+    overwrite: bool = False,
+    clone: bool = False,
+    check_project_fn=None,
+    registry_dir: Path = DEFAULT_REGISTRY_DIR,
+    project_image_prefix: str = "gcr.io/oss-fuzz",
+    external_litellm: bool = False,
+    source_oss_fuzz_dir: Path = None,
+):
     """
     Build CRS for a project using docker compose.
 
@@ -386,12 +414,12 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
         if not project_path.is_dir():
             logger.error(f"Project path is not a directory: {project_path}")
             return False
-        if not (project_path / 'project.yaml').exists():
+        if not (project_path / "project.yaml").exists():
             logger.error(f"project.yaml not found in: {project_path}")
             return False
 
         # Destination path (handles nested names like aixcc/c/project)
-        dest_path = oss_fuzz_dir / 'projects' / project_name
+        dest_path = oss_fuzz_dir / "projects" / project_name
 
         # Check if destination exists
         if dest_path.exists():
@@ -424,7 +452,7 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
         if not _clone_project_source(project_name, oss_fuzz_dir, build_dir):
             return False
         # Use cloned source as source_path
-        source_path = build_dir / 'src' / project_name
+        source_path = build_dir / "src" / project_name
         logger.info(f"Using cloned source as source_path: {source_path}")
 
     # Build project image
@@ -435,50 +463,58 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
     source_path_str = None
     if source_path:
         source_path_str = str(source_path)
-        source_tag = hashlib.sha256(source_path_str.encode() + project_name.encode()).hexdigest()[:12]
-        logger.info('Using source tag for image versioning: %s', source_tag)
+        source_tag = hashlib.sha256(
+            source_path_str.encode() + project_name.encode()
+        ).hexdigest()[:12]
+        logger.info("Using source tag for image versioning: %s", source_tag)
 
     # Generate compose files using render_compose module
-    logger.info('Generating compose-build.yaml')
+    logger.info("Generating compose-build.yaml")
     try:
-        build_profiles, config_hash, crs_build_dir, crs_list = render_compose.render_build_compose(
-            config_dir=str(config_dir),
-            build_dir=str(build_dir),
-            oss_fuzz_dir=str(oss_fuzz_dir),
-            project=project_name,
-            engine=engine,
-            sanitizer=sanitizer,
-            architecture=architecture,
-            registry_dir=str(registry_dir),
-            source_path=source_path_str,
-            project_image_prefix=project_image_prefix,
-            external_litellm=external_litellm
+        build_profiles, config_hash, crs_build_dir, crs_list = (
+            render_compose.render_build_compose(
+                config_dir=str(config_dir),
+                build_dir=str(build_dir),
+                oss_fuzz_dir=str(oss_fuzz_dir),
+                project=project_name,
+                engine=engine,
+                sanitizer=sanitizer,
+                architecture=architecture,
+                registry_dir=str(registry_dir),
+                source_path=source_path_str,
+                project_image_prefix=project_image_prefix,
+                external_litellm=external_litellm,
+            )
         )
         crs_build_dir = Path(crs_build_dir)
     except Exception as e:
-        logger.error('Failed to generate compose files: %s', e)
+        logger.error("Failed to generate compose files: %s", e)
         return False
 
     # Save parent image tarballs for dind CRS
-    parent_images_dir = _save_parent_image_tarballs(crs_list, project_name, build_dir, project_image_prefix)
+    parent_images_dir = _save_parent_image_tarballs(
+        crs_list, project_name, build_dir, project_image_prefix
+    )
     if parent_images_dir:
         logger.info(f"Parent image tarballs saved to: {parent_images_dir}")
 
     if not build_profiles:
-        logger.error('No build profiles found')
+        logger.error("No build profiles found")
         return False
 
-    logger.info('Found %d build profiles: %s', len(build_profiles), ', '.join(build_profiles))
+    logger.info(
+        "Found %d build profiles: %s", len(build_profiles), ", ".join(build_profiles)
+    )
 
     # Look for compose files in the hash directory
-    compose_file = crs_build_dir / 'compose-build.yaml'
+    compose_file = crs_build_dir / "compose-build.yaml"
 
     if not compose_file.exists():
-        logger.error('compose-build.yaml was not generated at: %s', compose_file)
+        logger.error("compose-build.yaml was not generated at: %s", compose_file)
         return False
 
     # Project name for build compose
-    build_project = f'crs-build-{config_hash}'
+    build_project = f"crs-build-{config_hash}"
 
     # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services
     # LiteLLM is only started during run phase
@@ -487,133 +523,210 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
     completed_profiles = []
     try:
         for profile in build_profiles:
-            logger.info('Building profile: %s', profile)
+            logger.info("Building profile: %s", profile)
 
             try:
                 # Step 1: Build the containers
                 build_cmd = [
-                    'docker', 'compose',
-                    '-p', build_project,
-                    '-f', str(compose_file),
-                    '--profile', profile,
-                    'build'
+                    "docker",
+                    "compose",
+                    "-p",
+                    build_project,
+                    "-f",
+                    str(compose_file),
+                    "--profile",
+                    profile,
+                    "build",
                 ]
-                logger.info('Building containers for profile: %s', profile)
+                logger.info("Building containers for profile: %s", profile)
                 subprocess.check_call(build_cmd)
 
                 # Step 2: If source_path provided, copy source to workdir
                 if source_path:
                     # Extract CRS name from profile (format: {crs_name}_builder)
-                    crs_name = profile.replace('_builder', '')
-                    service_name = f'{crs_name}_builder'
+                    crs_name = profile.replace("_builder", "")
+                    service_name = f"{crs_name}_builder"
 
                     # Generate unique container name for docker commit
-                    container_name = f'crs-source-copy-{uuid.uuid4().hex}'
+                    container_name = f"crs-source-copy-{uuid.uuid4().hex}"
                     # Use tagged image name for version control if source_tag exists
-                    image_name = f'{project_name}_{crs_name}_builder'
+                    image_name = f"{project_name}_{crs_name}_builder"
                     if source_tag:
-                        image_name = f'{image_name}:{source_tag}'
+                        image_name = f"{image_name}:{source_tag}"
 
-                    logger.info('Copying source from /local-source-mount to workdir for: %s', service_name)
-                    copy_cmd = [
-                        'docker', 'compose',
-                        '-p', build_project,
-                        '-f', str(compose_file),
-                        '--profile', profile,
-                        'run', '--no-deps', '--name', container_name,
+                    logger.info(
+                        "Copying source from /local-source-mount to workdir for: %s",
                         service_name,
-                        '/bin/bash', '-c',
-                        'workdir=$(pwd) && cd / && rm -rf "$workdir" && cp -r /local-source-mount "$workdir"'
+                    )
+                    copy_cmd = [
+                        "docker",
+                        "compose",
+                        "-p",
+                        build_project,
+                        "-f",
+                        str(compose_file),
+                        "--profile",
+                        profile,
+                        "run",
+                        "--no-deps",
+                        "--name",
+                        container_name,
+                        service_name,
+                        "/bin/bash",
+                        "-c",
+                        'workdir=$(pwd) && cd / && rm -rf "$workdir" && cp -r /local-source-mount "$workdir"',
                     ]
-                    logger.info('Running copy command: %s', _get_command_string(copy_cmd))
+                    logger.info(
+                        "Running copy command: %s", _get_command_string(copy_cmd)
+                    )
                     subprocess.check_call(copy_cmd)
 
                     # Extract original image metadata (CMD and ENTRYPOINT) to preserve them
-                    logger.info('Extracting metadata from original image: %s', image_name)
+                    logger.info(
+                        "Extracting metadata from original image: %s", image_name
+                    )
 
                     # Get original CMD
                     cmd_inspect = subprocess.run(
-                        ['docker', 'inspect', image_name, '--format', '{{json .Config.Cmd}}'],
-                        capture_output=True, text=True, check=True
+                        [
+                            "docker",
+                            "inspect",
+                            image_name,
+                            "--format",
+                            "{{json .Config.Cmd}}",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
                     )
                     original_cmd = cmd_inspect.stdout.strip()
 
                     # Get original ENTRYPOINT
                     entrypoint_inspect = subprocess.run(
-                        ['docker', 'inspect', image_name, '--format', '{{json .Config.Entrypoint}}'],
-                        capture_output=True, text=True, check=True
+                        [
+                            "docker",
+                            "inspect",
+                            image_name,
+                            "--format",
+                            "{{json .Config.Entrypoint}}",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
                     )
                     original_entrypoint = entrypoint_inspect.stdout.strip()
 
                     # Commit the container to preserve source changes in the image
-                    logger.info('Committing container %s to image %s', container_name, image_name)
-                    commit_cmd = ['docker', 'commit']
+                    logger.info(
+                        "Committing container %s to image %s",
+                        container_name,
+                        image_name,
+                    )
+                    commit_cmd = ["docker", "commit"]
 
                     # Add --change flags to restore original metadata if they exist
-                    if original_cmd and original_cmd != 'null':
-                        commit_cmd.extend(['--change', f'CMD {original_cmd}'])
-                    if original_entrypoint and original_entrypoint != 'null':
-                        commit_cmd.extend(['--change', f'ENTRYPOINT {original_entrypoint}'])
+                    if original_cmd and original_cmd != "null":
+                        commit_cmd.extend(["--change", f"CMD {original_cmd}"])
+                    if original_entrypoint and original_entrypoint != "null":
+                        commit_cmd.extend(
+                            ["--change", f"ENTRYPOINT {original_entrypoint}"]
+                        )
 
                     commit_cmd.extend([container_name, image_name])
-                    logger.info('Running commit command: %s', _get_command_string(commit_cmd))
+                    logger.info(
+                        "Running commit command: %s", _get_command_string(commit_cmd)
+                    )
                     subprocess.check_call(commit_cmd)
 
                     # Clean up the container
-                    logger.info('Removing container: %s', container_name)
-                    cleanup_cmd = ['docker', 'rm', container_name]
+                    logger.info("Removing container: %s", container_name)
+                    cleanup_cmd = ["docker", "rm", container_name]
                     subprocess.check_call(cleanup_cmd)
 
-                    logger.info('Successfully copied source and committed to image: %s', image_name)
+                    logger.info(
+                        "Successfully copied source and committed to image: %s",
+                        image_name,
+                    )
 
                 # Step 3: Run the build
                 up_cmd = [
-                    'docker', 'compose',
-                    '-p', build_project,
-                    '-f', str(compose_file),
-                    '--profile', profile,
-                    'up', '--abort-on-container-exit'
+                    "docker",
+                    "compose",
+                    "-p",
+                    build_project,
+                    "-f",
+                    str(compose_file),
+                    "--profile",
+                    profile,
+                    "up",
+                    "--abort-on-container-exit",
                 ]
-                logger.info('Running build for profile: %s', profile)
+                logger.info("Running build for profile: %s", profile)
                 subprocess.check_call(up_cmd)
 
                 completed_profiles.append(profile)
             except subprocess.CalledProcessError:
-                logger.error('Docker compose operation failed for profile: %s', profile)
+                logger.error("Docker compose operation failed for profile: %s", profile)
                 return False
 
-            logger.info('Successfully built profile: %s', profile)
+            logger.info("Successfully built profile: %s", profile)
 
-        logger.info('All CRS builds completed successfully')
+        logger.info("All CRS builds completed successfully")
     finally:
         # Clean up: remove all containers from completed profiles
-        logger.info('Cleaning up build services')
+        logger.info("Cleaning up build services")
         if completed_profiles:
-            down_cmd = ['docker', 'compose', '-p', build_project, '-f', str(compose_file)]
+            down_cmd = [
+                "docker",
+                "compose",
+                "-p",
+                build_project,
+                "-f",
+                str(compose_file),
+            ]
             for profile in completed_profiles:
-                down_cmd.extend(['--profile', profile])
-            down_cmd.extend(['down', '--remove-orphans'])
+                down_cmd.extend(["--profile", profile])
+            down_cmd.extend(["down", "--remove-orphans"])
             subprocess.run(down_cmd)
         else:
-            subprocess.run(['docker', 'compose',
-                          '-p', build_project,
-                          '-f', str(compose_file),
-                          'down', '--remove-orphans'])
+            subprocess.run(
+                [
+                    "docker",
+                    "compose",
+                    "-p",
+                    build_project,
+                    "-f",
+                    str(compose_file),
+                    "down",
+                    "--remove-orphans",
+                ]
+            )
         _fix_build_dir_permissions(build_dir)
 
     return True
 
 
-def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: list,
-            oss_fuzz_dir: Path, build_dir: Path, worker: str = 'local',
-            engine: str = 'libfuzzer', sanitizer: str = 'address',
-            architecture: str = 'x86_64', check_project_fn = None,
-            registry_dir: Path = DEFAULT_REGISTRY_DIR,
-            hints_dir: Path = None,
-            harness_source: Path = None,
-            diff_path: Path = None,
-            external_litellm: bool = False, source_oss_fuzz_dir: Path = None,
-            shared_seed_dir: Path = None, disable_shared_seed: bool = False):
+def run_crs(
+    config_dir: Path,
+    project_name: str,
+    fuzzer_name: str,
+    fuzzer_args: list,
+    oss_fuzz_dir: Path,
+    build_dir: Path,
+    worker: str = "local",
+    engine: str = "libfuzzer",
+    sanitizer: str = "address",
+    architecture: str = "x86_64",
+    check_project_fn=None,
+    registry_dir: Path = DEFAULT_REGISTRY_DIR,
+    hints_dir: Path = None,
+    harness_source: Path = None,
+    diff_path: Path = None,
+    external_litellm: bool = False,
+    source_oss_fuzz_dir: Path = None,
+    shared_seed_dir: Path = None,
+    disable_shared_seed: bool = False,
+):
     """
     Run CRS using docker compose.
 
@@ -665,33 +778,38 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             final_shared_seed_dir = shared_seed_dir / fuzzer_name
         else:
             # Check if ensemble mode (>1 CRS on same worker)
-            config_resource_path = config_dir / 'config-resource.yaml'
+            config_resource_path = config_dir / "config-resource.yaml"
             with open(config_resource_path) as f:
                 resource_config = yaml.safe_load(f)
-            crs_configs = resource_config.get('crs', {})
+            crs_configs = resource_config.get("crs", {})
             worker_crs_count = sum(
-                1 for cfg in crs_configs.values()
-                if worker in cfg.get('workers', [])
+                1 for cfg in crs_configs.values() if worker in cfg.get("workers", [])
             )
             if worker_crs_count > 1:
-                final_shared_seed_dir = build_dir / 'shared_seed_dir' / project_name / fuzzer_name
-                logger.info(f'Ensemble mode detected ({worker_crs_count} CRS on worker {worker}). '
-                           f'Shared seeds directory: {final_shared_seed_dir}')
+                final_shared_seed_dir = (
+                    build_dir / "shared_seed_dir" / project_name / fuzzer_name
+                )
+                logger.info(
+                    f"Ensemble mode detected ({worker_crs_count} CRS on worker {worker}). "
+                    f"Shared seeds directory: {final_shared_seed_dir}"
+                )
 
     # Create per-CRS directories if shared seed is enabled
     if final_shared_seed_dir:
-        config_resource_path = config_dir / 'config-resource.yaml'
+        config_resource_path = config_dir / "config-resource.yaml"
         with open(config_resource_path) as f:
             resource_config = yaml.safe_load(f)
-        crs_configs = resource_config.get('crs', {})
+        crs_configs = resource_config.get("crs", {})
         for crs_name, cfg in crs_configs.items():
-            if worker in cfg.get('workers', []):
+            if worker in cfg.get("workers", []):
                 crs_seed_dir = final_shared_seed_dir / crs_name
                 crs_seed_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(f'Created shared seed directory for {crs_name}: {crs_seed_dir}')
+                logger.info(
+                    f"Created shared seed directory for {crs_name}: {crs_seed_dir}"
+                )
 
     # Generate compose files using render_compose module
-    logger.info('Generating compose-%s.yaml', worker)
+    logger.info("Generating compose-%s.yaml", worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
     try:
         config_hash, crs_build_dir = render_compose.render_run_compose(
@@ -708,57 +826,80 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             harness_source=str(harness_source) if harness_source else None,
             diff_path=str(diff_path) if diff_path else None,
             external_litellm=external_litellm,
-            shared_seed_dir=str(final_shared_seed_dir) if final_shared_seed_dir else None
+            shared_seed_dir=str(final_shared_seed_dir)
+            if final_shared_seed_dir
+            else None,
         )
         crs_build_dir = Path(crs_build_dir)
     except Exception as e:
-        logger.error('Failed to generate compose file: %s', e)
+        logger.error("Failed to generate compose file: %s", e)
         return False
 
     # Look for compose files
-    compose_file = crs_build_dir / f'compose-{worker}.yaml'
+    compose_file = crs_build_dir / f"compose-{worker}.yaml"
 
     if not compose_file.exists():
-        logger.error('compose-%s.yaml was not generated', worker)
+        logger.error("compose-%s.yaml was not generated", worker)
         return False
 
     # Project names for separate compose projects
-    litellm_project = f'crs-litellm-{config_hash}'
-    run_project = f'crs-run-{config_hash}-{worker}'
+    litellm_project = f"crs-litellm-{config_hash}"
+    run_project = f"crs-run-{config_hash}-{worker}"
 
     # Start LiteLLM services in detached mode as separate project (unless using external)
     if not external_litellm:
-        litellm_compose_file = crs_build_dir / 'compose-litellm.yaml'
+        litellm_compose_file = crs_build_dir / "compose-litellm.yaml"
         if not litellm_compose_file.exists():
-            logger.error('compose-litellm.yaml was not generated')
+            logger.error("compose-litellm.yaml was not generated")
             return False
 
-        logger.info('Starting LiteLLM services (project: %s)', litellm_project)
-        litellm_up_cmd = ['docker', 'compose', '-p', litellm_project,
-                          '-f', str(litellm_compose_file), 'up', '-d']
+        logger.info("Starting LiteLLM services (project: %s)", litellm_project)
+        litellm_up_cmd = [
+            "docker",
+            "compose",
+            "-p",
+            litellm_project,
+            "-f",
+            str(litellm_compose_file),
+            "up",
+            "-d",
+        ]
         try:
             subprocess.check_call(litellm_up_cmd)
         except subprocess.CalledProcessError:
-            logger.error('Failed to start LiteLLM services')
+            logger.error("Failed to start LiteLLM services")
             return False
     else:
-        logger.info('Using external LiteLLM instance')
+        logger.info("Using external LiteLLM instance")
 
-    logger.info('Starting runner services from: %s', compose_file)
+    logger.info("Starting runner services from: %s", compose_file)
     # Commands for cleanup - only affect run project
-    compose_down_cmd = ['docker', 'compose',
-                       '-p', run_project,
-                       '-f', str(compose_file),
-                       'down', '--remove-orphans']
+    compose_down_cmd = [
+        "docker",
+        "compose",
+        "-p",
+        run_project,
+        "-f",
+        str(compose_file),
+        "down",
+        "--remove-orphans",
+    ]
 
     def cleanup():
         """Cleanup function for compose files"""
-        logger.info('cleanup')
+        logger.info("cleanup")
         subprocess.run(compose_down_cmd)
         if not external_litellm:
-            litellm_compose_file = crs_build_dir / 'compose-litellm.yaml'
-            litellm_stop_cmd = ['docker', 'compose', '-p', litellm_project,
-                               '-f', str(litellm_compose_file), 'stop']
+            litellm_compose_file = crs_build_dir / "compose-litellm.yaml"
+            litellm_stop_cmd = [
+                "docker",
+                "compose",
+                "-p",
+                litellm_project,
+                "-f",
+                str(litellm_compose_file),
+                "stop",
+            ]
             subprocess.run(litellm_stop_cmd)
         _fix_build_dir_permissions(build_dir)
 
@@ -768,7 +909,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
         cleanup()
         sys.exit(0)
 
-    signal.signal(signal.SIGINT, signal_handler)   # Ctrl-C
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl-C
     signal.signal(signal.SIGTERM, signal_handler)  # Termination
 
     # Register cleanup on normal exit
@@ -776,14 +917,21 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
 
     # Only pass the run compose file (litellm is in separate project)
     # --build ensures image is rebuilt if source files (run.sh, docker-compose.yml) changed
-    compose_cmd = ['docker', 'compose',
-                  '-p', run_project,
-                  '-f', str(compose_file),
-                  'up', '--build', '--abort-on-container-exit']
+    compose_cmd = [
+        "docker",
+        "compose",
+        "-p",
+        run_project,
+        "-f",
+        str(compose_file),
+        "up",
+        "--build",
+        "--abort-on-container-exit",
+    ]
     try:
         subprocess.check_call(compose_cmd)
     except subprocess.CalledProcessError:
-        logger.error('Docker compose failed for: %s', compose_file)
+        logger.error("Docker compose failed for: %s", compose_file)
         return False
     finally:
         cleanup()

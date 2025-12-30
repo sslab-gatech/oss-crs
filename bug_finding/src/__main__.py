@@ -16,78 +16,135 @@ def main():
     # logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
     parser = argparse.ArgumentParser(
-        description='CRS (Cyber Reasoning System) build and run tool'
+        description="CRS (Cyber Reasoning System) build and run tool"
     )
-    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # build_crs subcommand
-    build_parser = subparsers.add_parser('build', help='Build CRS for a project')
-    build_parser.add_argument('config_dir', type=Path,
-                              help='Directory containing CRS configuration files')
-    build_parser.add_argument('project', help='OSS-Fuzz project name')
-    build_parser.add_argument('source_path', nargs='?', type=Path,
-                              help='Optional path to local source')
-    build_parser.add_argument('--build-dir', type=Path, default=Path.cwd() / 'build',
-                              help='Path to build directory (default: ./build)')
-    build_parser.add_argument('--project-path', type=Path,
-                              help='Path to local OSS-compatible project')
-    build_parser.add_argument('--oss-fuzz-dir', type=Path, default=None,
-                              help='Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)')
-    build_parser.add_argument('--registry-dir', type=Path,
-                              help='Path to local oss-crs-registry directory')
-    build_parser.add_argument('--engine', default='libfuzzer',
-                              help='Fuzzing engine (default: libfuzzer)')
-    build_parser.add_argument('--sanitizer', default='address',
-                              help='Sanitizer (default: address)')
-    build_parser.add_argument('--architecture', default='x86_64',
-                              help='Architecture (default: x86_64)')
-    build_parser.add_argument('--project-image-prefix', default='gcr.io/oss-fuzz',
-                              help='Project image prefix (default: gcr.io/oss-fuzz)')
-    build_parser.add_argument('--external-litellm', action='store_true',
-                              help='Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)')
-    build_parser.add_argument('--overwrite', action='store_true',
-                              help='Overwrite existing project in oss-fuzz/projects/ when using project_path')
-    build_parser.add_argument('--clone', action='store_true',
-                              help='Clone project source from main_repo in project.yaml (for custom projects)')
-    build_parser.add_argument('--gitcache', action='store_true',
-                              help='Use gitcache for git clone operations')
+    build_parser = subparsers.add_parser("build", help="Build CRS for a project")
+    build_parser.add_argument(
+        "config_dir", type=Path, help="Directory containing CRS configuration files"
+    )
+    build_parser.add_argument("project", help="OSS-Fuzz project name")
+    build_parser.add_argument(
+        "source_path", nargs="?", type=Path, help="Optional path to local source"
+    )
+    build_parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=Path.cwd() / "build",
+        help="Path to build directory (default: ./build)",
+    )
+    build_parser.add_argument(
+        "--project-path", type=Path, help="Path to local OSS-compatible project"
+    )
+    build_parser.add_argument(
+        "--oss-fuzz-dir",
+        type=Path,
+        default=None,
+        help="Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)",
+    )
+    build_parser.add_argument(
+        "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
+    )
+    build_parser.add_argument(
+        "--engine", default="libfuzzer", help="Fuzzing engine (default: libfuzzer)"
+    )
+    build_parser.add_argument(
+        "--sanitizer", default="address", help="Sanitizer (default: address)"
+    )
+    build_parser.add_argument(
+        "--architecture", default="x86_64", help="Architecture (default: x86_64)"
+    )
+    build_parser.add_argument(
+        "--project-image-prefix",
+        default="gcr.io/oss-fuzz",
+        help="Project image prefix (default: gcr.io/oss-fuzz)",
+    )
+    build_parser.add_argument(
+        "--external-litellm",
+        action="store_true",
+        help="Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)",
+    )
+    build_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing project in oss-fuzz/projects/ when using project_path",
+    )
+    build_parser.add_argument(
+        "--clone",
+        action="store_true",
+        help="Clone project source from main_repo in project.yaml (for custom projects)",
+    )
+    build_parser.add_argument(
+        "--gitcache", action="store_true", help="Use gitcache for git clone operations"
+    )
 
     # run_crs subcommand
-    run_parser = subparsers.add_parser('run', help='Run CRS')
-    run_parser.add_argument('config_dir', type=Path,
-                            help='Directory containing CRS configuration files')
-    run_parser.add_argument('project', help='OSS-Fuzz project name')
-    run_parser.add_argument('fuzzer_name', help='Name of the fuzzer')
-    run_parser.add_argument('fuzzer_args', nargs='*',
-                            help='Arguments to pass to the fuzzer')
-    run_parser.add_argument('--worker', default='local',
-                            help='Worker name (default: local)')
-    run_parser.add_argument('--build-dir', type=Path, default=Path.cwd() / 'build',
-                            help='Path to build directory (default: ./build)')
-    run_parser.add_argument('--oss-fuzz-dir', type=Path, default=None,
-                            help='Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)')
-    run_parser.add_argument('--registry-dir', type=Path,
-                            help='Path to local oss-crs-registry directory')
-    run_parser.add_argument('--engine', default='libfuzzer',
-                            help='Fuzzing engine (default: libfuzzer)')
-    run_parser.add_argument('--sanitizer', default='address',
-                            help='Sanitizer (default: address)')
-    run_parser.add_argument('--architecture', default='x86_64',
-                            help='Architecture (default: x86_64)')
-    run_parser.add_argument('--hints', type=Path,
-                            help='Directory containing hints (SARIF reports and corpus)')
-    run_parser.add_argument('--harness-source', type=Path,
-                            help='Path to harness source file for analysis')
-    run_parser.add_argument('--diff', type=Path,
-                            help='Path to diff file for analysis')
-    run_parser.add_argument('--external-litellm', action='store_true',
-                            help='Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)')
-    run_parser.add_argument('--gitcache', action='store_true',
-                            help='Use gitcache for git clone operations')
-    run_parser.add_argument('--shared-seed-dir', type=Path, default=None,
-                            help='Base directory for shared seeds (default: build/shared/{project}/ for ensemble)')
-    run_parser.add_argument('--disable-shared-seed', action='store_true',
-                            help='Disable automatic shared seed directory for ensemble mode')
+    run_parser = subparsers.add_parser("run", help="Run CRS")
+    run_parser.add_argument(
+        "config_dir", type=Path, help="Directory containing CRS configuration files"
+    )
+    run_parser.add_argument("project", help="OSS-Fuzz project name")
+    run_parser.add_argument("fuzzer_name", help="Name of the fuzzer")
+    run_parser.add_argument(
+        "fuzzer_args", nargs="*", help="Arguments to pass to the fuzzer"
+    )
+    run_parser.add_argument(
+        "--worker", default="local", help="Worker name (default: local)"
+    )
+    run_parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=Path.cwd() / "build",
+        help="Path to build directory (default: ./build)",
+    )
+    run_parser.add_argument(
+        "--oss-fuzz-dir",
+        type=Path,
+        default=None,
+        help="Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)",
+    )
+    run_parser.add_argument(
+        "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
+    )
+    run_parser.add_argument(
+        "--engine", default="libfuzzer", help="Fuzzing engine (default: libfuzzer)"
+    )
+    run_parser.add_argument(
+        "--sanitizer", default="address", help="Sanitizer (default: address)"
+    )
+    run_parser.add_argument(
+        "--architecture", default="x86_64", help="Architecture (default: x86_64)"
+    )
+    run_parser.add_argument(
+        "--hints",
+        type=Path,
+        help="Directory containing hints (SARIF reports and corpus)",
+    )
+    run_parser.add_argument(
+        "--harness-source", type=Path, help="Path to harness source file for analysis"
+    )
+    run_parser.add_argument("--diff", type=Path, help="Path to diff file for analysis")
+    run_parser.add_argument(
+        "--external-litellm",
+        action="store_true",
+        help="Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)",
+    )
+    run_parser.add_argument(
+        "--gitcache", action="store_true", help="Use gitcache for git clone operations"
+    )
+    run_parser.add_argument(
+        "--shared-seed-dir",
+        type=Path,
+        default=None,
+        help="Base directory for shared seeds (default: build/shared/{project}/ for ensemble)",
+    )
+    run_parser.add_argument(
+        "--disable-shared-seed",
+        action="store_true",
+        help="Disable automatic shared seed directory for ensemble mode",
+    )
 
     args = parser.parse_args()
 
@@ -113,34 +170,34 @@ def main():
     # Set gitcache mode
     set_gitcache(args.gitcache)
 
-    if args.command == 'build':
+    if args.command == "build":
         # Build kwargs, only including non-None optional arguments
         build_kwargs = {
-            'config_dir': config_dir,
-            'project_name': args.project,
-            'oss_fuzz_dir': oss_fuzz_dir,
-            'build_dir': build_dir,
-            'engine': args.engine,
-            'sanitizer': args.sanitizer,
-            'architecture': args.architecture,
-            'overwrite': args.overwrite,
-            'clone': args.clone,
-            'project_image_prefix': args.project_image_prefix,
-            'external_litellm': args.external_litellm,
+            "config_dir": config_dir,
+            "project_name": args.project,
+            "oss_fuzz_dir": oss_fuzz_dir,
+            "build_dir": build_dir,
+            "engine": args.engine,
+            "sanitizer": args.sanitizer,
+            "architecture": args.architecture,
+            "overwrite": args.overwrite,
+            "clone": args.clone,
+            "project_image_prefix": args.project_image_prefix,
+            "external_litellm": args.external_litellm,
         }
 
         # Only add optional paths if provided
         if args.source_path:
-            build_kwargs['source_path'] = args.source_path.resolve()
+            build_kwargs["source_path"] = args.source_path.resolve()
         if args.project_path:
-            build_kwargs['project_path'] = args.project_path.resolve()
+            build_kwargs["project_path"] = args.project_path.resolve()
         if args.registry_dir:
-            build_kwargs['registry_dir'] = args.registry_dir.resolve()
+            build_kwargs["registry_dir"] = args.registry_dir.resolve()
         if source_oss_fuzz_dir:
-            build_kwargs['source_oss_fuzz_dir'] = source_oss_fuzz_dir
+            build_kwargs["source_oss_fuzz_dir"] = source_oss_fuzz_dir
 
         result = build_crs(**build_kwargs)
-    elif args.command == 'run':
+    elif args.command == "run":
         # Resolve and validate run-specific paths
         hints_dir = args.hints.resolve() if args.hints else None
         harness_source = args.harness_source.resolve() if args.harness_source else None
@@ -158,35 +215,35 @@ def main():
 
         # Build kwargs, only including non-None optional arguments
         run_kwargs = {
-            'config_dir': config_dir,
-            'project_name': args.project,
-            'fuzzer_name': args.fuzzer_name,
-            'fuzzer_args': args.fuzzer_args,
-            'oss_fuzz_dir': oss_fuzz_dir,
-            'build_dir': build_dir,
-            'worker': args.worker,
-            'engine': args.engine,
-            'sanitizer': args.sanitizer,
-            'architecture': args.architecture,
-            'external_litellm': args.external_litellm,
+            "config_dir": config_dir,
+            "project_name": args.project,
+            "fuzzer_name": args.fuzzer_name,
+            "fuzzer_args": args.fuzzer_args,
+            "oss_fuzz_dir": oss_fuzz_dir,
+            "build_dir": build_dir,
+            "worker": args.worker,
+            "engine": args.engine,
+            "sanitizer": args.sanitizer,
+            "architecture": args.architecture,
+            "external_litellm": args.external_litellm,
         }
 
         # Only add optional paths if provided
         if args.registry_dir:
-            run_kwargs['registry_dir'] = args.registry_dir.resolve()
+            run_kwargs["registry_dir"] = args.registry_dir.resolve()
         if hints_dir:
-            run_kwargs['hints_dir'] = hints_dir
+            run_kwargs["hints_dir"] = hints_dir
         if harness_source:
-            run_kwargs['harness_source'] = harness_source
+            run_kwargs["harness_source"] = harness_source
         if diff_path:
-            run_kwargs['diff_path'] = diff_path
+            run_kwargs["diff_path"] = diff_path
         if source_oss_fuzz_dir:
-            run_kwargs['source_oss_fuzz_dir'] = source_oss_fuzz_dir
+            run_kwargs["source_oss_fuzz_dir"] = source_oss_fuzz_dir
 
         # Shared seed directory options
         if args.shared_seed_dir:
-            run_kwargs['shared_seed_dir'] = args.shared_seed_dir.resolve()
-        run_kwargs['disable_shared_seed'] = getattr(args, 'disable_shared_seed', False)
+            run_kwargs["shared_seed_dir"] = args.shared_seed_dir.resolve()
+        run_kwargs["disable_shared_seed"] = getattr(args, "disable_shared_seed", False)
 
         result = run_crs(**run_kwargs)
     else:
@@ -196,5 +253,5 @@ def main():
     return 0 if result else 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

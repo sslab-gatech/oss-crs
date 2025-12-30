@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 KEY_PROVISIONER_DIR = files(__package__).parent / "key_provisioner"
 
 # Configure logging (INFO level won't show by default)
-logging.basicConfig(level=logging.WARNING, format='%(message)s')
+logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
 
 def check_image_exists(image_name: str, check_any_tag: bool = False) -> bool:
@@ -46,18 +46,15 @@ def check_image_exists(image_name: str, check_any_tag: bool = False) -> bool:
     """
     # First try exact match
     result = subprocess.run(
-        ['docker', 'image', 'inspect', image_name],
-        capture_output=True
+        ["docker", "image", "inspect", image_name], capture_output=True
     )
     if result.returncode == 0:
         return True
 
     # If check_any_tag is True and no tag specified, check for any tag
-    if check_any_tag and ':' not in image_name:
+    if check_any_tag and ":" not in image_name:
         result = subprocess.run(
-            ['docker', 'images', '-q', image_name],
-            capture_output=True,
-            text=True
+            ["docker", "images", "-q", image_name], capture_output=True, text=True
         )
         return bool(result.stdout.strip())
 
@@ -77,7 +74,7 @@ def get_crs_env_vars(config_dir: Path) -> List[str]:
     if not env_file.exists():
         return []
     env_vars = dotenv_values(str(env_file))
-    return sorted([k for k in env_vars.keys() if k.startswith('CRS_')])
+    return sorted([k for k in env_vars.keys() if k.startswith("CRS_")])
 
 
 def get_dot_env_vars(config_dir: Path) -> Dict[str, str]:
@@ -96,10 +93,7 @@ def get_dot_env_vars(config_dir: Path) -> Dict[str, str]:
 
 
 def merge_env_vars(
-    registry_env: Dict[str, str],
-    dot_env: Dict[str, str],
-    crs_name: str,
-    phase: str
+    registry_env: Dict[str, str], dot_env: Dict[str, str], crs_name: str, phase: str
 ) -> Dict[str, str]:
     """Merge registry env vars with .env vars.
 
@@ -148,7 +142,7 @@ def expand_volume_vars(volumes: List[str], env_vars: Dict[str, str]) -> List[str
             var_name = match.group(1) or match.group(2)
             return env_vars.get(var_name, match.group(0))
 
-        expanded_vol = re.sub(r'\$\{(\w+)\}|\$(\w+)', replace_var, vol)
+        expanded_vol = re.sub(r"\$\{(\w+)\}|\$(\w+)", replace_var, vol)
         expanded.append(expanded_vol)
     return expanded
 
@@ -156,6 +150,7 @@ def expand_volume_vars(volumes: List[str], env_vars: Dict[str, str]) -> List[str
 @dataclass
 class ComposeEnvironment:
     """Environment data for compose rendering."""
+
     config_dir: Path
     build_dir: Path
     template_path: Path
@@ -180,15 +175,15 @@ def load_config(config_dir: Path) -> Dict[str, Any]:
     if not resource_config_path.exists():
         raise FileNotFoundError(f"Required file not found: {resource_config_path}")
     with open(resource_config_path) as f:
-        config['resource'] = yaml.safe_load(f)
+        config["resource"] = yaml.safe_load(f)
 
     # Load worker configuration (optional)
     worker_config_path = config_dir / "config-worker.yaml"
     if worker_config_path.exists():
         with open(worker_config_path) as f:
-            config['worker'] = yaml.safe_load(f)
+            config["worker"] = yaml.safe_load(f)
     else:
-        config['worker'] = {}
+        config["worker"] = {}
 
     return config
 
@@ -212,13 +207,13 @@ def parse_cpu_range(cpu_spec: str) -> List[int]:
     cpu_list = []
 
     # Split by comma to handle comma-separated values
-    parts = cpu_spec.split(',')
+    parts = cpu_spec.split(",")
 
     for part in parts:
         part = part.strip()
-        if '-' in part:
+        if "-" in part:
             # Range format: '0-7'
-            start, end = part.split('-', 1)
+            start, end = part.split("-", 1)
             cpu_list.extend(range(int(start), int(end) + 1))
         else:
             # Single core: '5'
@@ -238,7 +233,7 @@ def format_cpu_list(cpu_list: List[int]) -> str:
     Returns:
       Comma-separated string (e.g., '0,1,2,3')
     """
-    return ','.join(map(str, cpu_list))
+    return ",".join(map(str, cpu_list))
 
 
 def parse_memory_mb(memory_spec: str) -> int:
@@ -252,9 +247,9 @@ def parse_memory_mb(memory_spec: str) -> int:
       Memory in megabytes
     """
     memory_spec = memory_spec.strip().upper()
-    if memory_spec.endswith('G'):
+    if memory_spec.endswith("G"):
         return int(memory_spec[:-1]) * 1024
-    if memory_spec.endswith('M'):
+    if memory_spec.endswith("M"):
         return int(memory_spec[:-1])
     # Assume MB if no unit specified
     return int(memory_spec)
@@ -275,7 +270,9 @@ def format_memory(memory_mb: int) -> str:
     return f"{memory_mb}M"
 
 
-def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) -> Optional[Path]:
+def clone_crs_if_needed(
+    crs_name: str, crs_build_dir: Path, registry_dir: Path
+) -> Optional[Path]:
     """
     Clone a CRS repository if needed, or return local path if specified.
 
@@ -304,10 +301,10 @@ def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) 
         print(f"ERROR: Failed to parse {crs_meta_path}: {e}")
         return None
 
-    source_config = pkg_config.get('source', {})
-    local_path = source_config.get('local_path')
-    crs_url = source_config.get('url')
-    crs_ref = source_config.get('ref')
+    source_config = pkg_config.get("source", {})
+    local_path = source_config.get("local_path")
+    crs_url = source_config.get("url")
+    crs_ref = source_config.get("ref")
 
     # Priority: local_path takes precedence over url
     if local_path:
@@ -334,12 +331,26 @@ def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) 
         # Clone the CRS repository from URL
         logging.info(f"Cloning CRS '{crs_name}' from {crs_url}")
         try:
-            run_git(['clone', crs_url, str(crs_path)], stdout=subprocess.DEVNULL)
+            run_git(["clone", crs_url, str(crs_path)], stdout=subprocess.DEVNULL)
 
             if crs_ref:
-                run_git(['-C', str(crs_path), 'checkout', crs_ref], stdout=subprocess.DEVNULL)
-                run_git(['-C', str(crs_path), 'submodule', 'update',
-                         '--init', '--recursive', '--depth', '1'], stdout=subprocess.DEVNULL)
+                run_git(
+                    ["-C", str(crs_path), "checkout", crs_ref],
+                    stdout=subprocess.DEVNULL,
+                )
+                run_git(
+                    [
+                        "-C",
+                        str(crs_path),
+                        "submodule",
+                        "update",
+                        "--init",
+                        "--recursive",
+                        "--depth",
+                        "1",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                )
 
             logging.info(f"Successfully cloned CRS '{crs_name}' to {crs_path}")
             return crs_path
@@ -353,9 +364,12 @@ def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) 
         return None
 
 
-def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
-                       crs_paths: Dict[str, str],
-                       crs_pkg_data: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+def get_crs_for_worker(
+    worker_name: str,
+    resource_config: Dict[str, Any],
+    crs_paths: Dict[str, str],
+    crs_pkg_data: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """
     Extract CRS configurations for a specific worker.
 
@@ -378,13 +392,13 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
     - CPU cores out of worker range
     - Not enough cores to give each CRS at least one
     """
-    crs_configs = resource_config.get('crs', {})
-    workers_config = resource_config.get('workers', {})
+    crs_configs = resource_config.get("crs", {})
+    workers_config = resource_config.get("workers", {})
     worker_resources = workers_config.get(worker_name, {})
 
     # Get worker's available resources
-    worker_cpus_spec = worker_resources.get('cpuset', '0-3')
-    worker_memory_spec = worker_resources.get('memory', '4G')
+    worker_cpus_spec = worker_resources.get("cpuset", "0-3")
+    worker_memory_spec = worker_resources.get("memory", "4G")
     worker_all_cpus = set(parse_cpu_range(worker_cpus_spec))
     worker_total_memory_mb = parse_memory_mb(worker_memory_spec)
 
@@ -394,12 +408,12 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
     for crs_name, crs_config in crs_configs.items():
         # Check if this CRS should run on this worker
-        crs_workers = crs_config.get('workers', [])
+        crs_workers = crs_config.get("workers", [])
         if worker_name not in crs_workers:
             continue
 
         # Check for explicit resource configuration
-        resources = crs_config.get('resources', {})
+        resources = crs_config.get("resources", {})
 
         # Three cases for resources config:
         # 1. resources.{worker_name} exists - per-worker config
@@ -409,7 +423,11 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
         if isinstance(resources, dict) and worker_name in resources:
             # Case 1: Per-worker explicit config
             explicit_crs.append((crs_name, resources[worker_name]))
-        elif isinstance(resources, dict) and 'cpuset' in resources and worker_name not in resources:
+        elif (
+            isinstance(resources, dict)
+            and "cpuset" in resources
+            and worker_name not in resources
+        ):
             # Case 2: Global config (applies to all workers)
             explicit_crs.append((crs_name, resources))
         else:
@@ -426,8 +444,8 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
     # Process explicit configurations first
     for crs_name, crs_resources in explicit_crs:
-        cpus_spec = crs_resources.get('cpuset', '0-3')
-        memory_spec = crs_resources.get('memory', '4G')
+        cpus_spec = crs_resources.get("cpuset", "0-3")
+        memory_spec = crs_resources.get("memory", "4G")
 
         crs_cpus_list = parse_cpu_range(cpus_spec)
         crs_cpus_set = set(crs_cpus_list)
@@ -436,15 +454,19 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
         # Validation: Check CPUs are within worker range
         if not crs_cpus_set.issubset(worker_all_cpus):
             out_of_range = crs_cpus_set - worker_all_cpus
-            print(f"ERROR: CRS '{crs_name}' on worker '{worker_name}' uses CPUs {out_of_range} "
-                  f"which are outside worker's CPU range {worker_cpus_spec}")
+            print(
+                f"ERROR: CRS '{crs_name}' on worker '{worker_name}' uses CPUs {out_of_range} "
+                f"which are outside worker's CPU range {worker_cpus_spec}"
+            )
             sys.exit(1)
 
         # Validation: Check for CPU conflicts
         conflicts = used_cpus & crs_cpus_set
         if conflicts:
-            print(f"ERROR: CRS '{crs_name}' on worker '{worker_name}' conflicts with another CRS. "
-                  f"CPUs {conflicts} are already allocated.")
+            print(
+                f"ERROR: CRS '{crs_name}' on worker '{worker_name}' conflicts with another CRS. "
+                f"CPUs {conflicts} are already allocated."
+            )
             sys.exit(1)
 
         used_cpus.update(crs_cpus_set)
@@ -452,29 +474,33 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
         # Get dind and host_docker_builder flags from CRS config-crs.yaml dependencies
         crs_pkg = crs_pkg_data.get(crs_name, {})
-        crs_dependencies = crs_pkg.get('dependencies', [])
-        crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
-        crs_host_docker_builder = 'host_docker_builder' in crs_dependencies if crs_dependencies else False
+        crs_dependencies = crs_pkg.get("dependencies", [])
+        crs_dind = "dind" in crs_dependencies if crs_dependencies else False
+        crs_host_docker_builder = (
+            "host_docker_builder" in crs_dependencies if crs_dependencies else False
+        )
 
         # Get volumes from CRS config-crs.yaml
-        crs_volumes = crs_pkg.get('volumes', [])
+        crs_volumes = crs_pkg.get("volumes", [])
 
         # Get run_env and build_env from CRS config-crs.yaml
-        crs_run_env = crs_pkg.get('run_env', {})
-        crs_build_env = crs_pkg.get('build_env', {})
+        crs_run_env = crs_pkg.get("run_env", {})
+        crs_build_env = crs_pkg.get("build_env", {})
 
-        result.append({
-            'name': crs_name,
-            'path': crs_paths[crs_name],
-            'cpuset': format_cpu_list(crs_cpus_list),
-            'memory_limit': format_memory(crs_memory_mb),
-            'suffix': 'runner',
-            'dind': crs_dind,
-            'host_docker_builder': crs_host_docker_builder,
-            'volumes': crs_volumes,
-            'run_env': crs_run_env,
-            'build_env': crs_build_env
-        })
+        result.append(
+            {
+                "name": crs_name,
+                "path": crs_paths[crs_name],
+                "cpuset": format_cpu_list(crs_cpus_list),
+                "memory_limit": format_memory(crs_memory_mb),
+                "suffix": "runner",
+                "dind": crs_dind,
+                "host_docker_builder": crs_host_docker_builder,
+                "volumes": crs_volumes,
+                "run_env": crs_run_env,
+                "build_env": crs_build_env,
+            }
+        )
 
     # Process auto-divide CRS instances
     if auto_divide_crs:
@@ -486,16 +512,20 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
         # Validation: Check we have enough CPUs
         if len(remaining_cpus) < num_auto:
-            print(f"ERROR: Not enough CPUs on worker '{worker_name}' for auto-division. "
-                  f"Need at least {num_auto} cores for {num_auto} CRS instances, "
-                  f"but only {len(remaining_cpus)} cores remain after explicit allocations.")
+            print(
+                f"ERROR: Not enough CPUs on worker '{worker_name}' for auto-division. "
+                f"Need at least {num_auto} cores for {num_auto} CRS instances, "
+                f"but only {len(remaining_cpus)} cores remain after explicit allocations."
+            )
             sys.exit(1)
 
         # Validation: Check we have enough memory
         if remaining_memory_mb < num_auto * 512:  # Minimum 512MB per CRS
-            print(f"ERROR: Not enough memory on worker '{worker_name}' for auto-division. "
-                  f"Only {remaining_memory_mb}MB remain for {num_auto} CRS instances "
-                  f"(minimum 512MB per CRS required).")
+            print(
+                f"ERROR: Not enough memory on worker '{worker_name}' for auto-division. "
+                f"Only {remaining_memory_mb}MB remain for {num_auto} CRS instances "
+                f"(minimum 512MB per CRS required)."
+            )
             sys.exit(1)
 
         # Divide remaining resources
@@ -521,29 +551,33 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
 
             # Get dind and host_docker_builder flags from CRS config-crs.yaml dependencies
             crs_pkg = crs_pkg_data.get(crs_name, {})
-            crs_dependencies = crs_pkg.get('dependencies', [])
-            crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
-            crs_host_docker_builder = 'host_docker_builder' in crs_dependencies if crs_dependencies else False
+            crs_dependencies = crs_pkg.get("dependencies", [])
+            crs_dind = "dind" in crs_dependencies if crs_dependencies else False
+            crs_host_docker_builder = (
+                "host_docker_builder" in crs_dependencies if crs_dependencies else False
+            )
 
             # Get volumes from CRS config-crs.yaml
-            crs_volumes = crs_pkg.get('volumes', [])
+            crs_volumes = crs_pkg.get("volumes", [])
 
             # Get run_env and build_env from CRS config-crs.yaml
-            crs_run_env = crs_pkg.get('run_env', {})
-            crs_build_env = crs_pkg.get('build_env', {})
+            crs_run_env = crs_pkg.get("run_env", {})
+            crs_build_env = crs_pkg.get("build_env", {})
 
-            result.append({
-                'name': crs_name,
-                'path': crs_paths[crs_name],
-                'cpuset': format_cpu_list(crs_cpus_list),
-                'memory_limit': format_memory(crs_memory),
-                'suffix': 'runner',
-                'dind': crs_dind,
-                'host_docker_builder': crs_host_docker_builder,
-                'volumes': crs_volumes,
-                'run_env': crs_run_env,
-                'build_env': crs_build_env
-            })
+            result.append(
+                {
+                    "name": crs_name,
+                    "path": crs_paths[crs_name],
+                    "cpuset": format_cpu_list(crs_cpus_list),
+                    "memory_limit": format_memory(crs_memory),
+                    "suffix": "runner",
+                    "dind": crs_dind,
+                    "host_docker_builder": crs_host_docker_builder,
+                    "volumes": crs_volumes,
+                    "run_env": crs_run_env,
+                    "build_env": crs_build_env,
+                }
+            )
 
     return result
 
@@ -560,16 +594,23 @@ def get_project_language(oss_fuzz_path: Path, project: str) -> str:
         with open(project_yaml_path) as f:
             project_config = yaml.safe_load(f)
 
-        language = project_config.get('language', 'c++')
+        language = project_config.get("language", "c++")
         return language
     except (yaml.YAMLError, AttributeError, TypeError):
-        logging.info(f"Language not specified in project.yaml for {project}, assuming c++")
+        logging.info(
+            f"Language not specified in project.yaml for {project}, assuming c++"
+        )
         return "c++"
 
 
-def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: str,
-                               registry_dir: str, env_file: str = None,
-                               mode: str = 'build') -> ComposeEnvironment:
+def _setup_compose_environment(
+    config_dir: str,
+    build_dir: str,
+    oss_fuzz_path: str,
+    registry_dir: str,
+    env_file: str = None,
+    mode: str = "build",
+) -> ComposeEnvironment:
     """
     Common setup for render_build_compose and render_run_compose.
 
@@ -594,30 +635,34 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
     env_file_path = Path(env_file) if env_file else None
 
     # Compute config_hash from config-resource.yaml
-    config_resource_path = config_dir / 'config-resource.yaml'
+    config_resource_path = config_dir / "config-resource.yaml"
     if not config_resource_path.exists():
-        raise FileNotFoundError(f'config-resource.yaml not found in config-dir: {config_dir}')
+        raise FileNotFoundError(
+            f"config-resource.yaml not found in config-dir: {config_dir}"
+        )
 
-    with open(config_resource_path, 'rb') as f:
+    with open(config_resource_path, "rb") as f:
         config_content = f.read()
     config_hash = hashlib.sha256(config_content).hexdigest()[:16]
 
     # Create crs_build_dir (used for compose files and other outputs)
     # Note: For run mode, build validation is done via Docker image existence check
     # in render_run_compose() after we have the project/CRS information
-    crs_build_dir = build_dir / 'crs' / config_hash
+    crs_build_dir = build_dir / "crs" / config_hash
     crs_build_dir.mkdir(parents=True, exist_ok=True)
-    if mode == 'build':
-        logging.info(f'Using CRS build directory: {crs_build_dir}')
+    if mode == "build":
+        logging.info(f"Using CRS build directory: {crs_build_dir}")
 
     # Output directory is the crs_build_dir
     output_dir = crs_build_dir
 
     # Verify crs_registry exists
     if not registry_dir_path.exists():
-        raise FileNotFoundError(f'Registry directory does not exist: {registry_dir_path}')
+        raise FileNotFoundError(
+            f"Registry directory does not exist: {registry_dir_path}"
+        )
     oss_crs_registry_path = registry_dir_path
-    logging.info(f'Using crs_registry at: {oss_crs_registry_path}')
+    logging.info(f"Using crs_registry at: {oss_crs_registry_path}")
 
     # Copy env file to output directory as .env if provided
     if env_file_path:
@@ -628,10 +673,10 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
 
     # Load configurations
     config = load_config(config_dir)
-    resource_config = config['resource']
+    resource_config = config["resource"]
 
     # Clone all required CRS repositories and build path mapping
-    crs_configs = resource_config.get('crs', {})
+    crs_configs = resource_config.get("crs", {})
     crs_paths = {}
     crs_pkg_data = {}
     for crs_name in crs_configs.keys():
@@ -651,33 +696,43 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
                 crs_data = {}
 
                 # Extract run_env and build_env from root level
-                crs_data['run_env'] = crs_config_data.get('run_env', {})
-                crs_data['build_env'] = crs_config_data.get('build_env', {})
+                crs_data["run_env"] = crs_config_data.get("run_env", {})
+                crs_data["build_env"] = crs_config_data.get("build_env", {})
 
                 # Extract CRS-specific config (dependencies, volumes, etc.)
                 if crs_name in crs_config_data:
                     crs_specific = crs_config_data[crs_name]
                     if isinstance(crs_specific, dict):
-                        crs_data['dependencies'] = crs_specific.get('dependencies', [])
-                        crs_data['volumes'] = crs_specific.get('volumes', [])
+                        crs_data["dependencies"] = crs_specific.get("dependencies", [])
+                        crs_data["volumes"] = crs_specific.get("volumes", [])
                     else:
-                        crs_data['dependencies'] = []
-                        crs_data['volumes'] = []
+                        crs_data["dependencies"] = []
+                        crs_data["volumes"] = []
                 else:
-                    crs_data['dependencies'] = []
-                    crs_data['volumes'] = []
+                    crs_data["dependencies"] = []
+                    crs_data["volumes"] = []
 
                 crs_pkg_data[crs_name] = crs_data
 
             except yaml.YAMLError as e:
-                logging.warning(f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}")
+                logging.warning(
+                    f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}"
+                )
                 crs_pkg_data[crs_name] = {
-                    'run_env': {}, 'build_env': {}, 'dependencies': [], 'volumes': []
+                    "run_env": {},
+                    "build_env": {},
+                    "dependencies": [],
+                    "volumes": [],
                 }
         else:
-            logging.warning(f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}")
+            logging.warning(
+                f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}"
+            )
             crs_pkg_data[crs_name] = {
-                'run_env': {}, 'build_env': {}, 'dependencies': [], 'volumes': []
+                "run_env": {},
+                "build_env": {},
+                "dependencies": [],
+                "volumes": [],
             }
 
     # Check for .env file in config-dir if no explicit env-file was provided
@@ -704,8 +759,12 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
     )
 
 
-def render_litellm_compose(template_path: Path, config_dir: Path,
-                           config_hash: str, crs_list: List[Dict[str, Any]]) -> str:
+def render_litellm_compose(
+    template_path: Path,
+    config_dir: Path,
+    config_hash: str,
+    crs_list: List[Dict[str, Any]],
+) -> str:
     """Render the compose-litellm.yaml template."""
     if not template_path.exists():
         raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -714,26 +773,34 @@ def render_litellm_compose(template_path: Path, config_dir: Path,
     template = Template(template_content)
 
     rendered = template.render(
-        config_hash=config_hash,
-        config_dir=str(config_dir),
-        crs_list=crs_list
+        config_hash=config_hash, config_dir=str(config_dir), crs_list=crs_list
     )
 
     return rendered
 
 
-def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
-                              template_path: Path, oss_fuzz_path: Path,
-                              build_dir: Path, project: str, config_dir: Path,
-                              engine: str, sanitizer: str, architecture: str,
-                              mode: str, config_hash: str,
-                              fuzzer_command: List[str] = None,
-                              source_path: str = None, harness_source: str = None,
-                              diff_path: str = None,
-                              project_image_prefix: str = 'gcr.io/oss-fuzz',
-                              external_litellm: bool = False,
-                              shared_seed_dir: str = None,
-                              harness_name: str = None) -> str:
+def render_compose_for_worker(
+    worker_name: str,
+    crs_list: List[Dict[str, Any]],
+    template_path: Path,
+    oss_fuzz_path: Path,
+    build_dir: Path,
+    project: str,
+    config_dir: Path,
+    engine: str,
+    sanitizer: str,
+    architecture: str,
+    mode: str,
+    config_hash: str,
+    fuzzer_command: List[str] = None,
+    source_path: str = None,
+    harness_source: str = None,
+    diff_path: str = None,
+    project_image_prefix: str = "gcr.io/oss-fuzz",
+    external_litellm: bool = False,
+    shared_seed_dir: str = None,
+    harness_name: str = None,
+) -> str:
     """Render the compose template for a specific worker."""
     if not template_path.exists():
         raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -750,7 +817,9 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
     # Compute source_tag from source_path if provided
     source_tag = None
     if source_path:
-        source_tag = hashlib.sha256(source_path.encode() + project.encode()).hexdigest()[:12]
+        source_tag = hashlib.sha256(
+            source_path.encode() + project.encode()
+        ).hexdigest()[:12]
 
     # Load .env vars and merge with each CRS's run_env/build_env
     dot_env = get_dot_env_vars(config_dir)
@@ -760,16 +829,16 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
 
     # Merge env vars for each CRS and expand volume variables
     for crs in crs_list:
-        crs_name = crs['name']
-        crs['build_env'] = merge_env_vars(
-            crs.get('build_env', {}), dot_env, crs_name, 'build'
+        crs_name = crs["name"]
+        crs["build_env"] = merge_env_vars(
+            crs.get("build_env", {}), dot_env, crs_name, "build"
         )
-        crs['run_env'] = merge_env_vars(
-            crs.get('run_env', {}), dot_env, crs_name, 'run'
+        crs["run_env"] = merge_env_vars(
+            crs.get("run_env", {}), dot_env, crs_name, "run"
         )
         # Expand ${VAR} in volumes using merged run_env (for vars like HOST_CACHE_DIR)
-        if crs.get('volumes'):
-            crs['volumes'] = expand_volume_vars(crs['volumes'], crs['run_env'])
+        if crs.get("volumes"):
+            crs["volumes"] = expand_volume_vars(crs["volumes"], crs["run_env"])
 
     rendered = template.render(
         crs_list=crs_list,
@@ -794,21 +863,26 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
         diff_path=diff_path,
         parent_image_prefix=project_image_prefix,
         external_litellm=external_litellm,
-        shared_seed_dir=shared_seed_dir
+        shared_seed_dir=shared_seed_dir,
     )
 
     return rendered
 
 
-
-
-
-def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
-                         project: str, engine: str, sanitizer: str,
-                         architecture: str, registry_dir: str,
-                         source_path: str = None, env_file: str = None,
-                         project_image_prefix: str = 'gcr.io/oss-fuzz',
-                         external_litellm: bool = False) -> Tuple[List[str], str, str, List[Dict]]:
+def render_build_compose(
+    config_dir: str,
+    build_dir: str,
+    oss_fuzz_dir: str,
+    project: str,
+    engine: str,
+    sanitizer: str,
+    architecture: str,
+    registry_dir: str,
+    source_path: str = None,
+    env_file: str = None,
+    project_image_prefix: str = "gcr.io/oss-fuzz",
+    external_litellm: bool = False,
+) -> Tuple[List[str], str, str, List[Dict]]:
     """
     Programmatic interface for build mode.
 
@@ -816,7 +890,9 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
       Tuple of (build_profile_names, config_hash, crs_build_dir, crs_list)
     """
     # Common setup
-    env = _setup_compose_environment(config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode='build')
+    env = _setup_compose_environment(
+        config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode="build"
+    )
 
     config_dir = env.config_dir
     build_dir = env.build_dir
@@ -831,7 +907,7 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
     crs_pkg_data = env.crs_pkg_data
 
     # Validate workers exist
-    workers = resource_config.get('workers', {})
+    workers = resource_config.get("workers", {})
     if not workers:
         raise ValueError("No workers defined in config-resource.yaml")
 
@@ -840,7 +916,9 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
     all_build_profiles = []
 
     for worker_name in workers.keys():
-        crs_list = get_crs_for_worker(worker_name, resource_config, crs_paths, crs_pkg_data)
+        crs_list = get_crs_for_worker(
+            worker_name, resource_config, crs_paths, crs_pkg_data
+        )
         if crs_list:
             all_crs_list.extend(crs_list)
             all_build_profiles.extend([f"{crs['name']}_builder" for crs in crs_list])
@@ -851,7 +929,7 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
             template_path=litellm_template_path,
             config_dir=config_dir,
             config_hash=config_hash,
-            crs_list=all_crs_list
+            crs_list=all_crs_list,
         )
         litellm_output_file = output_dir / "compose-litellm.yaml"
         litellm_output_file.write_text(litellm_rendered)
@@ -868,12 +946,12 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         engine=engine,
         sanitizer=sanitizer,
         architecture=architecture,
-        mode='build',
+        mode="build",
         config_hash=config_hash,
         fuzzer_command=None,
         source_path=source_path,
         project_image_prefix=project_image_prefix,
-        external_litellm=external_litellm
+        external_litellm=external_litellm,
     )
 
     output_file = output_dir / "compose-build.yaml"
@@ -882,15 +960,24 @@ def render_build_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
     return all_build_profiles, config_hash, str(crs_build_dir), all_crs_list
 
 
-def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
-                       project: str, engine: str, sanitizer: str,
-                       architecture: str, registry_dir: str,
-                       worker: str, fuzzer_command: List[str],
-                       source_path: str = None, env_file: str = None,
-                       harness_source: str = None,
-                       diff_path: str = None,
-                       external_litellm: bool = False,
-                       shared_seed_dir: str = None) -> Tuple[str, str]:
+def render_run_compose(
+    config_dir: str,
+    build_dir: str,
+    oss_fuzz_dir: str,
+    project: str,
+    engine: str,
+    sanitizer: str,
+    architecture: str,
+    registry_dir: str,
+    worker: str,
+    fuzzer_command: List[str],
+    source_path: str = None,
+    env_file: str = None,
+    harness_source: str = None,
+    diff_path: str = None,
+    external_litellm: bool = False,
+    shared_seed_dir: str = None,
+) -> Tuple[str, str]:
     """
     Programmatic interface for run mode.
 
@@ -901,7 +988,9 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
       Tuple of (config_hash, crs_build_dir)
     """
     # Common setup
-    env = _setup_compose_environment(config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode='run')
+    env = _setup_compose_environment(
+        config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode="run"
+    )
 
     config_dir = env.config_dir
     build_dir = env.build_dir
@@ -916,7 +1005,7 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
     crs_pkg_data = env.crs_pkg_data
 
     # Validate worker exists
-    workers = resource_config.get('workers', {})
+    workers = resource_config.get("workers", {})
     if worker not in workers:
         raise ValueError(f"Worker '{worker}' not found in config-resource.yaml")
 
@@ -930,10 +1019,12 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
     # Compute source_tag if source_path is provided
     source_tag = None
     if source_path:
-        source_tag = hashlib.sha256(source_path.encode() + project.encode()).hexdigest()[:12]
+        source_tag = hashlib.sha256(
+            source_path.encode() + project.encode()
+        ).hexdigest()[:12]
 
     for crs in crs_list:
-        crs_name = crs['name']
+        crs_name = crs["name"]
         builder_image = f"{project}_{crs_name}_builder"
         if source_tag:
             builder_image += f":{source_tag}"
@@ -951,7 +1042,7 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
             template_path=litellm_template_path,
             config_dir=config_dir,
             config_hash=config_hash,
-            crs_list=crs_list
+            crs_list=crs_list,
         )
         litellm_output_file = output_dir / "compose-litellm.yaml"
         litellm_output_file.write_text(litellm_rendered)
@@ -971,7 +1062,7 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         engine=engine,
         sanitizer=sanitizer,
         architecture=architecture,
-        mode='run',
+        mode="run",
         config_hash=config_hash,
         fuzzer_command=fuzzer_command,
         source_path=source_path,
@@ -979,7 +1070,7 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         diff_path=diff_path,
         external_litellm=external_litellm,
         shared_seed_dir=shared_seed_dir,
-        harness_name=harness_name
+        harness_name=harness_name,
     )
 
     output_file = output_dir / f"compose-{worker}.yaml"

@@ -19,4 +19,4 @@ def run_git(args: List[str], **kwargs) -> subprocess.CompletedProcess:
         cmd = f"gitcache git {' '.join(args)}"
         return subprocess.run(cmd, shell=True, check=True, **kwargs)
     else:
-        return subprocess.run(['git'] + args, check=True, **kwargs)
+        return subprocess.run(["git"] + args, check=True, **kwargs)
