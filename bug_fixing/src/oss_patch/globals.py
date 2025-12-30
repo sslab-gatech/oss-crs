@@ -10,7 +10,7 @@ OSS_PATCH_RUNNER_DATA_PATH = OSS_PATCH_BASE_IMAGES_PATH / "oss_patch_runner"
 
 # Runtime paths (not bundled - use current working directory)
 OSS_PATCH_BUILD_CONTEXT_DIR = Path.cwd() / ".build_context"
-OSS_PATCH_WORK_DIR = Path.cwd() / ".oss-patch-work"
+# OSS_PATCH_WORK_DIR = Path.cwd() / ".oss-patch-work"
 
 # Default registry path
 # files(__package__) = "bug_fixing.src.oss_patch" → .parent.parent.parent = oss-crs root

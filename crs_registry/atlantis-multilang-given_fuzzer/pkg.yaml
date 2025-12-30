@@ -1,5 +1,5 @@
-name: crs-multilang-dind
+name: atlantis-multilang-given_fuzzer
 type: bug-finding
 source:
   url: https://github.com/Team-Atlanta/atlantis-multilang-snapshot
-  ref: dind
+  ref: main

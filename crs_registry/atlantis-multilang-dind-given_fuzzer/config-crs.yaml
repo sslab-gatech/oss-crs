@@ -1,0 +1,22 @@
+# Runtime environment variables for CRS
+# These are merged with .env (which can override)
+run_env:
+  CRS_INPUT_GENS: given_fuzzer
+  CRS_CACHE_DIR: /tmp/crs-multilang-dind-cache
+  HOST_CACHE_DIR: /tmp/crs-multilang-dind-cache
+
+atlantis-multilang-dind-given_fuzzer:
+  models: []
+  dependencies:
+    # Uses Docker-in-Docker for complete isolation
+    - dind
+  volumes:
+    # Shared image cache - mount directory with .tar.gz image files
+    # Used by build phase to load CRS images on first build
+    # Prepare with: ./oss-crs-dind/prepare-cache.sh --tarballs
+    # Note: Docker data persists to /artifacts/docker-data/ so subsequent
+    # runs don't need to reload from cache
+    - ${HOST_CACHE_DIR}:/cache/images:ro
+  modes:
+    - full
+    - delta

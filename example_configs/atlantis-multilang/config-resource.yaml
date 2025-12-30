@@ -7,6 +7,6 @@ llm:
   max_budget: 0
 
 crs:
-  crs-multilang:
+  atlantis-multilang:
     workers:
       - local

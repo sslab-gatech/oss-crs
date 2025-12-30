@@ -16,6 +16,7 @@ from bug_fixing.src.oss_patch.functions import (
     get_git_commit_hash,
     get_crs_image_name,
     change_ownership_with_docker,
+    copy_git_repo,
 )
 from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_CRS_SYSTEM_IMAGES,
@@ -44,6 +45,8 @@ def _check_povs(povs_path: Path) -> bool:
 
 
 def _cleanup_dir(target_dir: Path):
+    if not target_dir.exists():
+        return
     for item in target_dir.iterdir():
         if item.is_dir():
             shutil.rmtree(item)
@@ -169,11 +172,11 @@ class OSSPatchCRSRunner:
         proj_src_path = (dst_dir / "proj-src").resolve()
         copied_oss_fuzz_path = (dst_dir / "oss-fuzz").resolve()
 
-        # copy existing CP's source
-        shutil.copytree(source_path, proj_src_path)
+        # copy existing CP's source (use copy_git_repo to handle submodules)
+        copy_git_repo(source_path, proj_src_path)
 
-        # copy the provided OSS-Fuzz source
-        shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path)
+        # copy the provided OSS-Fuzz source (use copy_git_repo to handle submodules)
+        copy_git_repo(oss_fuzz_path, copied_oss_fuzz_path)
 
         # # overwrite the provided project configs
         # shutil.copytree(

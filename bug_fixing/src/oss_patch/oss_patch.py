@@ -4,7 +4,7 @@ from .project_builder import OSSPatchProjectBuilder
 from .crs_runner import OSSPatchCRSRunner
 from .inc_build_checker import IncrementalBuildChecker
 from .inc_build_checker import IncrementalSnapshotMaker
-from .globals import OSS_PATCH_WORK_DIR
+from .globals import DEFAULT_PROJECT_SOURCE_PATH
 from .functions import (
     prepare_docker_cache_builder,
     pull_project_source,
@@ -12,6 +12,7 @@ from .functions import (
     change_ownership_with_docker,
     get_project_rts_config,
     resolve_rts_config,
+    copy_git_repo,
 )
 import logging
 import shutil
@@ -36,18 +37,26 @@ def _copy_oss_fuzz_if_needed(
 
     logger.info(f"Copying OSS-Fuzz from {source_oss_fuzz_dir} to {dest_oss_fuzz_dir}")
     dest_oss_fuzz_dir.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source_oss_fuzz_dir, dest_oss_fuzz_dir)
+    copy_git_repo(source_oss_fuzz_dir, dest_oss_fuzz_dir)
     return True
 
 
 class OSSPatch:
-    def __init__(self, project_name: str, crs_name: str | None = None):
+    def __init__(
+        self,
+        project_name: str,
+        crs_name: str | None = None,
+        work_dir: Path | None = None,
+    ):
         self.crs_name = crs_name
         self.project_name = project_name
-        self.work_dir = OSS_PATCH_WORK_DIR / project_name
 
-        if not OSS_PATCH_WORK_DIR.exists():
-            OSS_PATCH_WORK_DIR.mkdir()
+        # Base work directory (default: cwd/.oss-patch-work)
+        self.base_work_dir = work_dir / ".oss-patch-work" if work_dir else Path.cwd() / ".oss-patch-work"
+        self.work_dir = self.base_work_dir / project_name
+
+        if not self.base_work_dir.exists():
+            self.base_work_dir.mkdir(parents=True)
 
         if not self.work_dir.exists():
             self.work_dir.mkdir(parents=True)
@@ -82,7 +91,7 @@ class OSSPatch:
 
         # Copy oss-fuzz to work directory
         source_oss_fuzz = oss_fuzz_path.resolve()
-        dest_oss_fuzz = OSS_PATCH_WORK_DIR / "oss-fuzz"
+        dest_oss_fuzz = self.base_work_dir / "oss-fuzz"
         if not _copy_oss_fuzz_if_needed(dest_oss_fuzz, source_oss_fuzz, overwrite):
             logger.error("Failed to copy OSS-Fuzz")
             return False

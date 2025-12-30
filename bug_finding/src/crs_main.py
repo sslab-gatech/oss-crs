@@ -26,6 +26,27 @@ logger = logging.getLogger(__name__)
 DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / 'crs_registry'
 
 
+def _fix_build_dir_permissions(build_dir: Path):
+    """Fix permission issues when containers run as root.
+
+    FIXME: Bandaid solution for permission issues when runner executes as root.
+    Changes ownership of build_dir to current user.
+
+    Args:
+        build_dir: Path to build directory
+    """
+    uid = os.getuid()
+    gid = os.getgid()
+    logger.info(f'Changing ownership of {build_dir} to {uid}:{gid}')
+    chown_cmd = [
+        'docker', 'run', '--rm',
+        '-v', f'{build_dir}:/target',
+        'alpine',
+        'chown', '-R', f'{uid}:{gid}', '/target'
+    ]
+    subprocess.run(chown_cmd)
+
+
 def _get_absolute_path(path):
     """Returns absolute path with user expansion."""
     return str(Path(path).expanduser().resolve())
@@ -578,6 +599,7 @@ def build_crs(config_dir: Path, project_name: str, oss_fuzz_dir: Path, build_dir
                           '-p', build_project,
                           '-f', str(compose_file),
                           'down', '--remove-orphans'])
+        _fix_build_dir_permissions(build_dir)
 
     return True
 
@@ -738,17 +760,7 @@ def run_crs(config_dir: Path, project_name: str, fuzzer_name: str, fuzzer_args: 
             litellm_stop_cmd = ['docker', 'compose', '-p', litellm_project,
                                '-f', str(litellm_compose_file), 'stop']
             subprocess.run(litellm_stop_cmd)
-        # FIXME: Bandaid solution for permission issues when runner executes as root
-        uid = os.getuid()
-        gid = os.getgid()
-        logger.info(f'Changing ownership of {build_dir} to {uid}:{gid}')
-        chown_cmd = [
-            'docker', 'run', '--rm',
-            '-v', f'{build_dir}:/target',
-            'alpine',
-            'chown', '-R', f'{uid}:{gid}', '/target'
-        ]
-        subprocess.run(chown_cmd)
+        _fix_build_dir_permissions(build_dir)
 
     def signal_handler(signum, frame):
         """Handle termination signals"""

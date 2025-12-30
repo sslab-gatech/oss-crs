@@ -10,21 +10,24 @@ See infra/crs/__main__.py for the CLI entry point.
 
 import hashlib
 import logging
+import re
 import shutil
 import subprocess
 import sys
-import yaml
 from dataclasses import dataclass
-from pathlib import Path
 from importlib.resources import files
-from typing import Dict, Any, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
+import yaml
 from dotenv import dotenv_values
 from jinja2 import Template
 
 from .utils import run_git
 
 TEMPLATE_DIR = files(__package__).parent / "templates"
+
+logger = logging.getLogger(__name__)
 KEY_PROVISIONER_DIR = files(__package__).parent / "key_provisioner"
 
 # Configure logging (INFO level won't show by default)
@@ -75,6 +78,79 @@ def get_crs_env_vars(config_dir: Path) -> List[str]:
         return []
     env_vars = dotenv_values(str(env_file))
     return sorted([k for k in env_vars.keys() if k.startswith('CRS_')])
+
+
+def get_dot_env_vars(config_dir: Path) -> Dict[str, str]:
+    """Load all environment variables from .env file.
+
+    Args:
+        config_dir: Directory containing the .env file
+
+    Returns:
+        Dictionary of environment variable name -> value
+    """
+    env_file = config_dir / ".env"
+    if not env_file.exists():
+        return {}
+    return dict(dotenv_values(str(env_file)))
+
+
+def merge_env_vars(
+    registry_env: Dict[str, str],
+    dot_env: Dict[str, str],
+    crs_name: str,
+    phase: str
+) -> Dict[str, str]:
+    """Merge registry env vars with .env vars.
+
+    .env wins on conflict, with warning logged.
+
+    Args:
+        registry_env: Environment variables from config-crs.yaml (run_env or build_env)
+        dot_env: Environment variables from .env file
+        crs_name: Name of the CRS (for logging)
+        phase: 'build' or 'run' (for logging)
+
+    Returns:
+        Merged dictionary with .env values taking precedence
+    """
+    merged = dict(registry_env)
+
+    for key, value in dot_env.items():
+        if key in merged and merged[key] != value:
+            logger.warning(
+                f"[{crs_name}] {phase}_env: '{key}' overridden by .env: "
+                f"'{merged[key]}' -> '{value}'"
+            )
+        merged[key] = value
+
+    return merged
+
+
+def expand_volume_vars(volumes: List[str], env_vars: Dict[str, str]) -> List[str]:
+    """Expand ${VAR} in volume strings using env vars.
+
+    Docker Compose uses .env for variable substitution, but we've moved
+    some vars to config-crs.yaml. This function expands those variables
+    before rendering the template.
+
+    Args:
+        volumes: List of volume mount strings (e.g., "${HOST_CACHE_DIR}:/cache:ro")
+        env_vars: Environment variables to use for substitution
+
+    Returns:
+        List of volume strings with variables expanded
+    """
+    expanded = []
+    for vol in volumes:
+        # Match ${VAR} or $VAR patterns
+        def replace_var(match: re.Match) -> str:
+            var_name = match.group(1) or match.group(2)
+            return env_vars.get(var_name, match.group(0))
+
+        expanded_vol = re.sub(r'\$\{(\w+)\}|\$(\w+)', replace_var, vol)
+        expanded.append(expanded_vol)
+    return expanded
 
 
 @dataclass
@@ -178,11 +254,10 @@ def parse_memory_mb(memory_spec: str) -> int:
     memory_spec = memory_spec.strip().upper()
     if memory_spec.endswith('G'):
         return int(memory_spec[:-1]) * 1024
-    elif memory_spec.endswith('M'):
+    if memory_spec.endswith('M'):
         return int(memory_spec[:-1])
-    else:
-        # Assume MB if no unit specified
-        return int(memory_spec)
+    # Assume MB if no unit specified
+    return int(memory_spec)
 
 
 def format_memory(memory_mb: int) -> str:
@@ -197,8 +272,7 @@ def format_memory(memory_mb: int) -> str:
     """
     if memory_mb >= 1024 and memory_mb % 1024 == 0:
         return f"{memory_mb // 1024}G"
-    else:
-        return f"{memory_mb}M"
+    return f"{memory_mb}M"
 
 
 def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) -> Optional[Path]:
@@ -252,7 +326,7 @@ def clone_crs_if_needed(crs_name: str, crs_build_dir: Path, registry_dir: Path) 
         logging.info(f"Using local CRS '{crs_name}' from {local_path_resolved}")
         return local_path_resolved
 
-    elif crs_url:
+    if crs_url:
         if crs_path.exists():
             logging.info(f"CRS '{crs_name}' already exists at {crs_path}")
             return crs_path
@@ -377,12 +451,17 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
         used_memory_mb += crs_memory_mb
 
         # Get dind and host_docker_builder flags from CRS config-crs.yaml dependencies
-        crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
+        crs_pkg = crs_pkg_data.get(crs_name, {})
+        crs_dependencies = crs_pkg.get('dependencies', [])
         crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
         crs_host_docker_builder = 'host_docker_builder' in crs_dependencies if crs_dependencies else False
 
         # Get volumes from CRS config-crs.yaml
-        crs_volumes = crs_pkg_data.get(crs_name, {}).get('volumes', [])
+        crs_volumes = crs_pkg.get('volumes', [])
+
+        # Get run_env and build_env from CRS config-crs.yaml
+        crs_run_env = crs_pkg.get('run_env', {})
+        crs_build_env = crs_pkg.get('build_env', {})
 
         result.append({
             'name': crs_name,
@@ -392,7 +471,9 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
             'suffix': 'runner',
             'dind': crs_dind,
             'host_docker_builder': crs_host_docker_builder,
-            'volumes': crs_volumes
+            'volumes': crs_volumes,
+            'run_env': crs_run_env,
+            'build_env': crs_build_env
         })
 
     # Process auto-divide CRS instances
@@ -439,12 +520,17 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
                 crs_memory = memory_per_crs
 
             # Get dind and host_docker_builder flags from CRS config-crs.yaml dependencies
-            crs_dependencies = crs_pkg_data.get(crs_name, {}).get('dependencies', [])
+            crs_pkg = crs_pkg_data.get(crs_name, {})
+            crs_dependencies = crs_pkg.get('dependencies', [])
             crs_dind = 'dind' in crs_dependencies if crs_dependencies else False
             crs_host_docker_builder = 'host_docker_builder' in crs_dependencies if crs_dependencies else False
 
             # Get volumes from CRS config-crs.yaml
-            crs_volumes = crs_pkg_data.get(crs_name, {}).get('volumes', [])
+            crs_volumes = crs_pkg.get('volumes', [])
+
+            # Get run_env and build_env from CRS config-crs.yaml
+            crs_run_env = crs_pkg.get('run_env', {})
+            crs_build_env = crs_pkg.get('build_env', {})
 
             result.append({
                 'name': crs_name,
@@ -454,7 +540,9 @@ def get_crs_for_worker(worker_name: str, resource_config: Dict[str, Any],
                 'suffix': 'runner',
                 'dind': crs_dind,
                 'host_docker_builder': crs_host_docker_builder,
-                'volumes': crs_volumes
+                'volumes': crs_volumes,
+                'run_env': crs_run_env,
+                'build_env': crs_build_env
             })
 
     return result
@@ -557,24 +645,40 @@ def _setup_compose_environment(config_dir: str, build_dir: str, oss_fuzz_path: s
         if crs_config_yaml_path.exists():
             try:
                 with open(crs_config_yaml_path) as f:
-                    crs_config_data = yaml.safe_load(f)
-                    # Extract dependencies from the CRS-specific config
-                    if crs_config_data and crs_name in crs_config_data:
-                        crs_data = crs_config_data[crs_name]
-                        # Handle both dict and list formats
-                        if isinstance(crs_data, dict):
-                            crs_pkg_data[crs_name] = crs_data
-                        else:
-                            # Empty list or other format - treat as no config
-                            crs_pkg_data[crs_name] = {}
+                    crs_config_data = yaml.safe_load(f) or {}
+
+                # Initialize CRS data
+                crs_data = {}
+
+                # Extract run_env and build_env from root level
+                crs_data['run_env'] = crs_config_data.get('run_env', {})
+                crs_data['build_env'] = crs_config_data.get('build_env', {})
+
+                # Extract CRS-specific config (dependencies, volumes, etc.)
+                if crs_name in crs_config_data:
+                    crs_specific = crs_config_data[crs_name]
+                    if isinstance(crs_specific, dict):
+                        crs_data['dependencies'] = crs_specific.get('dependencies', [])
+                        crs_data['volumes'] = crs_specific.get('volumes', [])
                     else:
-                        crs_pkg_data[crs_name] = {}
+                        crs_data['dependencies'] = []
+                        crs_data['volumes'] = []
+                else:
+                    crs_data['dependencies'] = []
+                    crs_data['volumes'] = []
+
+                crs_pkg_data[crs_name] = crs_data
+
             except yaml.YAMLError as e:
                 logging.warning(f"Failed to parse config-crs.yaml for CRS '{crs_name}': {e}")
-                crs_pkg_data[crs_name] = {}
+                crs_pkg_data[crs_name] = {
+                    'run_env': {}, 'build_env': {}, 'dependencies': [], 'volumes': []
+                }
         else:
             logging.warning(f"config-crs.yaml not found for CRS '{crs_name}' at {crs_config_yaml_path}")
-            crs_pkg_data[crs_name] = {}
+            crs_pkg_data[crs_name] = {
+                'run_env': {}, 'build_env': {}, 'dependencies': [], 'volumes': []
+            }
 
     # Check for .env file in config-dir if no explicit env-file was provided
     if not env_file_path:
@@ -628,7 +732,8 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
                               diff_path: str = None,
                               project_image_prefix: str = 'gcr.io/oss-fuzz',
                               external_litellm: bool = False,
-                              shared_seed_dir: str = None) -> str:
+                              shared_seed_dir: str = None,
+                              harness_name: str = None) -> str:
     """Render the compose template for a specific worker."""
     if not template_path.exists():
         raise FileNotFoundError(f"Template file not found: {template_path}")
@@ -647,8 +752,24 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
     if source_path:
         source_tag = hashlib.sha256(source_path.encode() + project.encode()).hexdigest()[:12]
 
-    # Get CRS_* environment variables from .env
-    crs_env_vars = get_crs_env_vars(config_dir)
+    # Load .env vars and merge with each CRS's run_env/build_env
+    dot_env = get_dot_env_vars(config_dir)
+
+    # Create copies to avoid mutating the original list
+    crs_list = [dict(crs) for crs in crs_list]
+
+    # Merge env vars for each CRS and expand volume variables
+    for crs in crs_list:
+        crs_name = crs['name']
+        crs['build_env'] = merge_env_vars(
+            crs.get('build_env', {}), dot_env, crs_name, 'build'
+        )
+        crs['run_env'] = merge_env_vars(
+            crs.get('run_env', {}), dot_env, crs_name, 'run'
+        )
+        # Expand ${VAR} in volumes using merged run_env (for vars like HOST_CACHE_DIR)
+        if crs.get('volumes'):
+            crs['volumes'] = expand_volume_vars(crs['volumes'], crs['run_env'])
 
     rendered = template.render(
         crs_list=crs_list,
@@ -669,11 +790,11 @@ def render_compose_for_worker(worker_name: str, crs_list: List[Dict[str, Any]],
         source_path=source_path,
         source_tag=source_tag,
         harness_source=harness_source,
+        harness_name=harness_name,
         diff_path=diff_path,
         parent_image_prefix=project_image_prefix,
         external_litellm=external_litellm,
-        shared_seed_dir=shared_seed_dir,
-        crs_env_vars=crs_env_vars
+        shared_seed_dir=shared_seed_dir
     )
 
     return rendered
@@ -835,6 +956,9 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         litellm_output_file = output_dir / "compose-litellm.yaml"
         litellm_output_file.write_text(litellm_rendered)
 
+    # Extract harness_name from fuzzer_command (first element is the fuzzer/harness name)
+    harness_name = fuzzer_command[0] if fuzzer_command else None
+
     # Render compose file
     rendered = render_compose_for_worker(
         worker_name=worker,
@@ -854,7 +978,8 @@ def render_run_compose(config_dir: str, build_dir: str, oss_fuzz_dir: str,
         harness_source=harness_source,
         diff_path=diff_path,
         external_litellm=external_litellm,
-        shared_seed_dir=shared_seed_dir
+        shared_seed_dir=shared_seed_dir,
+        harness_name=harness_name
     )
 
     output_file = output_dir / f"compose-{worker}.yaml"

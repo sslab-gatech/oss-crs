@@ -1,5 +1,12 @@
-crs-multilang-dind:
-  models: []
+# Runtime environment variables for CRS
+# These are merged with .env (which can override)
+run_env:
+  CRS_INPUT_GENS: given_fuzzer,mlla,testlang_input_gen,dict_input_gen,concolic_input_gen
+  CRS_CACHE_DIR: /tmp/crs-multilang-dind-cache
+  HOST_CACHE_DIR: /tmp/crs-multilang-dind-cache
+
+atlantis-multilang-dind:
+  models: null  # Allow all models defined in config-litellm.yaml
   dependencies:
     # Uses Docker-in-Docker for complete isolation
     - dind

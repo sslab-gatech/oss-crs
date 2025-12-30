@@ -62,7 +62,8 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
     args = _parse_args(parser)
 
     if args.command == "build":
-        oss_patch = OSSPatch(args.project, crs_name=args.crs)
+        work_dir = Path(args.work_dir) if args.work_dir else None
+        oss_patch = OSSPatch(args.project, crs_name=args.crs, work_dir=work_dir)
         result = oss_patch.build(
             Path(args.oss_fuzz),
             _get_path_or_none(args.project_path),
@@ -89,7 +90,8 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             )
             return 1
 
-        oss_patch = OSSPatch(args.project, crs_name=args.crs)
+        work_dir = Path(args.work_dir) if args.work_dir else None
+        oss_patch = OSSPatch(args.project, crs_name=args.crs, work_dir=work_dir)
         result = oss_patch.run_crs(
             args.harness,
             Path(args.povs),
@@ -202,6 +204,11 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         action="store_true",
         help="Force rebuild images even if they already exist",
     )
+    build_crs_parser.add_argument(
+        "--work-dir",
+        help="Working directory for oss-patch (default: current directory)",
+        default=None,
+    )
 
     build_crs_parser.set_defaults(clean=False)
 
@@ -229,6 +236,11 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     )
     run_crs_parser.add_argument(
         "--litellm-key", help="The API key for litellm (env: LITELLM_API_KEY)"
+    )
+    run_crs_parser.add_argument(
+        "--work-dir",
+        help="Working directory for oss-patch (default: current directory)",
+        default=None,
     )
 
     run_pov_parser = subparsers.add_parser(

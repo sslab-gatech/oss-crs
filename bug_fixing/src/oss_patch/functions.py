@@ -16,9 +16,40 @@ import shutil
 import logging
 import re
 import yaml
-import git
 
 logger = logging.getLogger()
+
+
+def copy_git_repo(src: Path, dst: Path) -> None:
+    """Copy a git repository, properly handling submodules.
+
+    Git submodules have a .git file (not directory) that points to the parent's
+    .git/modules/ directory. This function copies the repository and converts
+    the submodule pointer to a proper .git directory.
+
+    Args:
+        src: Source repository path
+        dst: Destination path
+    """
+    # First, do a regular copy
+    shutil.copytree(src, dst)
+
+    # Check if .git is a file (submodule pointer) instead of a directory
+    git_path = dst / ".git"
+    if git_path.is_file():
+        # Read the gitdir pointer
+        gitdir_content = git_path.read_text().strip()
+        if gitdir_content.startswith("gitdir: "):
+            gitdir_rel = gitdir_content[len("gitdir: "):]
+            # Resolve relative to the original source location
+            gitdir_abs = (src / gitdir_rel).resolve()
+
+            if gitdir_abs.is_dir():
+                # Remove the pointer file
+                git_path.unlink()
+                # Copy the actual .git directory
+                shutil.copytree(gitdir_abs, git_path)
+                logger.info(f"Converted submodule .git pointer to directory: {dst}")
 
 
 def _docker_volume_exists(volume_name: str) -> bool:
@@ -622,5 +653,19 @@ def resolve_rts_config(
 
 
 def get_git_commit_hash(repository_path: Path) -> str:
-    repo = git.Repo(repository_path)
-    return repo.head.object.hexsha
+    """Get the git commit hash of a repository.
+
+    Uses subprocess with safe.directory config to handle repositories
+    that may have different ownership (e.g., copied repositories).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repository_path), "-c", "safe.directory=*", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to get git commit hash for {repository_path}: {e}")
+        return "unknown"
