@@ -319,7 +319,7 @@ def get_crs_image_name(crs_name: str) -> str:
     return f"gcr.io/oss-patch/{crs_name}"
 
 
-def run_command(command: str, n: int = 5) -> None:
+def run_command(command: str, n: int = 5, log_file: Path | None = None) -> None:
     """
     Executes a command and dynamically updates the terminal to show
     only the last N lines of output in real-time.
@@ -327,6 +327,7 @@ def run_command(command: str, n: int = 5) -> None:
     Args:
         command (str): The command string to execute.
         n (int): The number of recent lines to keep and display. Defaults to 5.
+        log_file (Path | None): Optional path to log file to append output.
 
     Raises:
         subprocess.CalledProcessError: If the command exits with a non-zero status.
@@ -337,6 +338,9 @@ def run_command(command: str, n: int = 5) -> None:
         0  # Tracks how many lines we previously printed to manage cursor
     )
     first_output = True  # Flag to track if this is the first output
+
+    # Open log file if provided
+    log_handle = open(log_file, "a") if log_file else None
 
     # Get terminal width for calculating wrapped lines
     terminal_width = shutil.get_terminal_size(fallback=(80, 24)).columns
@@ -384,6 +388,11 @@ def run_command(command: str, n: int = 5) -> None:
         if process.stdout:
             for line in iter(process.stdout.readline, ""):
                 clean_line = line.strip()
+                # Log every line to file (including empty lines for completeness)
+                if log_handle:
+                    log_handle.write(line)
+                    log_handle.flush()
+
                 if clean_line:
                     # 1. Update the rolling buffer
                     recent_lines_buffer.append(clean_line)
@@ -439,6 +448,10 @@ def run_command(command: str, n: int = 5) -> None:
         print(f"An unexpected error occurred: {e}")
         raise
 
+    finally:
+        if log_handle:
+            log_handle.close()
+
 
 def _build_docker_cache_builder_image() -> bool:
     try:
@@ -466,13 +479,23 @@ def prepare_docker_cache_builder() -> bool:
 
 
 def extract_sanitizer_report(full_log: str) -> str | None:
-    match = re.search(r"==\d+==", full_log)
+    # Detect ASAN (==123==) or UBSAN (runtime error:)
+    match = re.search(r"(==\d+==|runtime error:)", full_log)
 
     if match is None:
         # fail-safe: return the full crash log as it is.
         return None
 
-    return full_log[match.start() :]
+    start_idx = match.start()
+    # For UBSan runtime errors, we try to include the file path at the beginning of the line
+    if "runtime error:" in match.group():
+        line_start = full_log.rfind('\n', 0, start_idx)
+        if line_start != -1:
+            start_idx = line_start + 1
+        else:
+            start_idx = 0
+
+    return full_log[start_idx:]
 
 
 def extract_java_exception_report(full_log: str) -> str | None:
@@ -482,6 +505,151 @@ def extract_java_exception_report(full_log: str) -> str | None:
         return None
 
     return full_log[match.start() :]
+
+
+def get_cpv_config(project_path: Path, harness_name: str, cpv_name: str) -> dict | None:
+    config_path = project_path / ".aixcc" / "config.yaml"
+
+    if not config_path.exists():
+        logger.warning(f"Config file not found: {config_path}")
+        return None
+
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        logger.warning(f"Failed to parse config.yaml: {e}")
+        return None
+
+    if not config or "harness_files" not in config:
+        return None
+
+    for harness in config.get("harness_files", []):
+        if harness.get("name") != harness_name:
+            continue
+
+        cpvs = harness.get("cpvs", [])
+        for cpv in cpvs:
+            if cpv.get("name") == cpv_name:
+                return {
+                    "sanitizer": cpv.get("sanitizer", "address"),
+                    "error_token": cpv.get("error_token"),
+                }
+
+        # Harness found but no matching CPV - return None
+        return None
+
+    return None
+
+
+# Valid RTS modes per language
+VALID_RTS_MODES = {
+    "jvm": ["jcgeks", "openclover", "ekstazi", "none"],
+    "c": ["binaryrts", "none"],
+    "c++": ["binaryrts", "none"],
+}
+
+# Default RTS mode per language (when --with-rts is specified)
+DEFAULT_RTS_MODE = {
+    "jvm": "jcgeks",
+    "c": "binaryrts",
+    "c++": "binaryrts",
+}
+
+
+class RTSConfigError(Exception):
+    """Raised when RTS configuration is invalid."""
+    pass
+
+
+def get_project_rts_config(project_path: Path) -> dict:
+    """Get RTS and incremental build configuration from project.yaml.
+
+    Args:
+        project_path: Path to the project directory containing project.yaml
+
+    Returns:
+        dict with keys:
+            - 'inc_build': bool (default: True)
+            - 'rts_mode': str | None (value from project.yaml or None if not specified)
+            - 'language': str (jvm, c, c++)
+    """
+    project_yaml_path = project_path / "project.yaml"
+
+    if not project_yaml_path.exists():
+        logger.warning(f"project.yaml not found: {project_yaml_path}")
+        return {
+            "inc_build": True,
+            "rts_mode": None,
+            "language": "c",  # default
+        }
+
+    with open(project_yaml_path, "r") as f:
+        yaml_data = yaml.safe_load(f)
+
+    language = yaml_data.get("language", "c")
+    inc_build = yaml_data.get("inc_build", True)
+    rts_mode = yaml_data.get("rts_mode", None)
+
+    return {
+        "inc_build": inc_build,
+        "rts_mode": rts_mode,
+        "language": language,
+    }
+
+
+def resolve_rts_config(
+    cli_with_rts: bool,
+    cli_rts_tool: str | None,
+    project_config: dict
+) -> tuple[bool, str]:
+    """Resolve final inc_build and rts_mode values.
+
+    Priority:
+    1. CLI --rts-tool explicit value (overrides everything)
+    2. project.yaml rts_mode value
+    3. Default based on --with-rts flag and language
+
+    Args:
+        cli_with_rts: --with-rts flag from CLI
+        cli_rts_tool: --rts-tool value from CLI (None if not explicitly provided)
+        project_config: dict from get_project_rts_config()
+
+    Returns:
+        tuple of (inc_build_enabled, rts_mode)
+
+    Raises:
+        RTSConfigError: if rts_mode is invalid for the project language
+    """
+    inc_build = project_config.get("inc_build", True)
+    language = project_config.get("language", "c")
+    yaml_rts_mode = project_config.get("rts_mode")
+
+    # Determine effective rts_mode
+    if cli_rts_tool is not None:
+        # CLI override takes precedence
+        effective_rts_mode = cli_rts_tool
+    elif yaml_rts_mode is not None:
+        # Use project.yaml setting
+        effective_rts_mode = yaml_rts_mode
+    elif cli_with_rts:
+        # Default based on language when --with-rts is specified
+        effective_rts_mode = DEFAULT_RTS_MODE.get(language, "none")
+    else:
+        # No RTS
+        effective_rts_mode = "none"
+
+    # Validate rts_mode against language
+    valid_modes = VALID_RTS_MODES.get(language, ["none"])
+    if effective_rts_mode not in valid_modes:
+        raise RTSConfigError(
+            f"Invalid rts_mode '{effective_rts_mode}' for language '{language}'. "
+            f"Valid modes: {valid_modes}"
+        )
+
+    logger.info(f"Resolved config: inc_build={inc_build}, rts_mode={effective_rts_mode}, language={language}")
+
+    return (inc_build, effective_rts_mode)
 
 
 def get_git_commit_hash(repository_path: Path) -> str:

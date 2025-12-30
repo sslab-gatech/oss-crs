@@ -3,12 +3,15 @@ from .crs_builder import OSSPatchCRSBuilder
 from .project_builder import OSSPatchProjectBuilder
 from .crs_runner import OSSPatchCRSRunner
 from .inc_build_checker import IncrementalBuildChecker
+from .inc_build_checker import IncrementalSnapshotMaker
 from .globals import DEFAULT_PROJECT_SOURCE_PATH
 from .functions import (
     prepare_docker_cache_builder,
     pull_project_source,
     is_git_repository,
     change_ownership_with_docker,
+    get_project_rts_config,
+    resolve_rts_config,
     copy_git_repo,
 )
 import logging
@@ -118,7 +121,7 @@ class OSSPatch:
             project_path = oss_fuzz_path / "projects" / self.project_name
 
         if not source_path:
-            source_path = DEFAULT_PROJECT_SOURCE_PATH
+            source_path = self.work_dir / "project-src"
 
             if source_path.exists():
                 change_ownership_with_docker(source_path)
@@ -182,9 +185,101 @@ class OSSPatch:
     #     return oss_patch_runner.run_pov(harness_name, pov_path)
 
     # Testing purpose function
-    def test_inc_build(self, oss_fuzz_path: Path) -> bool:
+    def test_inc_build(
+        self,
+        oss_fuzz_path: Path,
+        with_rts: bool = False,
+        rts_tool: str | None = None,
+        source_path: Path | None = None,
+        log_file: Path | None = None,
+        skip_clone: bool = False,
+        skip_baseline: bool = False,
+        skip_snapshot: bool = False,
+    ) -> bool:
         oss_fuzz_path = oss_fuzz_path.resolve()
+        if source_path:
+            source_path = source_path.resolve()
 
-        return IncrementalBuildChecker(
-            oss_fuzz_path, self.project_name, self.work_dir
-        ).test()
+        project_path = oss_fuzz_path / "projects" / self.project_name
+
+        # Load project configuration from project.yaml
+        project_config = get_project_rts_config(project_path)
+        logger.info(f"Project config from project.yaml: {project_config}")
+
+        # Resolve final configuration (CLI overrides project.yaml)
+        inc_build_enabled, effective_rts_mode = resolve_rts_config(
+            with_rts, rts_tool, project_config
+        )
+
+        logger.info(f"Final config: inc_build={inc_build_enabled}, rts_mode={effective_rts_mode}")
+
+        # Create the checker
+        checker = IncrementalBuildChecker(
+            oss_fuzz_path, self.project_name, self.work_dir, log_file=log_file
+        )
+
+        # Choose workflow based on configuration
+        if not inc_build_enabled:
+            # Workflow A: No incremental build
+            logger.warning(
+                "Incremental build is DISABLED for this project (inc_build=false in project.yaml). "
+                "Running baseline-only workflow without creating snapshots."
+            )
+            return checker.test_without_inc_build(skip_clone=skip_clone)
+        else:
+            # Workflow B or C: Incremental build enabled
+            effective_with_rts = effective_rts_mode != "none"
+
+            if effective_with_rts:
+                logger.info(f"Running incremental build + RTS workflow (rts_mode={effective_rts_mode})")
+            else:
+                logger.info("Running incremental build workflow (rts_mode=none)")
+
+            return checker.test(
+                with_rts=effective_with_rts,
+                rts_tool=effective_rts_mode if effective_with_rts else "jcgeks",
+                skip_clone=skip_clone,
+                skip_baseline=skip_baseline,
+                skip_snapshot=skip_snapshot
+            )
+
+    def make_inc_snapshot(
+        self,
+        oss_fuzz_path: Path,
+        with_rts: bool = False,
+        rts_tool: str = "jcgeks",
+        push: bool = False,
+        force_rebuild: bool = True,
+        source_path: Path | None = None,
+        log_file: Path | None = None,
+        skip_clone: bool = False,
+    ) -> bool:
+        """Create incremental build snapshot and optionally push to registry.
+
+        This assumes test-inc-build has already been run successfully.
+
+        Args:
+            oss_fuzz_path: Path to OSS-Fuzz repository
+            with_rts: Enable RTS in snapshot
+            rts_tool: RTS tool to use (ekstazi, jcgeks, openclover)
+            push: Whether to push snapshot to Docker registry
+            force_rebuild: Force rebuild even if image exists (default: True)
+            source_path: Path to source code (optional)
+            log_file: Path to log file (optional)
+            skip_clone: Skip source code cloning
+        """
+        oss_fuzz_path = oss_fuzz_path.resolve()
+        if source_path:
+            source_path = source_path.resolve()
+
+        maker = IncrementalSnapshotMaker(
+            oss_fuzz_path, self.project_name, self.work_dir, log_file=log_file
+        )
+
+        return maker.make_snapshot(
+            with_rts=with_rts,
+            rts_tool=rts_tool,
+            push=push,
+            force_rebuild=force_rebuild,
+            skip_clone=skip_clone,
+        )

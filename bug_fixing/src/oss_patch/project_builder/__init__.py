@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import re
 import os
+import sys
 from contextlib import contextmanager
 
 from bug_fixing.src.oss_patch.functions import (
@@ -31,20 +32,22 @@ WORKDIR_REGEX = re.compile(r"\s*WORKDIR\s*([^\s]+)")
 
 PATCH_SNIPPET_FOR_COMPILE = """
 #################### OSS-PATCH: script for patched run ####################
-# `/built-src/{proj-src}` to `/src/{proj-src}`
-export MOUNTED_SRC_DIR=$(echo $PWD | sed 's/built-src/src/')
-pushd $MOUNTED_SRC_DIR 
+if [[ "$PWD" == *"built-src"* ]]; then
+    # `/built-src/{proj-src}` to `/src/{proj-src}`
+    export MOUNTED_SRC_DIR=$(echo $PWD | sed 's/built-src/src/')
+    pushd $MOUNTED_SRC_DIR 
 
-# Now in /src/{proj-src}
-git config --global --add safe.directory $MOUNTED_SRC_DIR 
-git diff HEAD > /tmp/patch.diff
+    # Now in /src/{proj-src}
+    git config --global --add safe.directory $MOUNTED_SRC_DIR 
+    git diff HEAD > /tmp/patch.diff
 
-popd
-# Now returned to `/built-src/{proj-src}`
-if [ -s /tmp/patch.diff ]; then
-    git apply /tmp/patch.diff
-else
-    echo "No patch file found at /tmp/patch.diff or it is empty. Skipping git apply."
+    popd
+    # Now returned to `/built-src/{proj-src}`
+    if [ -s /tmp/patch.diff ]; then
+        git apply /tmp/patch.diff
+    else
+        echo "No patch file found at /tmp/patch.diff or it is empty. Skipping git apply."
+    fi
 fi
 #################### OSS-PATCH: script for patched run ####################
 """
@@ -139,6 +142,32 @@ def _workdir_from_dockerfile(project_path: Path, proj_name: str):
     return _workdir_from_lines(lines, default=os.path.join("/src", proj_name))
 
 
+def _run_subprocess_with_logging(
+    cmd: str | list,
+    log_file: Path | None = None,
+    shell: bool = True,
+    **kwargs
+) -> subprocess.CompletedProcess:
+    """Run subprocess, streaming output to both terminal and log file."""
+    logger.info(f"Running command: {cmd}")
+    if log_file:
+        output_lines = []
+        with open(log_file, "a") as f:
+            proc = subprocess.Popen(
+                cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs
+            )
+            for line in iter(proc.stdout.readline, b""):
+                decoded = line.decode(errors="replace")
+                sys.stdout.write(decoded)
+                sys.stdout.flush()
+                f.write(decoded)
+                output_lines.append(line)
+            proc.wait()
+            return subprocess.CompletedProcess(cmd, proc.returncode, b"".join(output_lines), b"")
+    else:
+        return subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
+
+
 class OSSPatchProjectBuilder:
     def __init__(
         self,
@@ -146,12 +175,14 @@ class OSSPatchProjectBuilder:
         project_name: str,
         oss_fuzz_path: Path,
         project_path: Path,
+        log_file: Path | None = None,
         force_rebuild: bool = False,
     ):
         self.work_dir = work_dir
         self.project_name = project_name
         self.oss_fuzz_path = oss_fuzz_path.resolve()
         self.project_path = project_path
+        self.log_file = log_file
         self.force_rebuild = force_rebuild
 
         assert self.project_path.exists()
@@ -161,7 +192,12 @@ class OSSPatchProjectBuilder:
             self.project_path / "project.yaml"
         )
 
-    def build(self, source_path: Path, inc_build_enabled: bool = True) -> bool:
+    def build(
+        self,
+        source_path: Path,
+        inc_build_enabled: bool = True,
+        rts_enabled: bool = False,
+    ) -> bool:
         if not self._validate_arguments():
             return False
 
@@ -169,7 +205,7 @@ class OSSPatchProjectBuilder:
             return False
 
         if inc_build_enabled:
-            if not self.take_incremental_build_snapshot(source_path):
+            if not self.take_incremental_build_snapshot(source_path, rts_enabled):
                 return False
 
         return True
@@ -177,25 +213,69 @@ class OSSPatchProjectBuilder:
     def build_fuzzers(
         self,
         source_path: Path | None = None,
+        use_inc_image: bool = False,
+        sanitizer: str = "address",
     ) -> tuple[bytes, bytes] | None:
         # logger.info(f'Execute `build_fuzzers` command for "{self.project_name}"')
 
-        if source_path:
-            command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers {self.project_name} {source_path}"
-        else:
-            command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers {self.project_name}"
+        command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_fuzzers --sanitizer {sanitizer} {self.project_name}"
 
-        proc = subprocess.run(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        if source_path:
+            command += f" {source_path}"
+
+        if use_inc_image:
+            command += f" --docker_image_tag inc-{sanitizer} --no-build-image"
+
+        proc = _run_subprocess_with_logging(command, log_file=self.log_file)
 
         if proc.returncode == 0:
             return None
 
         return (proc.stdout, proc.stderr)
+
+    def run_tests(
+        self,
+        source_path: Path | None = None,
+        rts_enabled: bool = False,
+        log_file: Path | None = None,
+        use_inc_image: bool = False,
+        sanitizer: str = "address",
+    ) -> tuple[bytes, bytes] | None:
+        """Run tests for the project using oss-fuzz helper.py run_test.
+
+        Args:
+            source_path: Path to the project source (optional, mounts local source if provided)
+            rts_enabled: Whether to enable RTS optimizations (uses RTS tool configured in image)
+            log_file: Optional path to save test-specific log (separate from main log)
+            use_inc_image: Whether to use incremental build image (:inc tag)
+
+        Returns:
+            None if successful, (stdout, stderr) tuple if failed
+        """
+        # Build command: python3 infra/helper.py run_test PROJECT [SOURCE_PATH] [--rts]
+        command = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} run_test {self.project_name}"
+
+        if source_path:
+            command += f" {source_path}"
+
+        if rts_enabled:
+            command += " --rts"
+
+        if use_inc_image:
+            command += f" --docker_image_tag inc-{sanitizer}"
+
+        proc = _run_subprocess_with_logging(command, log_file=self.log_file)
+
+        # Save test-specific log file if specified (for RTS analysis)
+        if log_file:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_file, "wb") as f:
+                f.write(proc.stdout if proc.stdout else b"")
+
+        if proc.returncode == 0:
+            return None
+
+        return (proc.stdout if proc.stdout else b"", proc.stderr if proc.stderr else b"")
 
     def remove_builder_image(
         self, volume_name: str = OSS_PATCH_DOCKER_IMAGES_FOR_CRS
@@ -270,7 +350,7 @@ class OSSPatchProjectBuilder:
         #     f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} {pull_cmd}"
         # )
 
-        run_command(pull_cmd)
+        run_command(pull_cmd, log_file=self.log_file)
 
         if not docker_image_exists(base_runner_image_name):
             logger.error(
@@ -304,7 +384,7 @@ class OSSPatchProjectBuilder:
 
         oss_fuzz_image_build_cmd = f"python3 {self.oss_fuzz_path / 'infra/helper.py'} build_image --no-pull {self.project_name}"
 
-        run_command(oss_fuzz_image_build_cmd)
+        run_command(oss_fuzz_image_build_cmd, log_file=self.log_file)
 
         if not docker_image_exists(builder_image_name):
             logger.error(f'"{builder_image_name}" does not exist in the docker daemon.')
@@ -331,32 +411,43 @@ class OSSPatchProjectBuilder:
             logger.error(f'The image "{image_name}" does not exist in docker daemon')
             return False
 
-        command = f"docker run --rm {get_builder_image_name(self.oss_fuzz_path, self.project_name)} stat /usr/local/bin/replay_build.sh"
+        # command = f"docker run --rm {get_builder_image_name(self.oss_fuzz_path, self.project_name)} stat /usr/local/bin/replay_build.sh"
+        command = f"docker run --rm {get_builder_image_name(self.oss_fuzz_path, self.project_name)} pwd"
 
         # subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
 
         proc = subprocess.run(
-            command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True
+            command, capture_output=True, shell=True
         )
+        # proc = subprocess.run(
+        #     command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True
+        # )
 
-        if proc.returncode == 0:
+        if proc.stdout.decode().startswith("/built-src"):
             return True
         else:
             return False
 
-    def _take_incremental_build_snapshot_for_c(self, source_path: Path) -> bool:
+        # if proc.returncode == 0:
+        #     return True
+        # else:
+        #     return False
+
+    def _take_incremental_build_snapshot_for_c(
+            self, source_path: Path, rts_enabled: bool = False, sanitizer: str = "address"
+    ) -> bool:
         # if not self._detect_incremental_build(volume_name):
         #     logger.info(
         #         "`replay_build.sh` not detected, incremental build feature disabled."
         #     )
         #     return False
         project_path = self.oss_fuzz_path / "projects" / self.project_name
-        sanitizer = "address"
 
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
         )
 
+        old_workdir = _workdir_from_dockerfile(project_path, self.project_name)
         if self._detect_incremental_build(builder_image_name):
             logger.info(
                 f'Builder image "{builder_image_name}" is already a snapshot image for incremental build'
@@ -364,10 +455,53 @@ class OSSPatchProjectBuilder:
             return True
 
         new_src_dir = "/built-src"
-        new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir
-        )
+        new_workdir = old_workdir.replace("/src", new_src_dir, 1)
+        test_src_dir = "/test-src"
+        test_workdir = old_workdir.replace("/src", test_src_dir, 1)
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
+
+        # test.sh is required
+        test_sh_path = self.project_path / "test.sh"
+        assert test_sh_path.exists(), f"test.sh not found: {test_sh_path}"
+
+        # Build container command
+        base_cmd = (
+            f"export PATH=/ccache/bin:\\$PATH && "
+            f"pushd \\$SRC && rm -rf {old_workdir} && cp -r /local-source-mount {old_workdir} && popd && "
+            f"rsync -av \\$SRC/ {new_src_dir} && "
+            f"export SRC={new_src_dir} && "
+            f"cd {new_workdir} && "
+            f"chmod +x /usr/local/bin/compile && "
+            f"compile && "
+            f"cp -n /usr/local/bin/replay_build.sh \\$SRC/"
+        )
+
+        patch_apply_sh_path = OSS_PATCH_RUNNER_DATA_PATH / "patch_apply.sh"
+
+        # Run test.sh after compile to preserve test build artifacts
+        patch_apply_test_cmd = f"bash /patch_apply.sh && pushd {test_workdir} && SRC=/test-src bash {new_src_dir}/test.sh && popd"
+        if rts_enabled:
+            # Add RTS initialization after compile
+            # rts_init_c.py is mounted to root (/), test.sh is expected to be in $SRC/
+            rts_cmd = (
+                f" && python3 /rts_init_c.py {new_workdir} || :; {patch_apply_test_cmd}"
+            )
+            container_cmd = base_cmd + rts_cmd
+        else:
+            container_cmd = base_cmd + f" && {patch_apply_test_cmd}"
+        logger.info("Will run test.sh after compile to preserve build artifacts")
+
+        # Build volume mounts (test.sh mounted to $SRC/test.sh)
+        volume_mounts = (
+            f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
+            f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
+            f"-v={source_path}:/local-source-mount "
+            f"-v={test_sh_path}:/src/test.sh:ro "
+            f"-v={patch_apply_sh_path}:/patch_apply.sh:ro "
+        )
+        if rts_enabled:
+            rts_init_path = OSS_PATCH_RUNNER_DATA_PATH / "rts_init_c.py"
+            volume_mounts += f"-v={rts_init_path}:/rts_init_c.py:ro "
 
         try:
             create_container_command = (
@@ -375,13 +509,11 @@ class OSSPatchProjectBuilder:
                 f"--env=SANITIZER={sanitizer} "
                 f"--env=CCACHE_DIR=/workspace/ccache "
                 f"--env=FUZZING_LANGUAGE={self.project_lang} "
-                f"--env=CAPTURE_REPLAY_SCRIPT=1 "
+                # f"--env=CAPTURE_REPLAY_SCRIPT=1 "
                 f"--name={container_name} "
-                f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
-                f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
-                f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
+                f"{volume_mounts}"
                 f"{builder_image_name} "
-                f'/bin/bash -c "export PATH=/ccache/bin:\\$PATH && rsync -av \\$SRC/ {new_src_dir} && export SRC={new_src_dir} && cd {new_workdir} && chmod +x /usr/local/bin/compile && compile && cp -n /usr/local/bin/replay_build.sh \\$SRC/"'
+                f'/bin/bash -c "{container_cmd}"'
             )
 
             proc = subprocess.run(
@@ -433,24 +565,30 @@ class OSSPatchProjectBuilder:
                     logger.error("Installing patched compile script has failed")
                     return False
 
-            proc = subprocess.run(
+            proc = _run_subprocess_with_logging(
                 f"docker start -a {container_name}",
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                log_file=self.log_file,
             )
             if proc.returncode != 0:
                 logger.error("docker start command has failed")
                 return False
 
-            commit_command = (
-                f"docker container commit "
+            # Build commit command with environment variables
+            env_options = (
                 f'-c "ENV REPLAY_ENABLED=1" '
                 f'-c "ENV CAPTURE_REPLAY_SCRIPT=" '
                 f'-c "ENV SRC={new_src_dir}" '
+            )
+            if rts_enabled:
+                env_options += f'-c "ENV RTS_ON=1" '
+
+            # Commit with :inc-{sanitizer} tag to distinguish from original image
+            commit_command = (
+                f"docker container commit "
+                f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
-                f"{container_name} {builder_image_name}"
+                f"{container_name} {builder_image_name}:inc-{sanitizer}"
             )
 
             proc = subprocess.run(
@@ -469,42 +607,103 @@ class OSSPatchProjectBuilder:
 
         finally:
             subprocess.run(
-                "docker stop $(docker ps -a -q)",
+                f"docker stop {container_name}",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             subprocess.run(
-                "docker rm $(docker ps -a -q)",
+                f"docker rm {container_name}",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
 
-    def _take_incremental_build_snapshot_for_java(self, source_path: Path) -> bool:
+    def _take_incremental_build_snapshot_for_java(
+        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks", sanitizer: str = "address"
+    ) -> bool:
         project_path = self.oss_fuzz_path / "projects" / self.project_name
-        sanitizer = "address"
 
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
         )
+
+        old_workdir = _workdir_from_dockerfile(project_path, self.project_name)
         new_src_dir = "/built-src"
-        new_workdir = _workdir_from_dockerfile(project_path, self.project_name).replace(
-            "/src", new_src_dir
-        )
+        new_workdir = old_workdir.replace("/src", new_src_dir, 1)
+        test_src_dir = "/test-src"
+        test_workdir = old_workdir.replace("/src", test_src_dir, 1)
         container_name = f"{self.project_name.split('/')[-1]}-origin-{sanitizer}"
 
+        extension_path = OSS_PATCH_RUNNER_DATA_PATH / "extensions.xml"
+
+        # test.sh is required
+        test_sh_path = self.project_path / "test.sh"
+        assert test_sh_path.exists(), f"test.sh not found: {test_sh_path}"
+
+        # Build the container command
+        base_cmd = (
+            f"pushd \\$SRC && rm -rf {old_workdir} && cp -r /local-source-mount {old_workdir} && popd && "
+            f"rsync -av \\$SRC/ {new_src_dir} && "
+            f"export SRC={new_src_dir} && "
+            f"cd {new_workdir} && "
+            f"mkdir -p .mvn && "
+            f"cp /tmp/extensions.xml .mvn/extensions.xml && "
+            f"chmod +x /usr/local/bin/compile && "
+            f"compile"
+        )
+
+        patch_apply_sh_path = OSS_PATCH_RUNNER_DATA_PATH / "patch_apply.sh"
+
+        # Run test.sh after compile to preserve test build artifacts
+        patch_apply_test_cmd = f"bash /patch_apply.sh && pushd {test_workdir} && SRC=/test-src bash {new_src_dir}/test.sh && popd"
+        if rts_enabled:
+            # Add RTS initialization after compile
+            # rts_init_jvm.py and rts_config_jvm.py are copied to root (/)
+            # test.sh is expected to be in $SRC/
+            rts_cmd = (
+                f" && python3 /rts_init_jvm.py {old_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
+            )
+            container_cmd = base_cmd + rts_cmd
+        else:
+            container_cmd = base_cmd + f" && {patch_apply_test_cmd}"
+
+        # Validate RTS files early if enabled
+        if rts_enabled:
+            rts_init_path = OSS_PATCH_RUNNER_DATA_PATH / "rts_init_jvm.py"
+            rts_config_path = OSS_PATCH_RUNNER_DATA_PATH / "rts_config_jvm.py"
+
         try:
-            create_container_command = (
-                f"docker create --privileged --network=host "
-                f"--env=SANITIZER={sanitizer} "
-                f"--env=FUZZING_LANGUAGE={self.project_lang} "
-                f"--name={container_name} "
+            # Build volume mounts
+            # - rts_init_jvm.py: mount (only needed during snapshot, not in final image)
+            # - rts_config_jvm.py: docker cp (must be in final image for later test runs)
+            # - test.sh: mount (only needed during snapshot)
+            volume_mounts = (
                 f"-v={self.oss_fuzz_path}/ccaches/{self.project_name}/ccache:/workspace/ccache "
                 f"-v={self.oss_fuzz_path}/build/out/{self.project_name}/:/out/ "
-                f"-v={source_path}:{_workdir_from_dockerfile(project_path, self.project_name)} "
+                f"-v={source_path}:/local-source-mount "
+                f"-v={test_sh_path}:/src/test.sh:ro "
+                f"-v={self.oss_fuzz_path}/build/tmp/{self.project_name}/:/tmp/ "
+                f"-v={extension_path}:/tmp/extensions.xml:ro "
+                f"-v={patch_apply_sh_path}:/patch_apply.sh:ro "
+            )
+            if rts_enabled:
+                volume_mounts += f"-v={rts_init_path}:/rts_init_jvm.py:ro "
+
+            env_options = (
+                f"--env=SANITIZER={sanitizer} "
+                f"--env=FUZZING_LANGUAGE={self.project_lang} "
+            )
+            if rts_enabled:
+                env_options += f"--env=RTS_ON=1 --env=RTS_TOOL={rts_tool} "
+
+            create_container_command = (
+                f"docker create --privileged --net=host "
+                f"{env_options}"
+                f"--name={container_name} "
+                f"{volume_mounts}"
                 f"{builder_image_name} "
-                f'/bin/bash -c "rsync -av \\$SRC/ {new_src_dir} && export SRC={new_src_dir} && cd {new_workdir} && chmod +x /usr/local/bin/compile && compile"'
+                f'/bin/bash -c "{container_cmd}"'
             )
 
             proc = subprocess.run(
@@ -536,22 +735,42 @@ class OSSPatchProjectBuilder:
                     logger.error("Installing patched compile script has failed")
                     return False
 
-            proc = subprocess.run(
+            # Copy rts_config_jvm.py via docker cp before starting container (must be in final image)
+            if rts_enabled:
+                proc = subprocess.run(
+                    f"docker cp {rts_config_path} {container_name}:/rts_config_jvm.py",
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if proc.returncode != 0:
+                    logger.error("Installing rts_config_jvm.py has failed")
+                    return False
+
+            proc = _run_subprocess_with_logging(
                 f"docker start -a {container_name}",
-                shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                log_file=self.log_file,
             )
             if proc.returncode != 0:
                 logger.error("docker start command has failed")
                 return False
 
+            if rts_enabled:
+                logger.info("RTS initialization completed successfully")
+
+            # Build commit command with environment variables
+            env_options = f'-c "ENV SRC={new_src_dir}" '
+            if rts_enabled:
+                env_options += f'-c "ENV RTS_ON=1" '
+                env_options += f'-c "ENV RTS_TOOL={rts_tool}" '
+
+            # Commit with :inc-{sanitizer} tag to distinguish from original image
             commit_command = (
                 f"docker container commit "
-                f'-c "ENV SRC={new_src_dir}" '
+                f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
-                f"{container_name} {builder_image_name}"
+                f"{container_name} {builder_image_name}:inc-{sanitizer}"
             )
 
             proc = subprocess.run(
@@ -570,21 +789,22 @@ class OSSPatchProjectBuilder:
 
         finally:
             subprocess.run(
-                "docker stop $(docker ps -a -q)",
+                f"docker stop {container_name}",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
             subprocess.run(
-                "docker rm $(docker ps -a -q)",
+                f"docker rm {container_name}",
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
 
-    def take_incremental_build_snapshot(self, source_path: Path) -> bool:
-        logger.info("Taking a snapshot for incremental build...")
-
+    def take_incremental_build_snapshot(
+        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks", sanitizer: str = "address"
+    ) -> bool:
+        logger.info(f"Taking a snapshot for incremental build (sanitizer={sanitizer})...")
         assert self.oss_fuzz_path.exists()
         assert self.project_path
 
@@ -603,9 +823,13 @@ class OSSPatchProjectBuilder:
             return False
 
         if self.project_lang in ["c", "c++"]:
-            return self._take_incremental_build_snapshot_for_c(source_path)
+            return self._take_incremental_build_snapshot_for_c(
+                source_path, rts_enabled, sanitizer
+            )
         elif self.project_lang == "jvm":
-            return self._take_incremental_build_snapshot_for_java(source_path)
+            return self._take_incremental_build_snapshot_for_java(
+                source_path, rts_enabled, rts_tool, sanitizer
+            )
         else:
             logger.error(
                 f'Incremental build for language "{self.project_lang}" is not supported.'
