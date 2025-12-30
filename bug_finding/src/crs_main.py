@@ -90,6 +90,7 @@ def _build_project_image(
         "infra/helper.py",
         "build_image",
         "--no-pull",
+        "--cache",
         "--architecture",
         architecture,
         project_name,
