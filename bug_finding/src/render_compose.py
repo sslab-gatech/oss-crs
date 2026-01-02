@@ -10,6 +10,7 @@ See infra/crs/__main__.py for the CLI entry point.
 
 import hashlib
 import logging
+import os.path
 import re
 import shutil
 import subprocess
@@ -59,6 +60,55 @@ def check_image_exists(image_name: str, check_any_tag: bool = False) -> bool:
         return bool(result.stdout.strip())
 
     return False
+
+
+WORKDIR_REGEX = re.compile(r"\s*WORKDIR\s*([^\s]+)")
+
+
+def workdir_from_lines(lines: list, default: str = "/src") -> str:
+    """Gets the WORKDIR from the given Dockerfile lines.
+
+    Ported from oss-fuzz/infra/helper.py.
+
+    Args:
+        lines: Lines from a Dockerfile
+        default: Default workdir if none found
+
+    Returns:
+        The workdir path (e.g., "/src/json-c")
+    """
+    for line in reversed(lines):  # reversed to get last WORKDIR
+        match = re.match(WORKDIR_REGEX, line)
+        if match:
+            workdir = match.group(1)
+            workdir = workdir.replace("$SRC", "/src")
+
+            if not os.path.isabs(workdir):
+                workdir = os.path.join("/src", workdir)
+
+            return os.path.normpath(workdir)
+
+    return default
+
+
+def get_dockerfile_workdir(project_path: Path) -> str:
+    """Extract the WORKDIR from a project's Dockerfile.
+
+    Args:
+        project_path: Path to the OSS-Fuzz project directory containing Dockerfile
+
+    Returns:
+        The workdir path (e.g., "/src/json-c"), defaults to "/src"
+    """
+    dockerfile_path = project_path / "Dockerfile"
+    if not dockerfile_path.exists():
+        return "/src"
+
+    try:
+        with open(dockerfile_path, "r") as f:
+            return workdir_from_lines(f.readlines())
+    except (OSError, IOError):
+        return "/src"
 
 
 def get_crs_env_vars(config_dir: Path) -> List[str]:
@@ -840,6 +890,10 @@ def render_compose_for_worker(
         if crs.get("volumes"):
             crs["volumes"] = expand_volume_vars(crs["volumes"], crs["run_env"])
 
+    # Get workdir from project Dockerfile
+    project_path = oss_fuzz_path / "projects" / project
+    source_workdir = get_dockerfile_workdir(project_path)
+
     rendered = template.render(
         crs_list=crs_list,
         worker_name=worker_name,
@@ -858,6 +912,7 @@ def render_compose_for_worker(
         config_hash=config_hash,
         source_path=source_path,
         source_tag=source_tag,
+        source_workdir=source_workdir,
         harness_source=harness_source,
         harness_name=harness_name,
         diff_path=diff_path,
