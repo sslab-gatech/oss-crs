@@ -190,13 +190,8 @@ services:
       - {{ vol }}
 {%- endfor %}
 {%- if shared_seed_dir %}
-      # Shared seeds - own directory is rw, others are ro
-      - {{ shared_seed_dir }}/{{ crs.name }}:/seed_share_dir/{{ crs.name }}:rw
-{%- for other_crs in crs_list %}
-{%- if other_crs.name != crs.name %}
-      - {{ shared_seed_dir }}/{{ other_crs.name }}:/seed_share_dir/{{ other_crs.name }}:ro
-{%- endif %}
-{%- endfor %}
+      # Shared seeds - read-only mount populated by seed_watcher service
+      - {{ shared_seed_dir }}:/seed_share_dir:ro
 {%- endif %}
     cpuset: {{ crs.cpuset }}
     deploy:
@@ -206,6 +201,28 @@ services:
     command: {{ fuzzer_command | tojson }}
 {%- endif %}
 {%- endfor %}
+
+{%- if mode == 'run' and shared_seed_dir and harness_name %}
+  # Seed Watcher - monitors corpus directories, deduplicates by content hash
+  seed_watcher:
+    build:
+      context: {{ seed_watcher_path }}
+      dockerfile: Dockerfile
+    volumes:
+      # Shared seed directory - writable for the watcher
+      - {{ shared_seed_dir }}:/shared_seeds:rw
+      # Mount each CRS corpus directory as read-only
+{%- for crs in crs_list %}
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus:/corpus/{{ crs.name }}:ro
+{%- endfor %}
+    command:
+      - python3
+      - seed_watcher.py
+      - --corpus-dirs
+      - "{% for crs in crs_list %}/corpus/{{ crs.name }}{% if not loop.last %},{% endif %}{% endfor %}"
+      - --shared-dir
+      - /shared_seeds
+{%- endif %}
 
 {%- if not external_litellm %}
 networks:

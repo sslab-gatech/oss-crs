@@ -50,6 +50,9 @@ packages = [
     "key_provisioner/*.py",
     "key_provisioner/Dockerfile",
     "key_provisioner/*.toml",
+    "seed_watcher/*.py",
+    "seed_watcher/Dockerfile",
+    "seed_watcher/*.toml",
 ]
 "bug_fixing" = [
     "base_images/docker_cache_builder/*",

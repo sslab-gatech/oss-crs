@@ -363,6 +363,25 @@ def _clone_project_source(
         return False
 
 
+def _get_worker_crs_count(config_dir: Path, worker: str) -> int:
+    """Get count of CRS instances assigned to a worker.
+
+    Args:
+        config_dir: Path to config directory containing config-resource.yaml
+        worker: Worker name to check
+
+    Returns:
+        Number of CRS instances on the worker (>1 means ensemble mode)
+    """
+    config_resource_path = config_dir / "config-resource.yaml"
+    with open(config_resource_path) as f:
+        resource_config = yaml.safe_load(f)
+    crs_configs = resource_config.get("crs", {})
+    return sum(
+        1 for cfg in crs_configs.values() if worker in cfg.get("workers", [])
+    )
+
+
 def build_crs(
     config_dir: Path,
     project_name: str,
@@ -791,14 +810,7 @@ def run_crs(
             # User-provided path - append harness name
             final_shared_seed_dir = shared_seed_dir / fuzzer_name
         else:
-            # Check if ensemble mode (>1 CRS on same worker)
-            config_resource_path = config_dir / "config-resource.yaml"
-            with open(config_resource_path) as f:
-                resource_config = yaml.safe_load(f)
-            crs_configs = resource_config.get("crs", {})
-            worker_crs_count = sum(
-                1 for cfg in crs_configs.values() if worker in cfg.get("workers", [])
-            )
+            worker_crs_count = _get_worker_crs_count(config_dir, worker)
             if worker_crs_count > 1:
                 final_shared_seed_dir = (
                     build_dir / "shared_seed_dir" / project_name / fuzzer_name
@@ -808,19 +820,10 @@ def run_crs(
                     f"Shared seeds directory: {final_shared_seed_dir}"
                 )
 
-    # Create per-CRS directories if shared seed is enabled
+    # Create shared seed directory (seed_watcher service will populate it)
     if final_shared_seed_dir:
-        config_resource_path = config_dir / "config-resource.yaml"
-        with open(config_resource_path) as f:
-            resource_config = yaml.safe_load(f)
-        crs_configs = resource_config.get("crs", {})
-        for crs_name, cfg in crs_configs.items():
-            if worker in cfg.get("workers", []):
-                crs_seed_dir = final_shared_seed_dir / crs_name
-                crs_seed_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(
-                    f"Created shared seed directory for {crs_name}: {crs_seed_dir}"
-                )
+        final_shared_seed_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created shared seed directory: {final_shared_seed_dir}")
 
     # Generate compose files using render_compose module
     logger.info("Generating compose-%s.yaml", worker)
@@ -919,7 +922,7 @@ def run_crs(
 
     def signal_handler(signum, frame):
         """Handle termination signals"""
-        print(f"\nReceived signal {signum}")
+        logging.warning(f"\nReceived signal {signum}")
         cleanup()
         sys.exit(0)
 

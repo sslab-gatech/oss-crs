@@ -30,6 +30,7 @@ TEMPLATE_DIR = files(__package__).parent / "templates"
 
 logger = logging.getLogger(__name__)
 KEY_PROVISIONER_DIR = files(__package__).parent / "key_provisioner"
+SEED_WATCHER_DIR = files(__package__).parent / "seed_watcher"
 
 # Configure logging (INFO level won't show by default)
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
@@ -900,6 +901,7 @@ def render_compose_for_worker(
         oss_fuzz_path=str(oss_fuzz_path),
         build_dir=str(build_dir),
         key_provisioner_path=str(KEY_PROVISIONER_DIR),
+        seed_watcher_path=str(SEED_WATCHER_DIR),
         project=project,
         project_language=project_language,
         engine=engine,
