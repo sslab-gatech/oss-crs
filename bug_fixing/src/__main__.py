@@ -48,7 +48,9 @@ def _setup_file_logging(log_dir: Path, project_name: str) -> Path:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     LOG_FILE_HANDLER = logging.FileHandler(log_file)
-    LOG_FILE_HANDLER.setFormatter(logging.Formatter(CUSTOM_LOG_FORMAT, CUSTOM_DATE_FORMAT))
+    LOG_FILE_HANDLER.setFormatter(
+        logging.Formatter(CUSTOM_LOG_FORMAT, CUSTOM_DATE_FORMAT)
+    )
     logging.getLogger().addHandler(LOG_FILE_HANDLER)
 
     return log_file
@@ -66,13 +68,14 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         oss_patch = OSSPatch(args.project, crs_name=args.crs, work_dir=work_dir)
         result = oss_patch.build(
             Path(args.oss_fuzz),
-            _get_path_or_none(args.project_path),
-            _get_path_or_none(args.source_path),
-            _get_path_or_none(args.local_crs),
-            _get_path_or_none(args.registry),
-            args.overwrite,
-            args.gitcache,
-            args.force_rebuild,
+            custom_project_path=_get_path_or_none(args.project_path),
+            custom_source_path=_get_path_or_none(args.source_path),
+            local_crs=_get_path_or_none(args.local_crs),
+            registry_path=_get_path_or_none(args.registry),
+            overwrite=args.overwrite,
+            use_gitcache=args.gitcache,
+            force_rebuild=args.force_rebuild,
+            inc_build_enabled=args.incremental_build
         )
     elif args.command == "run":
         # Resolve litellm config: CLI args > env vars
@@ -104,17 +107,25 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         change_ownership_with_docker(Path(args.out))
     elif args.command == "test-inc-build":
         oss_patch = OSSPatch(args.project)
-        log_dir = Path(args.log_dir) if args.log_dir else oss_patch.work_dir / "logs"
+        log_dir = (
+            Path(args.log_dir) if args.log_dir else oss_patch.project_work_dir / "logs"
+        )
         log_file = _setup_file_logging(log_dir, args.project)
         logger.info(f"Logging to: {log_file}")
         result = oss_patch.test_inc_build(
-            Path(args.oss_fuzz), with_rts=args.with_rts, rts_tool=args.rts_tool,
-            log_file=log_file, skip_clone=args.skip_clone, skip_baseline=args.skip_baseline,
-            skip_snapshot=args.skip_snapshot
+            Path(args.oss_fuzz),
+            with_rts=args.with_rts,
+            rts_tool=args.rts_tool,
+            log_file=log_file,
+            skip_clone=args.skip_clone,
+            skip_baseline=args.skip_baseline,
+            skip_snapshot=args.skip_snapshot,
         )
     elif args.command == "make-inc-snapshot":
         oss_patch = OSSPatch(args.project)
-        log_dir = Path(args.log_dir) if args.log_dir else oss_patch.work_dir / "logs"
+        log_dir = (
+            Path(args.log_dir) if args.log_dir else oss_patch.project_work_dir / "logs"
+        )
         log_file = _setup_file_logging(log_dir, args.project)
         logger.info(f"Logging to: {log_file}")
         result = oss_patch.make_inc_snapshot(
@@ -205,6 +216,13 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         help="Force rebuild images even if they already exist",
     )
     build_crs_parser.add_argument(
+        "--no-incremental-build",
+        dest="incremental_build",
+        action="store_false",
+        default=True,
+        help="Disable incremental build feature (default: enabled)",
+    )
+    build_crs_parser.add_argument(
         "--work-dir",
         help="Working directory for oss-patch (default: current directory)",
         default=None,
@@ -281,8 +299,8 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         choices=["ekstazi", "jcgeks", "openclover", "binaryrts", "none"],
         default=None,
         help="RTS tool to use. Overrides project.yaml setting. "
-             "JVM: jcgeks|openclover|ekstazi|none, C: binaryrts|none. "
-             "If not specified, uses project.yaml 'rts_mode' or defaults based on language.",
+        "JVM: jcgeks|openclover|ekstazi|none, C: binaryrts|none. "
+        "If not specified, uses project.yaml 'rts_mode' or defaults based on language.",
     )
     test_inc_build_parser.add_argument(
         "--log-dir",
