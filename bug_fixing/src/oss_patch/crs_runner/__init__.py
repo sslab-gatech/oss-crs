@@ -12,6 +12,7 @@ from bug_fixing.src.oss_patch.functions import (
     docker_image_exists_in_volume,
     load_images_to_volume,
     get_builder_image_name,
+    get_incremental_build_image_name,
     get_base_runner_image_name,
     get_git_commit_hash,
     get_crs_image_name,
@@ -19,8 +20,7 @@ from bug_fixing.src.oss_patch.functions import (
     copy_git_repo,
 )
 from bug_fixing.src.oss_patch.globals import (
-    OSS_PATCH_CRS_SYSTEM_IMAGES,
-    OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
+    OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME,
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_BUILD_CONTEXT_DIR,
     OSS_PATCH_RUNNER_DATA_PATH,
@@ -116,19 +116,25 @@ class OSSPatchCRSRunner:
 
         return True
 
-    def build(
-        self,
-        oss_fuzz_path: Path,
-        source_path: Path,
+    def _load_necessary_images_to_volume(
+        self, oss_fuzz_path: Path, volume_name: str
     ) -> bool:
-        if not self._prepare_docker_volumes():
-            return False
-
-        if not self._construct_run_context(oss_fuzz_path, source_path):
-            return False
+        # Choose between incremental-build-enabled builder image and original builder image
+        if docker_image_exists(
+            get_incremental_build_image_name(
+                oss_fuzz_path, self.project_name, "address"
+            )
+        ):
+            builder_image_name = get_incremental_build_image_name(
+                oss_fuzz_path, self.project_name, "address"
+            )
+        else:
+            builder_image_name = get_builder_image_name(
+                oss_fuzz_path, self.project_name
+            )
 
         images_to_load = [
-            get_builder_image_name(oss_fuzz_path, self.project_name),
+            builder_image_name,
             get_base_runner_image_name(oss_fuzz_path),
         ]
         # TODO: optimize speed; caching
@@ -136,24 +142,31 @@ class OSSPatchCRSRunner:
             [
                 image_name
                 for image_name in images_to_load
-                if not docker_image_exists_in_volume(
-                    image_name, OSS_PATCH_DOCKER_IMAGES_FOR_CRS
-                )
+                if not docker_image_exists_in_volume(image_name, volume_name)
             ],
-            OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
+            volume_name,
         ):
-            logger.error(
-                f'Image loading to "{OSS_PATCH_DOCKER_IMAGES_FOR_CRS}" has failed'
-            )
+            logger.error(f'Image loading to "{volume_name}" has failed')
             return False
 
         return True
 
-    def _prepare_docker_volumes(self) -> bool:
-        if not create_docker_volume(OSS_PATCH_DOCKER_IMAGES_FOR_CRS):
+    def build(
+        self,
+        oss_fuzz_path: Path,
+        source_path: Path,
+    ) -> bool:
+        if not create_docker_volume(OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME):
             return False
-        if not create_docker_volume(OSS_PATCH_CRS_SYSTEM_IMAGES):
+
+        if not self._construct_run_context(oss_fuzz_path, source_path):
             return False
+
+        if not self._load_necessary_images_to_volume(
+            oss_fuzz_path, OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME
+        ):
+            return False
+
         return True
 
     def _copy_oss_fuzz_and_sources(
@@ -308,7 +321,7 @@ class OSSPatchCRSRunner:
 
                 command = (
                     f"docker run --rm --privileged "
-                    f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:/var/lib/docker "
+                    f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME}:/var/lib/docker "
                     f"-v {tmp_oss_fuzz_path}:/oss-fuzz "
                     f"-v {tmp_proj_src_path}:/cp-sources "
                     f"-v {self.work_dir.resolve()}:/work "
@@ -371,7 +384,13 @@ class OSSPatchCRSRunner:
     def build_fuzzers(self, source_path: Path):
         build_fuzzers_command = f"python3 /oss-fuzz/infra/helper.py build_fuzzers {self.project_name} /cp-sources"
 
-        runner_command = f"docker run --rm --privileged -v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:{DEFAULT_DOCKER_ROOT_DIR} -v {source_path}:/cp-sources {get_runner_image_name(self.project_name)} {build_fuzzers_command}"
+        runner_command = (
+            f"docker run --rm --privileged "
+            f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME}:{DEFAULT_DOCKER_ROOT_DIR} "
+            f"-v {source_path}:/cp-sources "
+            f"{get_runner_image_name(self.project_name)} "
+            f"{build_fuzzers_command}"
+        )
 
         try:
             subprocess.check_call(runner_command, shell=True)
