@@ -12,7 +12,7 @@ class TestAnalysisLogStructure:
 
     def test_return_structure_empty_file(self):
         """Test return structure with empty/nonexistent file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write("")
             temp_path = Path(f.name)
 
@@ -22,12 +22,24 @@ class TestAnalysisLogStructure:
         assert len(result) == 5, f"Expected 5 elements, got {len(result)}: {result}"
 
         # Check types
-        assert isinstance(result[0], int), f"result[0] (test_run) should be int, got {type(result[0])}"
-        assert isinstance(result[1], (int, float)), f"result[1] (total_time) should be number, got {type(result[1])}"
-        assert isinstance(result[2], list), f"result[2] (run_classes_list) should be list, got {type(result[2])}"
-        assert isinstance(result[3], set), f"result[3] (output_class_set) should be set, got {type(result[3])}"
-        assert isinstance(result[4], list), f"result[4] (failures/errors/skips) should be list, got {type(result[4])}"
-        assert len(result[4]) == 3, f"result[4] should have 3 elements, got {len(result[4])}"
+        assert isinstance(result[0], int), (
+            f"result[0] (test_run) should be int, got {type(result[0])}"
+        )
+        assert isinstance(result[1], (int, float)), (
+            f"result[1] (total_time) should be number, got {type(result[1])}"
+        )
+        assert isinstance(result[2], list), (
+            f"result[2] (run_classes_list) should be list, got {type(result[2])}"
+        )
+        assert isinstance(result[3], set), (
+            f"result[3] (output_class_set) should be set, got {type(result[3])}"
+        )
+        assert isinstance(result[4], list), (
+            f"result[4] (failures/errors/skips) should be list, got {type(result[4])}"
+        )
+        assert len(result[4]) == 3, (
+            f"result[4] should have 3 elements, got {len(result[4])}"
+        )
 
         temp_path.unlink()
 
@@ -43,7 +55,7 @@ class TestAnalysisLogStructure:
 [INFO] Tests run: 15, Failures: 1, Errors: 1, Skipped: 2
 [INFO] Total time: 45.123 s
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(maven_log)
             temp_path = Path(f.name)
 
@@ -137,7 +149,7 @@ class TestGoogleTestParser:
 
  1 FAILED TEST
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(gtest_log)
             temp_path = Path(f.name)
 
@@ -153,7 +165,9 @@ class TestGoogleTestParser:
         assert len(run_tests) == 5
         assert "FooTest.TestOne" in run_tests
         assert "BarTest.TestB" in run_tests
-        assert failures_errors_skips[0] == 1, f"Expected 1 failure, got {failures_errors_skips[0]}"
+        assert failures_errors_skips[0] == 1, (
+            f"Expected 1 failure, got {failures_errors_skips[0]}"
+        )
 
         temp_path.unlink()
 
@@ -172,7 +186,7 @@ class TestGoogleTestParser:
 [==========] 3 tests from 1 test suite ran. (180 ms total)
 [  PASSED  ] 3 tests.
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(gtest_log)
             temp_path = Path(f.name)
 
@@ -205,7 +219,7 @@ Test project /path/to/build
 
 Total Test time (real) =   0.25 sec
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(ctest_log)
             temp_path = Path(f.name)
 
@@ -230,7 +244,7 @@ Total Test time (real) =   0.25 sec
 
 Total Test time (real) =  60.10 sec
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(ctest_log)
             temp_path = Path(f.name)
 
@@ -252,7 +266,7 @@ Total Test time (real) =  60.10 sec
 
 Total Test time (real) =   0.05 sec
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(ctest_log)
             temp_path = Path(f.name)
 
@@ -288,7 +302,7 @@ test 2
 
 Total Test time (real) =   0.65 sec
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(ctest_log)
             temp_path = Path(f.name)
 
@@ -311,7 +325,7 @@ Total Test time (real) =   0.65 sec
 
 Total Test time (real) =   0.05 sec
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(ctest_log)
             temp_path = Path(f.name)
 
@@ -335,7 +349,7 @@ class TestLanguageDispatch:
 [INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
 [INFO] Total time: 5.0 s
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(maven_log)
             temp_path = Path(f.name)
 
@@ -357,7 +371,7 @@ class TestLanguageDispatch:
 [==========] 2 tests from 1 test suite ran. (3 ms total)
 [  PASSED  ] 2 tests.
 """
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
             f.write(gtest_log)
             temp_path = Path(f.name)
 

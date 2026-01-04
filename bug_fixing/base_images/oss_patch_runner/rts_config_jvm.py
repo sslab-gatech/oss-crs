@@ -26,7 +26,9 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 
-def execute_cmd_get_output(cmd: str, cwd: Optional[str] = None, timeout: int = 3600) -> Optional[str]:
+def execute_cmd_get_output(
+    cmd: str, cwd: Optional[str] = None, timeout: int = 3600
+) -> Optional[str]:
     """Execute a shell command and return output."""
     try:
         result = subprocess.run(
@@ -278,7 +280,9 @@ class OpenCloverConfig:
         The plugin reads from ${user.home}/.clover/clover.snapshot automatically.
         """
         print(f"[INFO] Preparing OpenClover for: {self.project_name}")
-        print("[INFO] OpenClover requires no dynamic configuration - test optimization is handled internally via snapshot mechanism")
+        print(
+            "[INFO] OpenClover requires no dynamic configuration - test optimization is handled internally via snapshot mechanism"
+        )
         print("[INFO] OpenClover preparation completed!")
 
 

@@ -254,17 +254,23 @@ def configure_maven_settings_for_openclover() -> bool:
                 plugin_group.text = openclover_plugin_group
                 tree.write(settings_path, encoding="utf-8", xml_declaration=True)
                 format_xml_with_xmllint(settings_path)
-                print(f"[INFO] Added {openclover_plugin_group} pluginGroup to {settings_path}")
+                print(
+                    f"[INFO] Added {openclover_plugin_group} pluginGroup to {settings_path}"
+                )
             else:
-                print(f"[INFO] {openclover_plugin_group} pluginGroup already exists in {settings_path}")
+                print(
+                    f"[INFO] {openclover_plugin_group} pluginGroup already exists in {settings_path}"
+                )
 
         else:
             # Create new settings.xml
             root = ET.Element("settings")
             root.set("xmlns", MAVEN_SETTINGS_NAMESPACE)
             root.set("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
-            root.set("xsi:schemaLocation",
-                     f"{MAVEN_SETTINGS_NAMESPACE} http://maven.apache.org/xsd/settings-1.0.0.xsd")
+            root.set(
+                "xsi:schemaLocation",
+                f"{MAVEN_SETTINGS_NAMESPACE} http://maven.apache.org/xsd/settings-1.0.0.xsd",
+            )
 
             plugin_groups = ET.SubElement(root, "pluginGroups")
             plugin_group = ET.SubElement(plugin_groups, "pluginGroup")
@@ -274,7 +280,9 @@ def configure_maven_settings_for_openclover() -> bool:
             ET.register_namespace("", MAVEN_SETTINGS_NAMESPACE)
             tree.write(settings_path, encoding="utf-8", xml_declaration=True)
             format_xml_with_xmllint(settings_path)
-            print(f"[INFO] Created {settings_path} with {openclover_plugin_group} pluginGroup")
+            print(
+                f"[INFO] Created {settings_path} with {openclover_plugin_group} pluginGroup"
+            )
 
         return True
 
@@ -313,7 +321,11 @@ def find_maven_executable() -> Optional[str]:
                 # Get the first result that is executable
                 for mvn_path in result.stdout.strip().split("\n"):
                     mvn_path = mvn_path.strip()
-                    if mvn_path and os.path.isfile(mvn_path) and os.access(mvn_path, os.X_OK):
+                    if (
+                        mvn_path
+                        and os.path.isfile(mvn_path)
+                        and os.access(mvn_path, os.X_OK)
+                    ):
                         print(f"[INFO] Using Maven from $SRC: {mvn_path}")
                         return mvn_path
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -536,8 +548,12 @@ def parse_test_patterns_from_test_sh(test_sh_path: str) -> tuple:
             include_value = include_match.group(1).strip()
             if include_value:
                 # Split by comma and strip whitespace
-                include_patterns = [p.strip() for p in include_value.split(",") if p.strip()]
-                print(f"[INFO] Parsed {len(include_patterns)} INCLUDE_TESTS pattern(s) from test.sh")
+                include_patterns = [
+                    p.strip() for p in include_value.split(",") if p.strip()
+                ]
+                print(
+                    f"[INFO] Parsed {len(include_patterns)} INCLUDE_TESTS pattern(s) from test.sh"
+                )
 
         # Parse EXCLUDE_TESTS variable
         exclude_match = re.search(r'EXCLUDE_TESTS=["\']([^"\']*)["\']', content)
@@ -545,8 +561,12 @@ def parse_test_patterns_from_test_sh(test_sh_path: str) -> tuple:
             exclude_value = exclude_match.group(1).strip()
             if exclude_value:
                 # Split by comma and strip whitespace
-                exclude_patterns = [p.strip() for p in exclude_value.split(",") if p.strip()]
-                print(f"[INFO] Parsed {len(exclude_patterns)} EXCLUDE_TESTS pattern(s) from test.sh")
+                exclude_patterns = [
+                    p.strip() for p in exclude_value.split(",") if p.strip()
+                ]
+                print(
+                    f"[INFO] Parsed {len(exclude_patterns)} EXCLUDE_TESTS pattern(s) from test.sh"
+                )
 
     except Exception as e:
         print(f"[ERROR] Failed to parse test.sh {test_sh_path}: {e}")
@@ -663,7 +683,10 @@ def delete_surefire_config_element(
 
             for plugin in plugin_list:
                 artifact_id = plugin.find(".//" + ns + "artifactId")
-                if artifact_id is not None and artifact_id.text == "maven-surefire-plugin":
+                if (
+                    artifact_id is not None
+                    and artifact_id.text == "maven-surefire-plugin"
+                ):
                     configuration = plugin.find(".//" + ns + "configuration")
                     if configuration is not None:
                         target = configuration.find(ns + target_name)
@@ -686,7 +709,9 @@ def delete_surefire_config_element(
             print(f"[WARNING] Failed to parse {pom_path}: {e}")
 
 
-def add_excludes_file_to_surefire(pom_path: str, project_name: str, tool_name: str) -> bool:
+def add_excludes_file_to_surefire(
+    pom_path: str, project_name: str, tool_name: str
+) -> bool:
     """Add excludesFile configuration to existing surefire plugin."""
     ns = "{" + MAVEN_NAMESPACE + "}"
 
@@ -752,7 +777,9 @@ def add_excludes_to_surefire(pom_path: str, exclude_patterns: List[str]) -> bool
         if build is None:
             build = root.find("build")
         if build is None:
-            print(f"[WARNING] No <build> element found in {pom_path}, skipping excludes")
+            print(
+                f"[WARNING] No <build> element found in {pom_path}, skipping excludes"
+            )
             return True
 
         # Find plugins element
@@ -760,7 +787,9 @@ def add_excludes_to_surefire(pom_path: str, exclude_patterns: List[str]) -> bool
         if plugins is None:
             plugins = build.find("plugins")
         if plugins is None:
-            print(f"[WARNING] No <build><plugins> element found in {pom_path}, skipping excludes")
+            print(
+                f"[WARNING] No <build><plugins> element found in {pom_path}, skipping excludes"
+            )
             return True
 
         # Determine namespace used in this pom.xml
@@ -773,7 +802,10 @@ def add_excludes_to_surefire(pom_path: str, exclude_patterns: List[str]) -> bool
                 artifact_id = plugin.find(plugin_ns + "artifactId")
                 if artifact_id is None:
                     artifact_id = plugin.find("artifactId")
-                if artifact_id is not None and artifact_id.text == "maven-surefire-plugin":
+                if (
+                    artifact_id is not None
+                    and artifact_id.text == "maven-surefire-plugin"
+                ):
                     surefire_plugin = plugin
                     break
 
@@ -856,7 +888,9 @@ def add_includes_to_surefire(pom_path: str, include_patterns: List[str]) -> bool
         if build is None:
             build = root.find("build")
         if build is None:
-            print(f"[WARNING] No <build> element found in {pom_path}, skipping includes")
+            print(
+                f"[WARNING] No <build> element found in {pom_path}, skipping includes"
+            )
             return True
 
         # Find plugins element
@@ -864,7 +898,9 @@ def add_includes_to_surefire(pom_path: str, include_patterns: List[str]) -> bool
         if plugins is None:
             plugins = build.find("plugins")
         if plugins is None:
-            print(f"[WARNING] No <build><plugins> element found in {pom_path}, skipping includes")
+            print(
+                f"[WARNING] No <build><plugins> element found in {pom_path}, skipping includes"
+            )
             return True
 
         # Determine namespace used in this pom.xml
@@ -877,7 +913,10 @@ def add_includes_to_surefire(pom_path: str, include_patterns: List[str]) -> bool
                 artifact_id = plugin.find(plugin_ns + "artifactId")
                 if artifact_id is None:
                     artifact_id = plugin.find("artifactId")
-                if artifact_id is not None and artifact_id.text == "maven-surefire-plugin":
+                if (
+                    artifact_id is not None
+                    and artifact_id.text == "maven-surefire-plugin"
+                ):
                     surefire_plugin = plugin
                     break
 
@@ -989,11 +1028,22 @@ def add_openclover_dependency_to_pom(pom_path: str) -> bool:
                 if artifact_id is None:
                     artifact_id = dep.find("artifactId")
 
-                group_text = group_id.text.strip() if group_id is not None and group_id.text else ""
-                artifact_text = artifact_id.text.strip() if artifact_id is not None and artifact_id.text else ""
+                group_text = (
+                    group_id.text.strip()
+                    if group_id is not None and group_id.text
+                    else ""
+                )
+                artifact_text = (
+                    artifact_id.text.strip()
+                    if artifact_id is not None and artifact_id.text
+                    else ""
+                )
 
                 # Check for existing clover dependency (OpenClover or Atlassian Clover)
-                if group_text in ("org.openclover", "com.atlassian.clover") and artifact_text == "clover":
+                if (
+                    group_text in ("org.openclover", "com.atlassian.clover")
+                    and artifact_text == "clover"
+                ):
                     print(f"[INFO] Clover dependency already exists in {pom_path}")
                     return True
 
@@ -1033,7 +1083,11 @@ def has_existing_clover(root: ET.Element, ns: str) -> bool:
     Returns:
         True if clover is already present, False otherwise
     """
-    clover_group_ids = {"org.openclover", "org.apache.maven.plugins", "com.atlassian.clover"}
+    clover_group_ids = {
+        "org.openclover",
+        "org.apache.maven.plugins",
+        "com.atlassian.clover",
+    }
     clover_artifact_patterns = {"clover-maven-plugin", "maven-clover-plugin", "clover"}
 
     # Check plugins in build/plugins
@@ -1047,8 +1101,14 @@ def has_existing_clover(root: ET.Element, ns: str) -> bool:
         if artifact_id is None:
             artifact_id = plugin.find("artifactId")
 
-        group_text = group_id.text.strip() if group_id is not None and group_id.text else ""
-        artifact_text = artifact_id.text.strip() if artifact_id is not None and artifact_id.text else ""
+        group_text = (
+            group_id.text.strip() if group_id is not None and group_id.text else ""
+        )
+        artifact_text = (
+            artifact_id.text.strip()
+            if artifact_id is not None and artifact_id.text
+            else ""
+        )
 
         # Check if it's a clover plugin
         if group_text in clover_group_ids and "clover" in artifact_text.lower():
@@ -1069,8 +1129,14 @@ def has_existing_clover(root: ET.Element, ns: str) -> bool:
         if artifact_id is None:
             artifact_id = dep.find("artifactId")
 
-        group_text = group_id.text.strip() if group_id is not None and group_id.text else ""
-        artifact_text = artifact_id.text.strip() if artifact_id is not None and artifact_id.text else ""
+        group_text = (
+            group_id.text.strip() if group_id is not None and group_id.text else ""
+        )
+        artifact_text = (
+            artifact_id.text.strip()
+            if artifact_id is not None and artifact_id.text
+            else ""
+        )
 
         # Check if it's a clover dependency
         if group_text in clover_group_ids:
@@ -1092,7 +1158,9 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
 
         # Skip OpenClover injection if clover is already present
         if tool_name == "openclover" and has_existing_clover(root, ns):
-            print(f"[INFO] Clover already exists in {pom_path}, skipping OpenClover injection")
+            print(
+                f"[INFO] Clover already exists in {pom_path}, skipping OpenClover injection"
+            )
             return True
 
         # Find build element (must exist)
@@ -1109,7 +1177,9 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
         if plugins is None:
             plugins = build.find("plugins")
         if plugins is None:
-            print(f"[WARNING] No <build><plugins> element found in {pom_path}, skipping")
+            print(
+                f"[WARNING] No <build><plugins> element found in {pom_path}, skipping"
+            )
             return True
 
         # Determine namespace used in this pom.xml
@@ -1126,7 +1196,10 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
                 artifact_id = plugin.find(plugin_ns + "artifactId")
                 if artifact_id is None:
                     artifact_id = plugin.find("artifactId")
-                if artifact_id is not None and artifact_id.text == "maven-surefire-plugin":
+                if (
+                    artifact_id is not None
+                    and artifact_id.text == "maven-surefire-plugin"
+                ):
                     surefire_plugin = plugin
                     break
 
@@ -1166,7 +1239,10 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
                     artifact_id = plugin.find(plugin_ns + "artifactId")
                     if artifact_id is None:
                         artifact_id = plugin.find("artifactId")
-                    if artifact_id is not None and artifact_id.text == rts_config["artifact_id"]:
+                    if (
+                        artifact_id is not None
+                        and artifact_id.text == rts_config["artifact_id"]
+                    ):
                         rts_exists = True
                         break
 
@@ -1190,15 +1266,20 @@ def add_rts_plugins_to_pom(pom_path: str, project_name: str, tool_name: str) -> 
 def configure_surefire_settings(project_path: str) -> None:
     """Configure surefire settings for RTS compatibility."""
     # delete_surefire_config_element(project_path, "argLine")
-    #delete_surefire_config_element(project_path, "parallel")
-    
+    # delete_surefire_config_element(project_path, "parallel")
+
     delete_surefire_config_element(project_path, "reuseForks", "true")
     delete_surefire_config_element(project_path, "forkCount", "1")
 
 
 def cleanup_rts_artifacts(project_path: str) -> None:
     """Clean up existing RTS artifacts from previous runs."""
-    artifacts_to_delete = [".ekstazi", ".jcg", "diffLog", "classes-javacg_merged.jar-output_javacg"]
+    artifacts_to_delete = [
+        ".ekstazi",
+        ".jcg",
+        "diffLog",
+        "classes-javacg_merged.jar-output_javacg",
+    ]
 
     for root, dirs, _ in os.walk(project_path):
         for dir_name in dirs:
@@ -1211,14 +1292,14 @@ def cleanup_rts_artifacts(project_path: str) -> None:
                     print(f"[WARNING] Failed to delete {dir_path}: {e}")
 
 
-
-
 def git_commit_changes(project_path: str, tool_name: str) -> bool:
     """Commit RTS configuration changes to git."""
     print("[INFO] Committing RTS configuration changes...")
 
     # Add project path to safe.directory
-    execute_cmd(f"git config --global --add safe.directory {project_path}", cwd=project_path)
+    execute_cmd(
+        f"git config --global --add safe.directory {project_path}", cwd=project_path
+    )
 
     # Set git user config
     execute_cmd('git config --global user.email "you@example.com"', cwd=project_path)
@@ -1327,7 +1408,9 @@ def init_rts(
 
     # Add include patterns
     if include_patterns:
-        print(f"[INFO] Step 5a: Adding {len(include_patterns)} include pattern(s) to surefire...")
+        print(
+            f"[INFO] Step 5a: Adding {len(include_patterns)} include pattern(s) to surefire..."
+        )
         for pom_path in pom_files:
             if add_includes_to_surefire(pom_path, include_patterns):
                 print(f"[INFO] Added includes to: {pom_path}")
@@ -1338,7 +1421,9 @@ def init_rts(
 
     # Add exclude patterns
     if exclude_patterns:
-        print(f"[INFO] Step 5b: Adding {len(exclude_patterns)} exclude pattern(s) to surefire...")
+        print(
+            f"[INFO] Step 5b: Adding {len(exclude_patterns)} exclude pattern(s) to surefire..."
+        )
         for pom_path in pom_files:
             if add_excludes_to_surefire(pom_path, exclude_patterns):
                 print(f"[INFO] Added excludes to: {pom_path}")

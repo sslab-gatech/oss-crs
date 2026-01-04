@@ -16,7 +16,9 @@ BINARY_RTS_REPO = "https://github.com/Team-Atlanta/binary-rts.git"
 PIN_URL = "https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.0-99633-g5ca9893f2-gcc-linux.tar.gz"
 
 
-def run(cmd: list[str] | str, check: bool = True, **kwargs) -> subprocess.CompletedProcess:
+def run(
+    cmd: list[str] | str, check: bool = True, **kwargs
+) -> subprocess.CompletedProcess:
     """Run a command and print it."""
     if isinstance(cmd, list):
         print(f"+ {' '.join(cmd)}", flush=True)
@@ -28,8 +30,19 @@ def run(cmd: list[str] | str, check: bool = True, **kwargs) -> subprocess.Comple
 def install_apt_packages():
     """Install system packages needed for ctags build and poetry."""
     run(["apt-get", "update"])
-    run(["apt-get", "install", "-y",
-         "autoconf", "automake", "pkg-config", "libjansson-dev", "libyaml-dev", "python3-pip"])
+    run(
+        [
+            "apt-get",
+            "install",
+            "-y",
+            "autoconf",
+            "automake",
+            "pkg-config",
+            "libjansson-dev",
+            "libyaml-dev",
+            "python3-pip",
+        ]
+    )
 
 
 def build_ctags(ctags_dir: str = "/tmp/ctags"):
@@ -55,7 +68,9 @@ def clone_binary_rts(install_dir: str = "/opt/binary-rts"):
     run(["poetry", "install", "--no-interaction"], cwd=f"{install_dir}/binaryrts/cli")
 
 
-def build_pintools_rts(binary_rts_dir: str = "/opt/binary-rts", pin_root: str = "/opt/pin"):
+def build_pintools_rts(
+    binary_rts_dir: str = "/opt/binary-rts", pin_root: str = "/opt/pin"
+):
     """Build pintools-rts Pin tool and listener library.
 
     Note: The listener library is built with libc++ to match oss-fuzz's stdlib.
@@ -70,13 +85,29 @@ def build_pintools_rts(binary_rts_dir: str = "/opt/binary-rts", pin_root: str = 
     run("make -j$(nproc)", cwd=pintools_dir, shell=True, env=env)
 
     # Build listener library with clang++ and libc++ to match oss-fuzz
-    run(["clang", "-c", "-fPIC", "-O2", "-o", "pin_annotations.o", "pin_annotations.c"],
-        cwd=listener_dir)
-    run(["clang++", "-std=c++17", "-stdlib=libc++", "-c", "-fPIC", "-O2",
-         "-I.", "-o", "pin_test_listener.o", "pin_test_listener.cpp"],
-        cwd=listener_dir)
-    run(["ar", "rcs", "libpin_listener.a", "pin_annotations.o", "pin_test_listener.o"],
-        cwd=listener_dir)
+    run(
+        ["clang", "-c", "-fPIC", "-O2", "-o", "pin_annotations.o", "pin_annotations.c"],
+        cwd=listener_dir,
+    )
+    run(
+        [
+            "clang++",
+            "-std=c++17",
+            "-stdlib=libc++",
+            "-c",
+            "-fPIC",
+            "-O2",
+            "-I.",
+            "-o",
+            "pin_test_listener.o",
+            "pin_test_listener.cpp",
+        ],
+        cwd=listener_dir,
+    )
+    run(
+        ["ar", "rcs", "libpin_listener.a", "pin_annotations.o", "pin_test_listener.o"],
+        cwd=listener_dir,
+    )
 
 
 def install_pin(install_dir: str = "/opt/pin"):

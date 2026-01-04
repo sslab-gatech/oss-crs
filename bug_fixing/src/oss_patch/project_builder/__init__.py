@@ -11,18 +11,15 @@ from contextlib import contextmanager
 
 from bug_fixing.src.oss_patch.functions import (
     create_docker_volume,
-    docker_image_exists_in_volume,
     docker_image_exists,
     get_base_runner_image_name,
     get_builder_image_name,
-    get_runner_image_name,
     run_command,
     is_git_repository,
     change_ownership_with_docker,
 )
 from bug_fixing.src.oss_patch.globals import (
-    OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
-    OSS_PATCH_CRS_SYSTEM_IMAGES,
+    OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME,
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
     OSS_PATCH_RUNNER_DATA_PATH,
@@ -143,10 +140,7 @@ def _workdir_from_dockerfile(project_path: Path, proj_name: str):
 
 
 def _run_subprocess_with_logging(
-    cmd: str | list,
-    log_file: Path | None = None,
-    shell: bool = True,
-    **kwargs
+    cmd: str | list, log_file: Path | None = None, shell: bool = True, **kwargs
 ) -> subprocess.CompletedProcess:
     """Run subprocess, streaming output to both terminal and log file."""
     logger.info(f"Running command: {cmd}")
@@ -154,7 +148,11 @@ def _run_subprocess_with_logging(
         output_lines = []
         with open(log_file, "a") as f:
             proc = subprocess.Popen(
-                cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs
+                cmd,
+                shell=shell,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                **kwargs,
             )
             for line in iter(proc.stdout.readline, b""):
                 decoded = line.decode(errors="replace")
@@ -163,9 +161,13 @@ def _run_subprocess_with_logging(
                 f.write(decoded)
                 output_lines.append(line)
             proc.wait()
-            return subprocess.CompletedProcess(cmd, proc.returncode, b"".join(output_lines), b"")
+            return subprocess.CompletedProcess(
+                cmd, proc.returncode, b"".join(output_lines), b""
+            )
     else:
-        return subprocess.run(cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
+        return subprocess.run(
+            cmd, shell=shell, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs
+        )
 
 
 class OSSPatchProjectBuilder:
@@ -206,7 +208,7 @@ class OSSPatchProjectBuilder:
 
         if inc_build_enabled:
             if not self.take_incremental_build_snapshot(source_path, rts_enabled):
-                return False
+                logger.warning("incremental build is disabled due to the failure")
 
         return True
 
@@ -275,10 +277,13 @@ class OSSPatchProjectBuilder:
         if proc.returncode == 0:
             return None
 
-        return (proc.stdout if proc.stdout else b"", proc.stderr if proc.stderr else b"")
+        return (
+            proc.stdout if proc.stdout else b"",
+            proc.stderr if proc.stderr else b"",
+        )
 
     def remove_builder_image(
-        self, volume_name: str = OSS_PATCH_DOCKER_IMAGES_FOR_CRS
+        self, volume_name: str = OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME
     ) -> bool:
         logger.info(
             f'Removing "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}" from {volume_name}'
@@ -361,9 +366,7 @@ class OSSPatchProjectBuilder:
         return True
 
     def _prepare_docker_volumes(self) -> bool:
-        if not create_docker_volume(OSS_PATCH_DOCKER_IMAGES_FOR_CRS):
-            return False
-        if not create_docker_volume(OSS_PATCH_CRS_SYSTEM_IMAGES):
+        if not create_docker_volume(OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME):
             return False
         return True
 
@@ -416,9 +419,7 @@ class OSSPatchProjectBuilder:
 
         # subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
 
-        proc = subprocess.run(
-            command, capture_output=True, shell=True
-        )
+        proc = subprocess.run(command, capture_output=True, shell=True)
         # proc = subprocess.run(
         #     command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True
         # )
@@ -434,7 +435,7 @@ class OSSPatchProjectBuilder:
         #     return False
 
     def _take_incremental_build_snapshot_for_c(
-            self, source_path: Path, rts_enabled: bool = False, sanitizer: str = "address"
+        self, source_path: Path, rts_enabled: bool = False, sanitizer: str = "address"
     ) -> bool:
         # if not self._detect_incremental_build(volume_name):
         #     logger.info(
@@ -620,7 +621,11 @@ class OSSPatchProjectBuilder:
             )
 
     def _take_incremental_build_snapshot_for_java(
-        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks", sanitizer: str = "address"
+        self,
+        source_path: Path,
+        rts_enabled: bool = False,
+        rts_tool: str = "jcgeks",
+        sanitizer: str = "address",
     ) -> bool:
         project_path = self.oss_fuzz_path / "projects" / self.project_name
 
@@ -661,9 +666,7 @@ class OSSPatchProjectBuilder:
             # Add RTS initialization after compile
             # rts_init_jvm.py and rts_config_jvm.py are copied to root (/)
             # test.sh is expected to be in $SRC/
-            rts_cmd = (
-                f" && python3 /rts_init_jvm.py {old_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
-            )
+            rts_cmd = f" && python3 /rts_init_jvm.py {old_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
             container_cmd = base_cmd + rts_cmd
         else:
             container_cmd = base_cmd + f" && {patch_apply_test_cmd}"
@@ -802,9 +805,15 @@ class OSSPatchProjectBuilder:
             )
 
     def take_incremental_build_snapshot(
-        self, source_path: Path, rts_enabled: bool = False, rts_tool: str = "jcgeks", sanitizer: str = "address"
+        self,
+        source_path: Path,
+        rts_enabled: bool = False,
+        rts_tool: str = "jcgeks",
+        sanitizer: str = "address",
     ) -> bool:
-        logger.info(f"Taking a snapshot for incremental build (sanitizer={sanitizer})...")
+        logger.info(
+            f"Taking a snapshot for incremental build (sanitizer={sanitizer})..."
+        )
         assert self.oss_fuzz_path.exists()
         assert self.project_path
 

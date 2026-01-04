@@ -78,17 +78,17 @@ def _parse_rts_markers(log_file: Path) -> tuple[int, int, int]:
                 if not line.startswith("[RTS]"):
                     continue
 
-                total_match = re.search(r'\[RTS\]\s*Total:\s*(\d+)', line)
+                total_match = re.search(r"\[RTS\]\s*Total:\s*(\d+)", line)
                 if total_match:
                     rts_total = int(total_match.group(1))
                     continue
 
-                selected_match = re.search(r'\[RTS\]\s*Selected:\s*(\d+)', line)
+                selected_match = re.search(r"\[RTS\]\s*Selected:\s*(\d+)", line)
                 if selected_match:
                     rts_selected = int(selected_match.group(1))
                     continue
 
-                excluded_match = re.search(r'\[RTS\]\s*Excluded:\s*(\d+)', line)
+                excluded_match = re.search(r"\[RTS\]\s*Excluded:\s*(\d+)", line)
                 if excluded_match:
                     rts_excluded = int(excluded_match.group(1))
                     continue
@@ -117,7 +117,9 @@ def analysis_log(log_file: Path, language: str = "jvm", test_mode: str | None = 
         logger.warning(f"Log file does not exist: {log_file}")
         return [0, 0, [], set(), [0, 0, 0]]
 
-    logger.info(f"[INFO] analysing log file: {log_file} (language={language}, test_mode={test_mode})")
+    logger.info(
+        f"[INFO] analysing log file: {log_file} (language={language}, test_mode={test_mode})"
+    )
 
     # Dispatch to appropriate parser
     if language == "jvm" or test_mode == "maven":
@@ -131,7 +133,9 @@ def analysis_log(log_file: Path, language: str = "jvm", test_mode: str | None = 
             result = _analysis_log_autotools(log_file)
         else:
             # Default: try autotools parser for misc/unknown (most common for C)
-            logger.info(f"Unknown test_mode '{test_mode}' for C, trying autotools parser")
+            logger.info(
+                f"Unknown test_mode '{test_mode}' for C, trying autotools parser"
+            )
             result = _analysis_log_autotools(log_file)
     else:
         logger.warning(f"Unknown language '{language}', falling back to Maven parser")
@@ -268,15 +272,17 @@ def _analysis_log_googletest(log_file: Path):
     for line in lines:
         # Match test run: [ RUN      ] TestSuite.TestName
         if "[ RUN      ]" in line:
-            match = re.search(r'\[ RUN\s+\]\s+(\S+)', line)
+            match = re.search(r"\[ RUN\s+\]\s+(\S+)", line)
             if match:
                 test_name = match.group(1)
                 run_tests.append(test_name)
 
         # Match failed tests during execution: [  FAILED  ] TestSuite.TestName (X ms)
         # Note: Don't match summary lines (no timing info) or "tests, listed below"
-        elif "[  FAILED  ]" in line and "tests, listed below" not in line and "(" in line:
-            match = re.search(r'\[\s+FAILED\s+\]\s+(\S+)\s+\(', line)
+        elif (
+            "[  FAILED  ]" in line and "tests, listed below" not in line and "(" in line
+        ):
+            match = re.search(r"\[\s+FAILED\s+\]\s+(\S+)\s+\(", line)
             if match:
                 test_name = match.group(1)
                 if test_name not in failed_tests:
@@ -285,7 +291,7 @@ def _analysis_log_googletest(log_file: Path):
         # Match summary: [==========] 30 tests from 14 test suites ran. (1234 ms total)
         elif "[==========]" in line and "ran." in line:
             # Extract total time: (1234 ms total) or (1.5 s total)
-            time_match = re.search(r'\((\d+(?:\.\d+)?)\s*(ms|s)\s+total\)', line)
+            time_match = re.search(r"\((\d+(?:\.\d+)?)\s*(ms|s)\s+total\)", line)
             if time_match:
                 time_val = float(time_match.group(1))
                 time_unit = time_match.group(2)
@@ -296,32 +302,34 @@ def _analysis_log_googletest(log_file: Path):
 
         # Match passed count: [  PASSED  ] 28 tests.
         elif "[  PASSED  ]" in line:
-            match = re.search(r'\[\s+PASSED\s+\]\s+(\d+)\s+test', line)
+            match = re.search(r"\[\s+PASSED\s+\]\s+(\d+)\s+test", line)
             if match:
                 passed_count = int(match.group(1))
                 # We'll compute test_run from passed + failed
 
         # Match failed count from summary: [  FAILED  ] 2 tests, listed below:
         elif "[  FAILED  ]" in line and "tests, listed below" in line:
-            match = re.search(r'\[\s+FAILED\s+\]\s+(\d+)\s+test', line)
+            match = re.search(r"\[\s+FAILED\s+\]\s+(\d+)\s+test", line)
             if match:
                 analysis_res[4][0] = int(match.group(1))  # failures
 
         # Match RTS selection marker (C RTS format - to be defined)
         elif "[RTS SELECTED]" in line:
-            match = re.search(r'\[RTS SELECTED\]\s+(\S+)', line)
+            match = re.search(r"\[RTS SELECTED\]\s+(\S+)", line)
             if match:
                 analysis_res[3].add(match.group(1))
 
     # Set results
     analysis_res[0] = len(run_tests)  # total tests run
-    analysis_res[2] = run_tests       # list of test names
+    analysis_res[2] = run_tests  # list of test names
 
     # If we didn't get failure count from summary, count from individual failures
     if analysis_res[4][0] == 0 and failed_tests:
         analysis_res[4][0] = len(failed_tests)
 
-    logger.info(f"GoogleTest: {analysis_res[0]} tests, {analysis_res[4][0]} failures, {analysis_res[1]:.2f}s")
+    logger.info(
+        f"GoogleTest: {analysis_res[0]} tests, {analysis_res[4][0]} failures, {analysis_res[1]:.2f}s"
+    )
 
     return analysis_res
 
@@ -370,10 +378,10 @@ def _analysis_log_ctest(log_file: Path):
         # Status can be: Passed, Failed, ***Failed, ***Not Run, ***Timeout, ***Exception[:...]
         # The status may include additional text (e.g., "Exception: SegFault")
         test_match = re.search(
-            r'^\s*\d+/\d+\s+Test\s+#?\d+:\s+(\S+)\s+\.+'
-            r'\s*(Passed|\*{0,3}Failed|\*{0,3}Not Run|\*{0,3}Timeout|\*{0,3}Exception\S*(?:\s+\S+)?)'
-            r'\s+([\d.]+)\s*sec',
-            line
+            r"^\s*\d+/\d+\s+Test\s+#?\d+:\s+(\S+)\s+\.+"
+            r"\s*(Passed|\*{0,3}Failed|\*{0,3}Not Run|\*{0,3}Timeout|\*{0,3}Exception\S*(?:\s+\S+)?)"
+            r"\s+([\d.]+)\s*sec",
+            line,
         )
         if test_match:
             test_name = test_match.group(1)
@@ -389,8 +397,8 @@ def _analysis_log_ctest(log_file: Path):
         # Match summary line: "X% tests passed, Y tests failed out of Z"
         # Also handles: "100% tests passed, 0 tests failed out of 10"
         summary_match = re.search(
-            r'(\d+)%\s+tests\s+passed,\s+(\d+)\s+tests?\s+failed\s+out\s+of\s+(\d+)',
-            line
+            r"(\d+)%\s+tests\s+passed,\s+(\d+)\s+tests?\s+failed\s+out\s+of\s+(\d+)",
+            line,
         )
         if summary_match:
             failed = int(summary_match.group(2))
@@ -400,14 +408,14 @@ def _analysis_log_ctest(log_file: Path):
             continue
 
         # Match total time: "Total Test time (real) =   1.23 sec"
-        time_match = re.search(r'Total Test time\s*\(real\)\s*=\s*([\d.]+)\s*sec', line)
+        time_match = re.search(r"Total Test time\s*\(real\)\s*=\s*([\d.]+)\s*sec", line)
         if time_match:
             analysis_res[1] = float(time_match.group(1))
             continue
 
         # Match RTS selection marker (for C RTS integration)
         if "[RTS SELECTED]" in line:
-            rts_match = re.search(r'\[RTS SELECTED\]\s+(\S+)', line)
+            rts_match = re.search(r"\[RTS SELECTED\]\s+(\S+)", line)
             if rts_match:
                 analysis_res[3].add(rts_match.group(1))
 
@@ -415,7 +423,9 @@ def _analysis_log_ctest(log_file: Path):
     analysis_res[0] = len(run_tests)
     analysis_res[2] = run_tests
 
-    logger.info(f"CTest: {analysis_res[0]} tests, {analysis_res[4][0]} failures, {analysis_res[1]:.2f}s")
+    logger.info(
+        f"CTest: {analysis_res[0]} tests, {analysis_res[4][0]} failures, {analysis_res[1]:.2f}s"
+    )
 
     # If no summary line was found, use individual counts
     if analysis_res[4][0] == 0 and failed_from_individual > 0:
@@ -463,14 +473,16 @@ def _analysis_log_autotools(log_file: Path):
 
     # Strip ANSI color codes for parsing
     # Handles both real ANSI codes (\x1b[..m) and literal bracket sequences ([..m)
-    ansi_escape = re.compile(r'(\x1b\[[0-9;]*m|\[[0-9;]*m)')
+    ansi_escape = re.compile(r"(\x1b\[[0-9;]*m|\[[0-9;]*m)")
 
     for line in lines:
         # Remove ANSI color codes
-        clean_line = ansi_escape.sub('', line).strip()
+        clean_line = ansi_escape.sub("", line).strip()
 
         # Match per-test result lines: "PASS: test_name" or "FAIL: test_name"
-        test_match = re.match(r'^(PASS|FAIL|SKIP|XFAIL|XPASS|ERROR):\s+(\S+)', clean_line)
+        test_match = re.match(
+            r"^(PASS|FAIL|SKIP|XFAIL|XPASS|ERROR):\s+(\S+)", clean_line
+        )
         if test_match:
             status = test_match.group(1)
             test_name = test_match.group(2)
@@ -484,7 +496,9 @@ def _analysis_log_autotools(log_file: Path):
             continue
 
         # Match summary lines: "# TOTAL: 19", "# PASS:  14", etc.
-        summary_match = re.match(r'^#\s*(TOTAL|PASS|FAIL|SKIP|XFAIL|XPASS|ERROR):\s*(\d+)', clean_line)
+        summary_match = re.match(
+            r"^#\s*(TOTAL|PASS|FAIL|SKIP|XFAIL|XPASS|ERROR):\s*(\d+)", clean_line
+        )
         if summary_match:
             stat_type = summary_match.group(1)
             count = int(summary_match.group(2))
@@ -502,7 +516,7 @@ def _analysis_log_autotools(log_file: Path):
 
         # Match RTS selection marker (for C RTS integration)
         if "[RTS SELECTED]" in line:
-            rts_match = re.search(r'\[RTS SELECTED\]\s+(\S+)', line)
+            rts_match = re.search(r"\[RTS SELECTED\]\s+(\S+)", line)
             if rts_match:
                 analysis_res[3].add(rts_match.group(1))
 
@@ -524,6 +538,8 @@ def _analysis_log_autotools(log_file: Path):
     # Subtract skipped from test count - "tests run" should be non-skipped only
     analysis_res[0] = analysis_res[0] - analysis_res[4][2]
 
-    logger.info(f"Autotools: {analysis_res[0]} tests run (non-skipped), {analysis_res[4][0]} failures, {analysis_res[4][2]} skipped")
+    logger.info(
+        f"Autotools: {analysis_res[0]} tests run (non-skipped), {analysis_res[4][0]} failures, {analysis_res[4][2]} skipped"
+    )
 
     return analysis_res

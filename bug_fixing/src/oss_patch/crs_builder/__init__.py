@@ -10,9 +10,6 @@ from bug_fixing.src.oss_patch.functions import (
     run_command,
 )
 from bug_fixing.src.oss_patch.globals import (
-    OSS_PATCH_CRS_SYSTEM_IMAGES,
-    DEFAULT_DOCKER_ROOT_DIR,
-    OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
     OSS_CRS_REGISTRY_PATH,
 )
 
@@ -156,8 +153,6 @@ class OSSPatchCRSBuilder:
 
         logger.info("Building CRS Docker image...")
 
-        # crs_repo_path_in_container = "/crs-source"
-
         crs_build_command = (
             f"docker build "
             f"--tag {crs_image_name} "
@@ -165,32 +160,9 @@ class OSSPatchCRSBuilder:
             f"{self.crs_path}"
         )
 
-        # docker_command = (
-        #     f"docker run --rm --privileged --network=host "
-        #     f"-v {volume_name}:{DEFAULT_DOCKER_ROOT_DIR} "
-        #     f"-v {self.crs_path}:{crs_repo_path_in_container} "
-        #     f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
-        #     f"{crs_build_command}"
-        # )
-
-        # try:
-        #     subprocess.check_call(
-        #         docker_command,
-        #         stdout=subprocess.DEVNULL,
-        #         stderr=subprocess.DEVNULL,
-        #         shell=True,
-        #     )
-        # except subprocess.CalledProcessError as e:
-        #     logger.error(
-        #         "something went wrong during building the CRS docker image...", e
-        #     )
-        #     return False
-
         run_command(crs_build_command)
 
-        # logger.info("=" * 60)
         logger.info("CRS build completed successfully!")
         logger.info(f"CRS image: {get_crs_image_name(self.crs_name)}")
-        # logger.info("=" * 60)
 
         return True

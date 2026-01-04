@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_REGISTRY = "ghcr.io/team-atlanta"
 
 
-def _get_snapshot_image_name(project_name: str, sanitizer: str, registry: str = DEFAULT_REGISTRY) -> str:
+def _get_snapshot_image_name(
+    project_name: str, sanitizer: str, registry: str = DEFAULT_REGISTRY
+) -> str:
     """Generate snapshot image name.
 
     Args:
@@ -211,18 +213,24 @@ class IncrementalSnapshotMaker:
                 if self._check_image_exists(source_image):
                     logger.info(f"Image already exists locally: {source_image}")
                 else:
-                    logger.info(f"Image not found locally: {source_image}, rebuild required")
+                    logger.info(
+                        f"Image not found locally: {source_image}, rebuild required"
+                    )
                     need_rebuild = True
 
         # If not forcing rebuild and all images exist, skip build
         if not need_rebuild:
-            logger.info("All images exist locally, skipping rebuild (use without --no-rebuild to force)")
+            logger.info(
+                "All images exist locally, skipping rebuild (use without --no-rebuild to force)"
+            )
         else:
             # Build images
             proj_src_path = self.work_dir / "project-src"
 
             if skip_clone:
-                logger.info(f"Skipping source code clone, using existing code at {proj_src_path}")
+                logger.info(
+                    f"Skipping source code clone, using existing code at {proj_src_path}"
+                )
                 if not proj_src_path.exists():
                     logger.error(f"Source code path does not exist: {proj_src_path}")
                     return False
@@ -234,9 +242,7 @@ class IncrementalSnapshotMaker:
                 pull_project_source(self.project_path, proj_src_path)
 
             # Build base project builder image
-            logger.info(
-                f'Creating project builder image: "{base_image}"'
-            )
+            logger.info(f'Creating project builder image: "{base_image}"')
             self.project_builder.build(proj_src_path, inc_build_enabled=False)
 
             # Create snapshot for each required sanitizer

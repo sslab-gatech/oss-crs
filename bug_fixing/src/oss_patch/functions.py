@@ -5,7 +5,7 @@ from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
     OSS_PATCH_CACHE_BUILDER_DATA_PATH,
-    OSS_PATCH_DOCKER_IMAGES_FOR_CRS,
+    OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME,
 )
 from tempfile import TemporaryDirectory
 import os
@@ -40,7 +40,7 @@ def copy_git_repo(src: Path, dst: Path) -> None:
         # Read the gitdir pointer
         gitdir_content = git_path.read_text().strip()
         if gitdir_content.startswith("gitdir: "):
-            gitdir_rel = gitdir_content[len("gitdir: "):]
+            gitdir_rel = gitdir_content[len("gitdir: ") :]
             # Resolve relative to the original source location
             gitdir_abs = (src / gitdir_rel).resolve()
 
@@ -238,7 +238,7 @@ def load_images_to_volume(images: list[str], volume_name: str) -> bool:
         # TODO: skip save if already exists
         docker_load_cmd = (
             f"docker run --privileged --rm "
-            f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS}:{DEFAULT_DOCKER_ROOT_DIR} "
+            f"-v {OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME}:{DEFAULT_DOCKER_ROOT_DIR} "
             f"-v {images_path}:/images "
             f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
             f"sh -c 'for f in /images/*; do docker load -i \"$f\"; done'"
@@ -309,6 +309,12 @@ def get_builder_image_name(oss_fuzz_path: Path, project_name: str) -> str:
         return f"aixcc-afc/{project_name}"
     else:
         assert False
+
+
+def get_incremental_build_image_name(
+    oss_fuzz_path: Path, project_name: str, sanitizer: str = "address"
+) -> str:
+    return f"{get_builder_image_name(oss_fuzz_path, project_name)}:inc-{sanitizer}"
 
 
 def get_runner_image_name(proj_name: str) -> str:
@@ -489,7 +495,7 @@ def extract_sanitizer_report(full_log: str) -> str | None:
     start_idx = match.start()
     # For UBSan runtime errors, we try to include the file path at the beginning of the line
     if "runtime error:" in match.group():
-        line_start = full_log.rfind('\n', 0, start_idx)
+        line_start = full_log.rfind("\n", 0, start_idx)
         if line_start != -1:
             start_idx = line_start + 1
         else:
@@ -559,6 +565,7 @@ DEFAULT_RTS_MODE = {
 
 class RTSConfigError(Exception):
     """Raised when RTS configuration is invalid."""
+
     pass
 
 
@@ -599,9 +606,7 @@ def get_project_rts_config(project_path: Path) -> dict:
 
 
 def resolve_rts_config(
-    cli_with_rts: bool,
-    cli_rts_tool: str | None,
-    project_config: dict
+    cli_with_rts: bool, cli_rts_tool: str | None, project_config: dict
 ) -> tuple[bool, str]:
     """Resolve final inc_build and rts_mode values.
 
@@ -647,7 +652,9 @@ def resolve_rts_config(
             f"Valid modes: {valid_modes}"
         )
 
-    logger.info(f"Resolved config: inc_build={inc_build}, rts_mode={effective_rts_mode}, language={language}")
+    logger.info(
+        f"Resolved config: inc_build={inc_build}, rts_mode={effective_rts_mode}, language={language}"
+    )
 
     return (inc_build, effective_rts_mode)
 
@@ -660,7 +667,15 @@ def get_git_commit_hash(repository_path: Path) -> str:
     """
     try:
         result = subprocess.run(
-            ["git", "-C", str(repository_path), "-c", "safe.directory=*", "rev-parse", "HEAD"],
+            [
+                "git",
+                "-C",
+                str(repository_path),
+                "-c",
+                "safe.directory=*",
+                "rev-parse",
+                "HEAD",
+            ],
             capture_output=True,
             text=True,
             check=True,
