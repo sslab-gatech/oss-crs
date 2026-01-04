@@ -175,7 +175,7 @@ class OSSPatchCRSRunner:
         source_path: Path,
         dst_dir: Path,
     ) -> bool:
-        logger.info("Copying OSS-Fuzz and target project's sources")
+        logger.info(f"Copying OSS-Fuzz and target project sources to \"{dst_dir}\"")
 
         if dst_dir.exists():
             shutil.rmtree(dst_dir)

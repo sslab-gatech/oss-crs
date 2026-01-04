@@ -133,6 +133,7 @@ class OSSPatch:
             shutil.rmtree(self.source_path)
 
         if custom_source_path:
+            logger.info(f'Using the existing project source: "{custom_source_path}"')
             shutil.copytree(custom_source_path, self.source_path)
         else:
             pull_project_source(self.project_path, self.source_path, use_gitcache)

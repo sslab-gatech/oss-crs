@@ -75,7 +75,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             overwrite=args.overwrite,
             use_gitcache=args.gitcache,
             force_rebuild=args.force_rebuild,
-            inc_build_enabled=args.incremental_build
+            inc_build_enabled=args.incremental_build,
         )
     elif args.command == "run":
         # Resolve litellm config: CLI args > env vars
