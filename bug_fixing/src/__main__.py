@@ -94,6 +94,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             return 1
 
         work_dir = Path(args.work_dir) if args.work_dir else None
+        log_dir = Path(args.log_dir) if args.log_dir else None
         oss_patch = OSSPatch(args.project, crs_name=args.crs, work_dir=work_dir)
         result = oss_patch.run_crs(
             args.harness,
@@ -102,6 +103,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             litellm_base,
             _get_path_or_none(args.hints),
             Path(args.out),
+            log_dir=log_dir,
         )
         # FIXME: Bandaid solution for permission issues when runner executes as root
         change_ownership_with_docker(Path(args.out))
@@ -259,6 +261,11 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         "--work-dir",
         help="Working directory for oss-patch (default: current directory)",
         default=None,
+    )
+    run_crs_parser.add_argument(
+        "--log-dir",
+        default=None,
+        help="Directory to save CRS execution logs. Default: {out}/logs/",
     )
 
     run_pov_parser = subparsers.add_parser(

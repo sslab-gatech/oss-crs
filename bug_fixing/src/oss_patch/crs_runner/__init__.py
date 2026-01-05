@@ -100,7 +100,13 @@ def _check_force_build_in_oss_fuzz(oss_fuzz_path: Path) -> bool:
 
 
 class OSSPatchCRSRunner:
-    def __init__(self, project_name: str, work_dir: Path, out_dir: Path | None = None):
+    def __init__(
+        self,
+        project_name: str,
+        work_dir: Path,
+        out_dir: Path | None = None,
+        log_dir: Path | None = None,
+    ):
         self.project_name = project_name
         self.work_dir = work_dir
         self.run_context_dir = self.work_dir / "run_context"
@@ -108,9 +114,13 @@ class OSSPatchCRSRunner:
         self.proj_src_path = self.run_context_dir / "proj-src"
 
         self.out_dir = out_dir
+        self.log_dir = log_dir
 
         if out_dir and not out_dir.exists():
             out_dir.mkdir()
+
+        if log_dir and not log_dir.exists():
+            log_dir.mkdir(parents=True)
 
     def _write_runner_metadata(self):
         oss_fuzz_path = self.run_context_dir / "oss-fuzz"
@@ -319,6 +329,7 @@ class OSSPatchCRSRunner:
         self, crs_name: str, litellm_api_key: str, litellm_api_base: str
     ) -> bool:
         # Run the CRS container
+        from datetime import datetime
 
         assert self.out_dir
 
@@ -338,6 +349,14 @@ class OSSPatchCRSRunner:
                 f"Target project's source does not exist in run_context ({self.run_context_dir}). Run `build` command first."
             )
             return False
+
+        # Prepare log file if log_dir is set
+        log_file = None
+        if self.log_dir:
+            timestamp = datetime.now().strftime("%y%m%d%H%M%S")
+            safe_name = self.project_name.replace("/", "_")
+            log_file = self.log_dir / f"crs_run_{safe_name}_{timestamp}.log"
+            logger.info(f"CRS execution log will be saved to: {log_file}")
 
         with TemporaryDirectory() as tmp_dir:
             crs_run_tmp_dir = Path(tmp_dir)
@@ -367,7 +386,7 @@ class OSSPatchCRSRunner:
                 try:
                     # @TODO: ensure the clean-up of existing docker processes
                     # subprocess.check_call(command, shell=True)
-                    run_command(command, n=10)
+                    run_command(command, n=10, log_file=log_file)
                     return True
                 except subprocess.CalledProcessError as e:
                     logger.error(f"CRS failed: {e}")

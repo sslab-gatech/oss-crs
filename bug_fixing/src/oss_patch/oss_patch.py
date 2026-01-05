@@ -209,11 +209,15 @@ class OSSPatch:
         litellm_api_base: str,
         hints_dir: Path | None,
         out_dir: Path,
+        log_dir: Path | None = None,
     ) -> bool:
         assert self.crs_name
 
+        # Default log_dir to out_dir/logs if not specified
+        effective_log_dir = log_dir if log_dir else out_dir / "logs"
+
         oss_patch_runner = OSSPatchCRSRunner(
-            self.project_name, self.project_work_dir, out_dir
+            self.project_name, self.project_work_dir, out_dir, log_dir=effective_log_dir
         )
 
         return oss_patch_runner.run_crs_against_povs(
