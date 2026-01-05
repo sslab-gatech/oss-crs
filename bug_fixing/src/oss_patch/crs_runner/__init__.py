@@ -188,15 +188,10 @@ class OSSPatchCRSRunner:
         # copy existing CP's source (use copy_git_repo to handle submodules)
         copy_git_repo(source_path, proj_src_path)
 
-        # copy the provided OSS-Fuzz source (use copy_git_repo to handle submodules)
-        copy_git_repo(oss_fuzz_path, copied_oss_fuzz_path)
-
-        # # overwrite the provided project configs
-        # shutil.copytree(
-        #     self.project_path,
-        #     copied_oss_fuzz_path / "projects" / self.project_name,
-        #     dirs_exist_ok=True,
-        # )
+        # Ensure clean copy
+        if copied_oss_fuzz_path.exists():
+            shutil.rmtree(copied_oss_fuzz_path)
+        shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path)
 
         return True
 
