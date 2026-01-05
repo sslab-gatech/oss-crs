@@ -185,7 +185,7 @@ class OSSPatch:
         project_builder = OSSPatchProjectBuilder(
             self.project_work_dir,
             self.project_name,
-            oss_fuzz_path,
+            self.oss_fuzz_path,
             project_path=self.project_path,
             force_rebuild=force_rebuild,
         )
@@ -195,7 +195,7 @@ class OSSPatch:
             return False
 
         crs_runner = OSSPatchCRSRunner(self.project_name, self.project_work_dir)
-        if not crs_runner.build(oss_fuzz_path, self.source_path):
+        if not crs_runner.build(self.oss_fuzz_path, self.source_path):
             return False
 
         logger.info(f"CRS building successfully done!")

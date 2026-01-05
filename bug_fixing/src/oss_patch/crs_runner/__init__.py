@@ -64,6 +64,32 @@ def _disable_force_build_in_oss_fuzz(oss_fuzz_path: Path):
     )
 
 
+def _remove_all_projects_in_oss_fuzz(
+    oss_fuzz_path: Path, except_project: Path | None = None
+):
+    if except_project:
+        assert except_project.resolve().exists()
+        assert except_project.relative_to(oss_fuzz_path)
+
+        # @TODO: better way to do this deletions
+        with TemporaryDirectory() as tmp_dir:
+            tmp_dir_path = Path(tmp_dir)
+            tmp_project_path = tmp_dir_path / "target-project"
+
+            shutil.copytree(except_project, tmp_project_path)
+
+            shutil.rmtree(oss_fuzz_path / "projects")
+
+            Path.mkdir(except_project.parent, parents=True)
+            shutil.move(tmp_project_path, except_project)
+
+        assert len([d for d in (oss_fuzz_path / "projects").iterdir()]) == 1
+
+        return
+
+    shutil.rmtree(oss_fuzz_path / "projects")
+
+
 def _check_force_build_in_oss_fuzz(oss_fuzz_path: Path) -> bool:
     helper_path = oss_fuzz_path / "infra/helper.py"
 
@@ -175,7 +201,7 @@ class OSSPatchCRSRunner:
         source_path: Path,
         dst_dir: Path,
     ) -> bool:
-        logger.info(f"Copying OSS-Fuzz and target project sources to \"{dst_dir}\"")
+        logger.info(f'Copying OSS-Fuzz and target project sources to "{dst_dir}"')
 
         if dst_dir.exists():
             shutil.rmtree(dst_dir)
@@ -192,6 +218,15 @@ class OSSPatchCRSRunner:
         if copied_oss_fuzz_path.exists():
             shutil.rmtree(copied_oss_fuzz_path)
         shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path)
+
+        target_project_path = copied_oss_fuzz_path / "projects" / self.project_name
+
+        assert not (target_project_path / ".aixcc").exists()
+
+        # @TODO: better way to do this deletions
+        _remove_all_projects_in_oss_fuzz(
+            copied_oss_fuzz_path, except_project=target_project_path
+        )
 
         return True
 
