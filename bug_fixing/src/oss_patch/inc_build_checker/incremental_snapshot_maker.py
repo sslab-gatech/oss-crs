@@ -18,7 +18,7 @@ DEFAULT_REGISTRY = "ghcr.io/team-atlanta"
 def _get_snapshot_image_name(
     project_name: str, sanitizer: str, registry: str = DEFAULT_REGISTRY
 ) -> str:
-    """Generate snapshot image name.
+    """Generate snapshot image name for incremental build.
 
     Args:
         project_name: Project name (e.g., "json-c", "aixcc/c/json-c")
@@ -31,6 +31,21 @@ def _get_snapshot_image_name(
     # Extract just the project name, removing any prefix like "aixcc/c/" or "aixcc/jvm/"
     simple_name = project_name.split("/")[-1]
     return f"{registry}/crsbench/{simple_name}:inc-{sanitizer}"
+
+
+def _get_base_image_name(project_name: str, registry: str = DEFAULT_REGISTRY) -> str:
+    """Generate base image name for builder.
+
+    Args:
+        project_name: Project name (e.g., "json-c", "aixcc/c/json-c")
+        registry: Docker registry (default: ghcr.io/team-atlanta)
+
+    Returns:
+        Full image name (e.g., "ghcr.io/team-atlanta/crsbench/json-c:base")
+    """
+    # Extract just the project name, removing any prefix like "aixcc/c/" or "aixcc/jvm/"
+    simple_name = project_name.split("/")[-1]
+    return f"{registry}/crsbench/{simple_name}:base"
 
 
 class IncrementalSnapshotMaker:
@@ -130,6 +145,24 @@ class IncrementalSnapshotMaker:
         )
         return proc.returncode == 0
 
+    def _check_remote_image_exists(self, image_name: str) -> bool:
+        """Check if a Docker image exists in remote registry.
+
+        Args:
+            image_name: Full image name with tag (e.g., ghcr.io/team-atlanta/crsbench/project:tag)
+
+        Returns:
+            True if image exists in remote registry, False otherwise
+        """
+        cmd = f"docker manifest inspect {image_name}"
+        proc = subprocess.run(
+            cmd,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return proc.returncode == 0
+
     def _push_image(self, source_image: str, target_image: str) -> bool:
         """Tag and push Docker image to registry.
 
@@ -173,20 +206,22 @@ class IncrementalSnapshotMaker:
 
     def make_snapshot(
         self,
-        with_rts: bool = False,
-        rts_tool: str = "jcgeks",
-        push: bool = False,
+        rts_tool: str | None = None,
+        push: str | None = None,
         force_rebuild: bool = True,
         skip_clone: bool = False,
+        force_push: bool = False,
     ) -> bool:
         """Create incremental build snapshot and optionally push to registry.
 
         Args:
-            with_rts: Enable RTS in snapshot
-            rts_tool: RTS tool to use (ekstazi, jcgeks, openclover)
-            push: Whether to push snapshot to Docker registry (ghcr.io/team-atlanta)
+            rts_tool: RTS tool to use. JVM: jcgeks, openclover. C/C++: binaryrts.
+                      If None, RTS is disabled.
+            push: Push mode - 'base' (base image only), 'inc' (incremental only),
+                  'both' (base and incremental), or None (no push)
             force_rebuild: Force rebuild even if image exists (default: True)
             skip_clone: Skip source code cloning
+            force_push: Force push even if images already exist in remote registry
 
         Returns:
             True if successful, False otherwise
@@ -198,6 +233,29 @@ class IncrementalSnapshotMaker:
         # Get project language
         language = self._get_project_language()
         logger.info(f"Project language: {language}")
+
+        # Validate rts_tool for project language
+        rts_enabled = rts_tool is not None
+        if rts_enabled:
+            jvm_tools = {"jcgeks", "openclover"}
+            c_tools = {"binaryrts"}
+
+            if language == "jvm" and rts_tool not in jvm_tools:
+                logger.error(
+                    f"Invalid RTS tool '{rts_tool}' for JVM project. "
+                    f"Valid options: {', '.join(jvm_tools)}"
+                )
+                return False
+            elif language in ("c", "c++") and rts_tool not in c_tools:
+                logger.error(
+                    f"Invalid RTS tool '{rts_tool}' for C/C++ project. "
+                    f"Valid options: {', '.join(c_tools)}"
+                )
+                return False
+            elif language not in ("jvm", "c", "c++"):
+                logger.warning(
+                    f"Unknown language '{language}', RTS tool validation skipped"
+                )
 
         # Check if images already exist (when not forcing rebuild)
         base_image = get_builder_image_name(self.oss_fuzz_path, self.project_name)
@@ -250,8 +308,8 @@ class IncrementalSnapshotMaker:
                 logger.info(f"Creating snapshot for sanitizer: {sanitizer}")
                 if not self.project_builder.take_incremental_build_snapshot(
                     proj_src_path,
-                    rts_enabled=with_rts,
-                    rts_tool=rts_tool,
+                    rts_enabled=rts_enabled,
+                    rts_tool=rts_tool if rts_tool else "none",
                     sanitizer=sanitizer,
                 ):
                     logger.error(f"Failed to create snapshot for {sanitizer}")
@@ -260,34 +318,59 @@ class IncrementalSnapshotMaker:
                 source_image = f"{base_image}:inc-{sanitizer}"
                 logger.info(f"Created snapshot image: {source_image}")
 
+        # Prepare base image info
+        base_target_image = _get_base_image_name(self.project_name)
+
         # Print summary
         logger.info("=" * 60)
         logger.info("Snapshot Summary")
         logger.info("=" * 60)
         logger.info(f"Project: {self.project_name}")
         logger.info(f"Language: {language}")
-        logger.info(f"RTS enabled: {with_rts}")
-        if with_rts:
+        logger.info(f"RTS enabled: {rts_enabled}")
+        if rts_enabled:
             logger.info(f"RTS tool: {rts_tool}")
         logger.info(f"Sanitizers: {self.required_sanitizers}")
         logger.info(f"Rebuilt: {need_rebuild}")
         logger.info("Local images:")
+        logger.info(f"  - {base_image} (base)")
         for source_img, _ in images_to_process:
             logger.info(f"  - {source_img}")
         if push:
+            logger.info(f"Push mode: {push}")
             logger.info("Target images (remote):")
-            for _, target_img in images_to_process:
-                logger.info(f"  - {target_img}")
+            if push in ("base", "both"):
+                logger.info(f"  - {base_target_image} (base)")
+            if push in ("inc", "both"):
+                for _, target_img in images_to_process:
+                    logger.info(f"  - {target_img}")
         logger.info("=" * 60)
 
         # Push images if requested
         if push:
             logger.info(f"Pushing images to registry: {DEFAULT_REGISTRY}")
-            for source_image, target_image in images_to_process:
-                if not self._push_image(source_image, target_image):
-                    logger.error(f"Failed to push image: {target_image}")
-                    return False
 
-            logger.info("All images pushed successfully")
+            # Push base image if requested
+            if push in ("base", "both"):
+                if not force_push and self._check_remote_image_exists(base_target_image):
+                    logger.info(f"Skipping push: base image already exists in remote: {base_target_image}")
+                else:
+                    logger.info("Pushing base image...")
+                    if not self._push_image(base_image, base_target_image):
+                        logger.error(f"Failed to push base image: {base_target_image}")
+                        return False
+
+            # Push incremental images if requested
+            if push in ("inc", "both"):
+                logger.info("Pushing incremental images...")
+                for source_image, target_image in images_to_process:
+                    if not force_push and self._check_remote_image_exists(target_image):
+                        logger.info(f"Skipping push: image already exists in remote: {target_image}")
+                        continue
+                    if not self._push_image(source_image, target_image):
+                        logger.error(f"Failed to push image: {target_image}")
+                        return False
+
+            logger.info("All requested images pushed successfully")
 
         return True

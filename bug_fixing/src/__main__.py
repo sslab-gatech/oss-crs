@@ -130,12 +130,12 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         logger.info(f"Logging to: {log_file}")
         result = oss_patch.make_inc_snapshot(
             Path(args.oss_fuzz),
-            with_rts=args.with_rts,
             rts_tool=args.rts_tool,
             push=args.push,
             force_rebuild=not args.no_rebuild,
             log_file=log_file,
             skip_clone=args.skip_clone,
+            force_push=args.force_push,
         )
     # elif args.command == "run_pov":
     #     oss_patch = OSSPatch(args.project)
@@ -341,22 +341,20 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     make_inc_snapshot_parser.add_argument("project", help="name of the project")
     make_inc_snapshot_parser.add_argument("oss_fuzz", help="path to OSS-Fuzz")
     make_inc_snapshot_parser.add_argument(
-        "--with-rts",
-        action="store_true",
-        default=False,
-        help="Enable RTS (Regression Test Selection) in snapshot.",
-    )
-    make_inc_snapshot_parser.add_argument(
         "--rts-tool",
-        choices=["ekstazi", "jcgeks", "openclover"],
-        default="jcgeks",
-        help="RTS tool to use (default: jcgeks). Only used when --with-rts is specified.",
+        choices=["jcgeks", "openclover", "binaryrts"],
+        default=None,
+        help="RTS tool override. JVM: jcgeks, openclover. C/C++: binaryrts. "
+             "If not specified, uses project.yaml 'rts_mode'. "
+             "If project.yaml has no rts_mode, RTS is disabled.",
     )
     make_inc_snapshot_parser.add_argument(
         "--push",
-        action="store_true",
-        default=False,
-        help="Push the snapshot image to Docker registry (ghcr.io/team-atlanta/crsbench/{project}).",
+        choices=["base", "inc", "both"],
+        default=None,
+        help="Push images to Docker registry (ghcr.io/team-atlanta/crsbench/{project}). "
+             "Choices: 'base' (base builder image only), 'inc' (incremental snapshot only), "
+             "'both' (both base and incremental images).",
     )
     make_inc_snapshot_parser.add_argument(
         "--no-rebuild",
@@ -369,6 +367,12 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         action="store_true",
         default=False,
         help="Skip source code cloning and use existing code at {work_dir}/project-src.",
+    )
+    make_inc_snapshot_parser.add_argument(
+        "--force-push",
+        action="store_true",
+        default=False,
+        help="Force push even if images already exist in remote registry.",
     )
     make_inc_snapshot_parser.add_argument(
         "--log-dir",

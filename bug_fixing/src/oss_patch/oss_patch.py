@@ -304,13 +304,13 @@ class OSSPatch:
     def make_inc_snapshot(
         self,
         oss_fuzz_path: Path,
-        with_rts: bool = False,
-        rts_tool: str = "jcgeks",
-        push: bool = False,
+        rts_tool: str | None = None,
+        push: str | None = None,
         force_rebuild: bool = True,
         source_path: Path | None = None,
         log_file: Path | None = None,
         skip_clone: bool = False,
+        force_push: bool = False,
     ) -> bool:
         """Create incremental build snapshot and optionally push to registry.
 
@@ -318,26 +318,41 @@ class OSSPatch:
 
         Args:
             oss_fuzz_path: Path to OSS-Fuzz repository
-            with_rts: Enable RTS in snapshot
-            rts_tool: RTS tool to use (ekstazi, jcgeks, openclover)
-            push: Whether to push snapshot to Docker registry
+            rts_tool: RTS tool override. If None, uses project.yaml rts_mode.
+                      JVM: jcgeks, openclover. C/C++: binaryrts.
+            push: Push mode - 'base' (base image only), 'inc' (incremental only),
+                  'both' (base and incremental), or None (no push)
             force_rebuild: Force rebuild even if image exists (default: True)
             source_path: Path to source code (optional)
             log_file: Path to log file (optional)
             skip_clone: Skip source code cloning
+            force_push: Force push even if images already exist in remote registry
         """
         oss_fuzz_path = oss_fuzz_path.resolve()
         if source_path:
             source_path = source_path.resolve()
+
+        project_path = oss_fuzz_path / "projects" / self.project_name
+
+        # Load project configuration from project.yaml
+        project_config = get_project_rts_config(project_path)
+        logger.info(f"Project config from project.yaml: {project_config}")
+
+        # Resolve final configuration (CLI overrides project.yaml)
+        # For make-inc-snapshot, we don't use --with-rts flag, so pass False
+        _, effective_rts_mode = resolve_rts_config(False, rts_tool, project_config)
+        rts_enabled = effective_rts_mode != "none"
+
+        logger.info(f"Final config: rts_enabled={rts_enabled}, rts_mode={effective_rts_mode}")
 
         maker = IncrementalSnapshotMaker(
             oss_fuzz_path, self.project_name, self.project_work_dir, log_file=log_file
         )
 
         return maker.make_snapshot(
-            with_rts=with_rts,
-            rts_tool=rts_tool,
+            rts_tool=effective_rts_mode if rts_enabled else None,
             push=push,
             force_rebuild=force_rebuild,
             skip_clone=skip_clone,
+            force_push=force_push,
         )
