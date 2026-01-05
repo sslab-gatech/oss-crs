@@ -684,3 +684,107 @@ def get_git_commit_hash(repository_path: Path) -> str:
     except subprocess.CalledProcessError as e:
         logger.warning(f"Failed to get git commit hash for {repository_path}: {e}")
         return "unknown"
+
+
+# =============================================================================
+# Inc-build image pull/retag utilities
+# =============================================================================
+
+DEFAULT_INC_BUILD_REGISTRY = "ghcr.io/team-atlanta/crsbench"
+
+
+def get_inc_build_remote_image_name(
+    project_name: str,
+    sanitizer: str = "address",
+    registry: str = DEFAULT_INC_BUILD_REGISTRY,
+) -> str:
+    """Get remote inc-build Docker image name."""
+    # Extract just the project name, removing any prefix like "aixcc/c/"
+    simple_name = project_name.split("/")[-1]
+    return f"{registry}/{simple_name}:inc-{sanitizer}"
+
+
+def get_ossfuzz_inc_image_name(project_name: str, sanitizer: str = "address") -> str:
+    """Get OSS-Fuzz compatible inc-build image name (aixcc-afc/{project}:inc-{sanitizer})."""
+    simple_name = project_name.split("/")[-1]
+    return f"aixcc-afc/{simple_name}:inc-{sanitizer}"
+
+
+def _pull_docker_image(image_name: str, timeout: int = 600) -> bool:
+    """Pull a Docker image from registry."""
+    logger.info(f'Pulling Docker image "{image_name}"...')
+
+    proc = subprocess.run(
+        f"docker pull {image_name}",
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+    )
+
+    if proc.returncode == 0:
+        logger.info(f'Successfully pulled "{image_name}"')
+        return True
+    else:
+        logger.warning(f'Failed to pull "{image_name}": {proc.stderr.decode()[:500]}')
+        return False
+
+
+def _retag_docker_image(src_image: str, dst_image: str) -> bool:
+    """Retag a Docker image."""
+    proc = subprocess.run(
+        f"docker tag {src_image} {dst_image}",
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    if proc.returncode == 0:
+        logger.info(f'Retagged "{src_image}" -> "{dst_image}"')
+        return True
+    else:
+        logger.error(f'Failed to retag "{src_image}" -> "{dst_image}"')
+        return False
+
+
+def ensure_inc_build_image(
+    project_name: str,
+    oss_fuzz_path: Path,
+    sanitizer: str = "address",
+    registry: str = DEFAULT_INC_BUILD_REGISTRY,
+) -> bool:
+    """Ensure inc-build image is available locally (pull from registry if needed).
+
+    Tries to:
+    1. Check if inc-build image already exists locally
+    2. If not, pull from remote registry
+    3. Retag to builder image format for OSS-Fuzz compatibility
+    """
+    builder_image = get_builder_image_name(oss_fuzz_path, project_name)
+    builder_inc_image = f"{builder_image}:inc-{sanitizer}"
+
+    # Check if already available in builder format
+    if docker_image_exists(builder_inc_image):
+        logger.info(f'Inc-build image "{builder_inc_image}" already exists locally.')
+        return True
+
+    # Check OSS-Fuzz compatible format (aixcc-afc/{project}:inc-{sanitizer})
+    ossfuzz_image = get_ossfuzz_inc_image_name(project_name, sanitizer)
+    if docker_image_exists(ossfuzz_image):
+        logger.info(f'Found "{ossfuzz_image}", retagging to builder format...')
+        return _retag_docker_image(ossfuzz_image, builder_inc_image)
+
+    # Try to pull from remote registry
+    remote_image = get_inc_build_remote_image_name(project_name, sanitizer, registry)
+
+    # Check if remote image exists locally (maybe already pulled with different tag)
+    if docker_image_exists(remote_image):
+        logger.info(f'Found "{remote_image}" locally, retagging to builder format...')
+        return _retag_docker_image(remote_image, builder_inc_image)
+
+    # Pull from remote
+    if _pull_docker_image(remote_image):
+        return _retag_docker_image(remote_image, builder_inc_image)
+
+    logger.info(f"Inc-build image not available from registry, will build locally.")
+    return False

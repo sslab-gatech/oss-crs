@@ -17,6 +17,7 @@ from bug_fixing.src.oss_patch.functions import (
     run_command,
     is_git_repository,
     change_ownership_with_docker,
+    ensure_inc_build_image,
 )
 from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_DOCKER_IMAGES_FOR_CRS_VOLUME,
@@ -207,8 +208,16 @@ class OSSPatchProjectBuilder:
             return False
 
         if inc_build_enabled:
-            if not self.take_incremental_build_snapshot(source_path, rts_enabled):
-                logger.warning("incremental build is disabled due to the failure")
+            # Try to pull inc-build image from remote registry first
+            if ensure_inc_build_image(self.project_name, self.oss_fuzz_path):
+                logger.info(
+                    f'Using pre-built inc-build image from registry for "{self.project_name}"'
+                )
+            else:
+                # Build locally if pull failed
+                if not self.take_incremental_build_snapshot(source_path, rts_enabled):
+                    logger.warning("incremental build is disabled due to the failure")
+                    return False
 
         return True
 
