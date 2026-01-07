@@ -141,8 +141,9 @@ def _save_parent_image_tarballs(
             shutil.rmtree(tarball_path)
         # Create parent directories if needed (project_name may contain slashes)
         tarball_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Saving parent image {parent_image} to {tarball_path}")
-        save_cmd = ["docker", "save", parent_image, "-o", str(tarball_path)]
+        # Specify :latest tag explicitly to avoid saving all tags in the repository
+        logger.info(f"Saving parent image {parent_image}:latest to {tarball_path}")
+        save_cmd = ["docker", "save", f"{parent_image}:latest", "-o", str(tarball_path)]
         try:
             subprocess.check_call(save_cmd)
             logger.info(f"Successfully saved parent image to {tarball_path}")
