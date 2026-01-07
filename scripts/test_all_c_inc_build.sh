@@ -107,7 +107,7 @@ run_single_test() {
     local result_file="$result_dir/${project}.result"
 
     # Use --with-rts to enable RTS based on project.yaml rts_mode setting
-    if uv run oss-bugfix-crs test-inc-build "aixcc/c/$project" "$oss_fuzz_path" --with-rts > "$log_file" 2>&1; then
+    if uv run oss-bugfix-crs test-inc-build "aixcc/c/$project" "$oss_fuzz_path" --with-rts --skip-clone > "$log_file" 2>&1; then
         echo "PASSED" > "$result_file"
     else
         echo "FAILED" > "$result_file"
@@ -126,7 +126,7 @@ if [ "$JOBS" -eq 1 ]; then
         result_file="$RESULT_DIR/${project}.result"
 
         # Use --with-rts to enable RTS based on project.yaml rts_mode setting
-        if uv run oss-bugfix-crs test-inc-build "aixcc/c/$project" "$OSS_FUZZ_PATH" --with-rts > "$log_file" 2>&1; then
+        if uv run oss-bugfix-crs test-inc-build "aixcc/c/$project" "$OSS_FUZZ_PATH" --with-rts --skip-clone > "$log_file" 2>&1; then
             echo "  ✓ PASSED"
             echo "PASSED" > "$result_file"
         else
