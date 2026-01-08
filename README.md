@@ -8,6 +8,28 @@ This repository contains the infrastructure for building, running, and ensemblin
 - Automated LiteLLM server deployment during CRS operations
 - YAML-based configuration for CPU core allocation, memory limits, and LLM budget control
 
+## Prerequisites
+
+The following system dependencies are required:
+
+- **Python 3.9+** - Required for running the CRS tools
+- **uv** - Python package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Docker** - Required for building and running CRS containers
+- **Git** - Required for cloning repositories
+- **rsync** - Required for optimized OSS-Fuzz directory copying
+
+Install rsync if not present:
+```bash
+# Debian/Ubuntu
+apt-get install rsync
+
+# CentOS/RHEL
+yum install rsync
+
+# macOS (usually pre-installed)
+brew install rsync
+```
+
 ## Quick Start
 
 ### 1. Clone the Repository

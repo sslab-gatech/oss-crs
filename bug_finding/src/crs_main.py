@@ -13,12 +13,13 @@ import signal
 import uuid
 import yaml
 from pathlib import Path
+from typing import Optional
 from importlib.resources import files
 
 from dotenv import dotenv_values
 
 from . import render_compose
-from .utils import run_git
+from .utils import check_rsync_available, run_git, run_rsync
 
 logger = logging.getLogger(__name__)
 
@@ -154,15 +155,64 @@ def _save_parent_image_tarballs(
     return str(parent_images_dir)
 
 
-def _clone_oss_fuzz_if_needed(
-    oss_fuzz_dir: Path, source_oss_fuzz_dir: Path = None
+def _validate_oss_fuzz_structure(
+    source_dir: Path, project_name: Optional[str] = None
 ) -> bool:
+    """Validate OSS-Fuzz directory structure.
+
+    Args:
+        source_dir: Source OSS-Fuzz directory to validate
+        project_name: Optional project name to validate exists
+
+    Returns:
+        bool: True if valid, False otherwise
     """
-    Clone or copy OSS-Fuzz to the standard location if needed.
+    # Check source exists
+    if not source_dir.exists():
+        logging.error(f"Source OSS-Fuzz directory does not exist: {source_dir}")
+        return False
+
+    # Check projects/ directory exists (required for valid OSS-Fuzz structure)
+    projects_dir = source_dir / "projects"
+    if not projects_dir.exists():
+        logging.error(
+            f"Invalid OSS-Fuzz directory structure. "
+            f"'projects/' directory not found in: {source_dir}"
+        )
+        return False
+
+    # If project_name provided, check it exists
+    if project_name:
+        project_path = projects_dir / project_name
+        if not project_path.exists():
+            logging.error(
+                f"Project '{project_name}' not found in source OSS-Fuzz directory. "
+                f"Expected path: {project_path}"
+            )
+            return False
+
+    return True
+
+
+def _clone_oss_fuzz_if_needed(
+    oss_fuzz_dir: Path,
+    source_oss_fuzz_dir: Optional[Path] = None,
+    project_name: Optional[str] = None,
+) -> bool:
+    """Clone or copy OSS-Fuzz to the standard location if needed.
+
+    When source_oss_fuzz_dir and project_name are provided, uses rsync for
+    optimized selective copy:
+    - Excludes build/ directory entirely (FR-001)
+    - Copies only the target project from projects/ (FR-002)
+    - Copies all other top-level directories (infra/, docs/, etc.) (FR-003)
+    - Handles symlinks gracefully (FR-004)
+    - Supports nested project names (FR-005)
 
     Args:
         oss_fuzz_dir: Destination directory for OSS-Fuzz (standard location)
         source_oss_fuzz_dir: Optional source directory to copy from
+        project_name: Optional project name for selective copy optimization
 
     Returns:
         bool: True if successful, False otherwise
@@ -174,12 +224,77 @@ def _clone_oss_fuzz_if_needed(
 
     # If source directory provided, copy from it
     if source_oss_fuzz_dir:
-        if not source_oss_fuzz_dir.exists():
-            logging.error(
-                f"Source OSS-Fuzz directory does not exist: {source_oss_fuzz_dir}"
-            )
+        # Validate source structure
+        if not _validate_oss_fuzz_structure(source_oss_fuzz_dir, project_name):
             return False
 
+        # Use optimized rsync copy if project_name is provided
+        if project_name:
+            # Check rsync is available (FR-008)
+            if not check_rsync_available():
+                return False
+
+            logging.info(
+                f"Optimized copy of OSS-Fuzz from {source_oss_fuzz_dir} to {oss_fuzz_dir} "
+                f"(project: {project_name})"
+            )
+
+            # Create destination directory
+            oss_fuzz_dir.mkdir(parents=True, exist_ok=True)
+
+            # Phase 1: Copy base structure excluding build/ and projects/
+            logging.info("Phase 1: Copying base structure (excluding build/ and projects/)")
+            if not run_rsync(
+                source=source_oss_fuzz_dir,
+                dest=oss_fuzz_dir,
+                exclude=["build/", "projects/"],
+            ):
+                logging.error("Failed to copy base OSS-Fuzz structure")
+                return False
+
+            # Phase 2: Copy only the target project from projects/
+            logging.info(f"Phase 2: Copying target project: {project_name}")
+            source_project = source_oss_fuzz_dir / "projects" / project_name
+            dest_project = oss_fuzz_dir / "projects" / project_name
+
+            # Create parent directories for nested project names (e.g., aixcc/c/myproject)
+            dest_project.parent.mkdir(parents=True, exist_ok=True)
+
+            if not run_rsync(source=source_project, dest=dest_project):
+                logging.error(f"Failed to copy project: {project_name}")
+                return False
+
+            # Phase 3: Copy target project's build artifacts if they exist
+            # Copy both build/out/ (compiled fuzzers) and build/work/ (intermediate files)
+            # This supports incremental builds and pre-built fuzzer reuse
+            # Handle nested project names by using hyphenated form for matching
+            project_base = project_name.replace("/", "-")
+
+            for build_subdir in ["out", "work"]:
+                source_build = source_oss_fuzz_dir / "build" / build_subdir
+                if not source_build.exists():
+                    continue
+
+                # Find directories matching project name (e.g., json-c, json-c-asan)
+                matching_dirs = [
+                    d for d in source_build.iterdir()
+                    if d.is_dir() and (d.name == project_base or d.name.startswith(f"{project_base}-"))
+                ]
+                if matching_dirs:
+                    logging.info(f"Phase 3: Copying build/{build_subdir}/ for {project_name}")
+                    dest_build = oss_fuzz_dir / "build" / build_subdir
+                    dest_build.mkdir(parents=True, exist_ok=True)
+                    for src_dir in matching_dirs:
+                        dest_dir = dest_build / src_dir.name
+                        logging.info(f"  Copying {src_dir.name}")
+                        if not run_rsync(source=src_dir, dest=dest_dir):
+                            logging.warning(f"Failed to copy build artifact: {src_dir.name}")
+                            # Continue anyway - build artifacts are optional
+
+            logging.info(f"Successfully copied OSS-Fuzz to {oss_fuzz_dir}")
+            return True
+
+        # Fallback to shutil.copytree for full copy (legacy behavior)
         logging.info(f"Copying OSS-Fuzz from {source_oss_fuzz_dir} to {oss_fuzz_dir}")
         try:
             # Create parent directory if needed
@@ -416,7 +531,7 @@ def build_crs(
 
     # Note: No need to verify external_litellm during build - LiteLLM is only used during run
 
-    if not _clone_oss_fuzz_if_needed(oss_fuzz_dir, source_oss_fuzz_dir):
+    if not _clone_oss_fuzz_if_needed(oss_fuzz_dir, source_oss_fuzz_dir, project_name):
         return False
 
     # Copy project_path to oss-fuzz/projects/{project_name} if provided
@@ -777,7 +892,7 @@ def run_crs(
         logger.error("LITELLM_URL or LITELLM_KEY is not provided in the environment")
         return False
 
-    if not _clone_oss_fuzz_if_needed(oss_fuzz_dir, source_oss_fuzz_dir):
+    if not _clone_oss_fuzz_if_needed(oss_fuzz_dir, source_oss_fuzz_dir, project_name):
         return False
 
     # Validate CRS modes against diff_path

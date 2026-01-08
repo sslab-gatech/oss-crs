@@ -138,3 +138,10 @@ Example CRS configurations are in `example_configs/`:
 
 - Use uv as python package manager
 - Follow absolute imports for better code organization
+
+## Active Technologies
+- Python 3.9+ + rsync (system utility), subprocess (stdlib) (001-oss-fuzz-copy-optimize)
+- Filesystem (OSS-Fuzz directory structure) (001-oss-fuzz-copy-optimize)
+
+## Recent Changes
+- 001-oss-fuzz-copy-optimize: Added Python 3.9+ + rsync (system utility), subprocess (stdlib)
