@@ -7,9 +7,7 @@ the filename in the shared directory is the SHA256 hash of the content.
 """
 
 import argparse
-import hashlib
 import logging
-import shutil
 import time
 from pathlib import Path
 
@@ -17,20 +15,13 @@ from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent
 
+from seed_utils import copy_seed
+
 logging.basicConfig(
     level=logging.ERROR,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("seed_watcher")
-
-
-def file_hash(path: Path) -> str:
-    """Compute SHA256 hash of file contents."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 class SeedHandler(FileSystemEventHandler):
@@ -45,27 +36,7 @@ class SeedHandler(FileSystemEventHandler):
 
         Returns True if seed was new and copied, False if duplicate.
         """
-        if not src_path.is_file():
-            return False
-
-        try:
-            content_hash = file_hash(src_path)
-        except (OSError, IOError) as e:
-            logger.error("Failed to hash %s: %s", src_path, e)
-            return False
-
-        # Use hash as filename - automatically deduplicates
-        dest_path = self.shared_dir / content_hash
-
-        if dest_path.exists():
-            return False
-
-        try:
-            shutil.copy2(src_path, dest_path)
-            return True
-        except (OSError, IOError) as e:
-            logger.error("Failed to copy %s: %s", src_path, e)
-            return False
+        return copy_seed(src_path, self.shared_dir)
 
     def on_created(self, event):
         if isinstance(event, FileCreatedEvent):

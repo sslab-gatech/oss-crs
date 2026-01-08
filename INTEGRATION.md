@@ -293,7 +293,7 @@ When multiple CRS instances run on the same worker (ensemble mode), OSS-CRS auto
 
 **Host directory structure**:
 ```
-build/shared_seed_dir/{project}/{harness_name}/
+build/shared_seed_dir/{configuration}/{project}/{harness_name}/
 ├── atlantis-c-libafl/    # CRS 1's seeds
 ├── crs-libfuzzer/        # CRS 2's seeds
 └── ...
@@ -325,8 +325,8 @@ crs-libfuzzer_runner:
     - <path-to-build>/out/crs-libfuzzer/json-c:/out
     - <hash>_keys_data_crs-libfuzzer:/keys:ro
     # Shared seeds - own directory is rw, others are ro
-    - <path-to-build>/shared_seed_dir/json-c/json_array_fuzzer/crs-libfuzzer:/seed_share_dir/crs-libfuzzer:rw
-    - <path-to-build>/shared_seed_dir/json-c/json_array_fuzzer/atlantis-c-libafl:/seed_share_dir/atlantis-c-libafl:ro
+    - <path-to-build>/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/crs-libfuzzer:/seed_share_dir/crs-libfuzzer:rw
+    - <path-to-build>/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/atlantis-c-libafl:/seed_share_dir/atlantis-c-libafl:ro
 ```
 
 **Notes**:

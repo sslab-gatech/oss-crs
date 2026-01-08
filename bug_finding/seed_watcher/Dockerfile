@@ -7,6 +7,7 @@ WORKDIR /app
 
 COPY pyproject.toml .
 COPY seed_watcher.py .
+COPY seed_utils.py .
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .

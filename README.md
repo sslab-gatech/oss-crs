@@ -217,13 +217,13 @@ uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-c-libafl 
 
 Enable cross-CRS seed sharing for ensemble mode. When multiple CRS instances run on the same worker, they can share discovered seeds to improve overall fuzzing coverage.
 
-**Auto-detection (default)**: When running an ensemble configuration with more than one CRS on the same worker, shared seed directories are automatically created at `build/shared_seed_dir/{project}/{harness_name}/`.
+**Auto-detection (default)**: When running an ensemble configuration with more than one CRS on the same worker, shared seed directories are automatically created at `build/shared_seed_dir/{configuration}/{project}/{harness_name}/`.
 
 ```bash
 # Ensemble mode - shared seeds auto-enabled
 uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer
-# Creates: build/shared_seed_dir/json-c/json_array_fuzzer/atlantis-c-libafl/
-#          build/shared_seed_dir/json-c/json_array_fuzzer/crs-libfuzzer/
+# Creates: build/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/atlantis-c-libafl/
+#          build/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/crs-libfuzzer/
 ```
 
 **Explicit path**: Override the base shared seed directory location (harness name is appended automatically).

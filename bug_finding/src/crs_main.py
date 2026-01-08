@@ -759,6 +759,7 @@ def run_crs(
     source_oss_fuzz_dir: Path = None,
     shared_seed_dir: Path = None,
     disable_shared_seed: bool = False,
+    corpus_dir: Path = None,
 ):
     """
     Run CRS using docker compose.
@@ -783,6 +784,7 @@ def run_crs(
         source_oss_fuzz_dir: Optional source OSS-Fuzz directory to copy from (Path, already resolved)
         shared_seed_dir: Optional base directory for shared seeds (Path, already resolved)
         disable_shared_seed: Disable automatic shared seed directory for ensemble mode
+        corpus_dir: Optional directory containing initial corpus files to copy to shared seed dir
 
     Returns:
         bool: True if successful, False otherwise
@@ -805,6 +807,7 @@ def run_crs(
 
     # Determine shared_seed_dir for ensemble mode
     final_shared_seed_dir = None
+    config_name = config_dir.name
     if not disable_shared_seed:
         if shared_seed_dir:
             # User-provided path - append harness name
@@ -813,7 +816,7 @@ def run_crs(
             worker_crs_count = _get_worker_crs_count(config_dir, worker)
             if worker_crs_count > 1:
                 final_shared_seed_dir = (
-                    build_dir / "shared_seed_dir" / project_name / fuzzer_name
+                    build_dir / "shared_seed_dir" / config_name / project_name / fuzzer_name
                 )
                 logger.info(
                     f"Ensemble mode detected ({worker_crs_count} CRS on worker {worker}). "
@@ -824,6 +827,22 @@ def run_crs(
     if final_shared_seed_dir:
         final_shared_seed_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created shared seed directory: {final_shared_seed_dir}")
+
+    # Copy corpus files to shared seed directory if provided
+    if corpus_dir and final_shared_seed_dir:
+        if not corpus_dir.is_dir():
+            logger.error(f"Corpus directory does not exist: {corpus_dir}")
+            return False
+        # Import seed_utils for hash-based deduplication
+        from bug_finding.seed_watcher.seed_utils import copy_corpus_to_shared
+        copied_count = copy_corpus_to_shared(corpus_dir, final_shared_seed_dir)
+        if copied_count > 0:
+            logger.info(
+                f"Copied {copied_count} corpus files from {corpus_dir} "
+                f"to {final_shared_seed_dir} (hash-based naming)"
+            )
+        else:
+            logger.warning(f"No new corpus files copied from {corpus_dir}")
 
     # Generate compose files using render_compose module
     logger.info("Generating compose-%s.yaml", worker)

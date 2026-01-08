@@ -145,6 +145,12 @@ def main():
         action="store_true",
         help="Disable automatic shared seed directory for ensemble mode",
     )
+    run_parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="Directory containing initial corpus files to copy to shared seed directory",
+    )
 
     args = parser.parse_args()
 
@@ -244,6 +250,8 @@ def main():
         if args.shared_seed_dir:
             run_kwargs["shared_seed_dir"] = args.shared_seed_dir.resolve()
         run_kwargs["disable_shared_seed"] = getattr(args, "disable_shared_seed", False)
+        if args.corpus:
+            run_kwargs["corpus_dir"] = args.corpus.resolve()
 
         result = run_crs(**run_kwargs)
     else:

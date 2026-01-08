@@ -5,3 +5,6 @@ requires-python = ">=3.10"
 dependencies = [
     "watchdog>=4.0.0",
 ]
+
+[tool.setuptools]
+py-modules = ["seed_watcher", "seed_utils"]
