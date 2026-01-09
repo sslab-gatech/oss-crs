@@ -1209,7 +1209,10 @@ def add_openclover_to_plugin_management(pom_path: str) -> bool:
                 if group_id is None:
                     group_id = plugin.find("groupId")
 
-                if artifact_id is not None and artifact_id.text == "clover-maven-plugin":
+                if (
+                    artifact_id is not None
+                    and artifact_id.text == "clover-maven-plugin"
+                ):
                     group_text = group_id.text if group_id is not None else ""
                     if group_text == "org.openclover":
                         openclover_plugin = plugin
@@ -1235,7 +1238,9 @@ def add_openclover_to_plugin_management(pom_path: str) -> bool:
             artifact_elem.text = openclover_config["artifact_id"]
             version_elem = ET.SubElement(new_plugin, "version")
             version_elem.text = openclover_config["version"]
-            print(f"[INFO] Added OpenClover {openclover_config['version']} to pluginManagement")
+            print(
+                f"[INFO] Added OpenClover {openclover_config['version']} to pluginManagement"
+            )
 
         # 2. Disable Atlassian Clover plugin (to prevent version conflicts)
         if atlassian_clover_plugin is not None:
@@ -1251,7 +1256,9 @@ def add_openclover_to_plugin_management(pom_path: str) -> bool:
             if skip is None:
                 skip = ET.SubElement(config, "skip")
             skip.text = "true"
-            print("[INFO] Disabled existing Atlassian Clover plugin with <skip>true</skip>")
+            print(
+                "[INFO] Disabled existing Atlassian Clover plugin with <skip>true</skip>"
+            )
         else:
             # Add Atlassian Clover plugin with skip=true to override parent POM
             atlassian_plugin = ET.SubElement(pm_plugins, "plugin")
@@ -1262,14 +1269,18 @@ def add_openclover_to_plugin_management(pom_path: str) -> bool:
             config = ET.SubElement(atlassian_plugin, "configuration")
             skip = ET.SubElement(config, "skip")
             skip.text = "true"
-            print("[INFO] Added Atlassian Clover plugin with <skip>true</skip> to disable parent POM's clover")
+            print(
+                "[INFO] Added Atlassian Clover plugin with <skip>true</skip> to disable parent POM's clover"
+            )
 
         tree.write(pom_path, encoding="utf-8", xml_declaration=True)
         format_xml_with_xmllint(pom_path)
         return True
 
     except Exception as e:
-        print(f"[ERROR] Failed to add OpenClover to pluginManagement in {pom_path}: {e}")
+        print(
+            f"[ERROR] Failed to add OpenClover to pluginManagement in {pom_path}: {e}"
+        )
         return False
 
 
@@ -1520,12 +1531,16 @@ def init_rts(
     # Some parent POMs (e.g., jboss-parent) define com.atlassian.maven.plugins:clover-maven-plugin
     # with an older version, causing version conflicts with OpenClover runtime
     if tool_name == "openclover":
-        print(f"[INFO] Step 2b: Adding OpenClover to pluginManagement to override parent POM versions...")
+        print(
+            f"[INFO] Step 2b: Adding OpenClover to pluginManagement to override parent POM versions..."
+        )
         for pom_path in pom_files:
             if add_openclover_to_plugin_management(pom_path):
                 print(f"[INFO] Added OpenClover to pluginManagement: {pom_path}")
             else:
-                print(f"[WARNING] Failed to add OpenClover to pluginManagement: {pom_path}")
+                print(
+                    f"[WARNING] Failed to add OpenClover to pluginManagement: {pom_path}"
+                )
 
     # Step 3: Add RTS plugins to all pom.xml files
     print("[INFO] Step 3: Adding RTS plugins to pom.xml files...")
