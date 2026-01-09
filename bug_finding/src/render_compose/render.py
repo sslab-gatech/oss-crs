@@ -10,14 +10,14 @@ from typing import Any
 import yaml
 from jinja2 import Template
 
-from bug_finding.src.render.config import (
+from bug_finding.src.render_compose.config import (
     ComposeEnvironment,
     clone_crs_if_needed,
     get_crs_for_worker,
     get_project_language,
     load_config,
 )
-from bug_finding.src.render.helpers import (
+from bug_finding.src.render_compose.helpers import (
     check_image_exists,
     expand_volume_vars,
     get_dockerfile_workdir,

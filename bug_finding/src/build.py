@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from bug_finding.src.render import compose as render_compose
+from bug_finding.src.render_compose import render as render_compose
 from bug_finding.src.crs_utils import (
     clone_oss_fuzz_if_needed,
     fix_build_dir_permissions,
