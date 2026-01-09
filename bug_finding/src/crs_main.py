@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """Main CRS implementation for build and run operations."""
 
-import os
-import shutil
-import subprocess
-import sys
 import atexit
 import hashlib
 import logging
+import os
 import shlex
+import shutil
 import signal
+import subprocess
+import sys
 import uuid
-import yaml
+from importlib.resources import files
 from pathlib import Path
 from typing import Optional
-from importlib.resources import files
 
+import yaml
 from dotenv import dotenv_values
 
 from . import render_compose

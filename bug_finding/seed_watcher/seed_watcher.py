@@ -11,11 +11,10 @@ import logging
 import time
 from pathlib import Path
 
+from seed_utils import copy_seed
+from watchdog.events import FileCreatedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent
-
-from seed_utils import copy_seed
 
 logging.basicConfig(
     level=logging.ERROR,

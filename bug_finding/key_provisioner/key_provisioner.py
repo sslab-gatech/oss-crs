@@ -6,15 +6,16 @@ This service provisions API keys for LiteLLM proxy by making requests to the
 LiteLLM proxy's key management endpoints.
 """
 
+import argparse
+import logging
 import os
 import sys
 import time
-import logging
-import requests
-import argparse
-import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
+import requests
+import yaml
 
 # Configure logging
 logging.basicConfig(
@@ -56,11 +57,10 @@ class LiteLLMKeyProvisioner:
             if response.status_code == 200:
                 logger.info("LiteLLM proxy service is healthy")
                 return True
-            else:
-                logger.warning(
-                    f"LiteLLM proxy health check failed: {response.status_code}"
-                )
-                return False
+            logger.warning(
+                f"LiteLLM proxy health check failed: {response.status_code}"
+            )
+            return False
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to connect to LiteLLM proxy: {e}")
             return False
@@ -110,11 +110,10 @@ class LiteLLMKeyProvisioner:
                 key_data = response.json()
                 logger.info(f"Successfully generated key for user {user_id}")
                 return key_data
-            else:
-                logger.error(
-                    f"Failed to generate key: {response.status_code} - {response.text}"
-                )
-                return None
+            logger.error(
+                f"Failed to generate key: {response.status_code} - {response.text}"
+            )
+            return None
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed while generating key: {e}")
