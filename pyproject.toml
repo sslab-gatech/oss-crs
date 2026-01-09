@@ -38,7 +38,7 @@ packages = [
     "bug_fixing", "bug_fixing.src",
     "bug_fixing.src.oss_patch",
     "bug_fixing.src.oss_patch.crs_builder",
-    "bug_fixing.src.oss_patch.crs_runner",
+    "bug_fixing.src.oss_patch.crs_context",
     "bug_fixing.src.oss_patch.project_builder",
     "bug_fixing.src.oss_patch.inc_build_checker",
     "crs_registry"
