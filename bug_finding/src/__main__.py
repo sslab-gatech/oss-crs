@@ -6,8 +6,9 @@ import logging
 import sys
 from pathlib import Path
 
-from .crs_main import build_crs, run_crs
-from .utils import set_gitcache
+from bug_finding.src.build import build_crs
+from bug_finding.src.run import run_crs
+from bug_finding.src.utils import set_gitcache
 
 
 def main():

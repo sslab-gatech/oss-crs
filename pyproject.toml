@@ -34,7 +34,7 @@ dev = [
 
 [tool.setuptools]
 packages = [
-    "bug_finding", "bug_finding.src",
+    "bug_finding", "bug_finding.src", "bug_finding.src.render",
     "bug_fixing", "bug_fixing.src",
     "bug_fixing.src.oss_patch",
     "bug_fixing.src.oss_patch.crs_builder",
