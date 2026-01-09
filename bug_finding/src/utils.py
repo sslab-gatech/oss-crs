@@ -88,7 +88,7 @@ def run_rsync(
     logger.info("Running rsync: %s", " ".join(cmd))
 
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
         return True
     except subprocess.CalledProcessError as e:
         logger.error("rsync failed with exit code %d", e.returncode)
