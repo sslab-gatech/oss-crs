@@ -1,5 +1,4 @@
 name: atlantis-c-libafl
 type: bug-finding
 source:
-  url: https://github.com/Team-Atlanta/atlantis-c-libafl-snapshot
-  ref: main
+  local_path: ~/post/atlantis-c-libafl-snapshot

@@ -167,8 +167,8 @@ def main():
         logging.info(f"Creating build directory: {build_dir}")
         build_dir.mkdir(parents=True, exist_ok=True)
 
-    # Always use standard oss-fuzz directory location
-    oss_fuzz_dir = (build_dir / "crs" / "oss-fuzz").resolve()
+    # Always use standard oss-fuzz directory location (per-project isolation)
+    oss_fuzz_dir = (build_dir / "crs" / "oss-fuzz" / args.project).resolve()
 
     # Resolve source oss-fuzz directory if provided (for copying)
     source_oss_fuzz_dir = args.oss_fuzz_dir.resolve() if args.oss_fuzz_dir else None

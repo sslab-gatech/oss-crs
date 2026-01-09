@@ -70,3 +70,8 @@ include = [
     "bug_finding",
     "bug_fixing",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (require network access, may be slow)",
+]
