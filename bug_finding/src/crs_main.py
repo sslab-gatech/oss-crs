@@ -242,12 +242,12 @@ def _clone_oss_fuzz_if_needed(
             # Create destination directory
             oss_fuzz_dir.mkdir(parents=True, exist_ok=True)
 
-            # Phase 1: Copy base structure excluding build/ and projects/
-            logging.info("Phase 1: Copying base structure (excluding build/ and projects/)")
+            # Phase 1: Copy base structure excluding {build,projects,.git}/
+            logging.info("Phase 1: Copying base structure (excluding build/, projects/, and .git/)")
             if not run_rsync(
                 source=source_oss_fuzz_dir,
                 dest=oss_fuzz_dir,
-                exclude=["build/", "projects/"],
+                exclude=["build/", "projects/", ".git/"],
             ):
                 logging.error("Failed to copy base OSS-Fuzz structure")
                 return False
