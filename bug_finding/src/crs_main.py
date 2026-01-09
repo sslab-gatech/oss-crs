@@ -217,11 +217,6 @@ def _clone_oss_fuzz_if_needed(
     Returns:
         bool: True if successful, False otherwise
     """
-    # If already exists, skip (don't overwrite)
-    if oss_fuzz_dir.exists():
-        logging.info(f"OSS-Fuzz directory already exists: {oss_fuzz_dir}")
-        return True
-
     # If source directory provided, copy from it
     if source_oss_fuzz_dir:
         # Validate source structure
@@ -312,12 +307,60 @@ def _clone_oss_fuzz_if_needed(
             logging.error(f"Failed to copy OSS-Fuzz directory: {e}")
             return False
 
-    # Otherwise, clone from GitHub
+    # Otherwise, clone from GitHub (if not already present)
+    # Check if directory already exists with valid structure (from previous build)
+    if oss_fuzz_dir.exists():
+        if project_name:
+            # For sparse checkout, verify infra/ and project exist
+            if (oss_fuzz_dir / "infra").exists() and (
+                oss_fuzz_dir / "projects" / project_name
+            ).exists():
+                logging.info(
+                    f"OSS-Fuzz directory already exists with project {project_name}: {oss_fuzz_dir}"
+                )
+                return True
+        else:
+            # For full clone, just check infra/ exists
+            if (oss_fuzz_dir / "infra").exists():
+                logging.info(f"OSS-Fuzz directory already exists: {oss_fuzz_dir}")
+                return True
+        # Directory exists but invalid - remove and re-clone
+        logging.warning(f"OSS-Fuzz directory exists but invalid, removing: {oss_fuzz_dir}")
+        shutil.rmtree(oss_fuzz_dir)
+
     logging.info(f"Cloning oss-fuzz to: {oss_fuzz_dir}")
     try:
         # Create parent directory if needed
         oss_fuzz_dir.parent.mkdir(parents=True, exist_ok=True)
-        run_git(["clone", "https://github.com/google/oss-fuzz", str(oss_fuzz_dir)])
+
+        if project_name:
+            # Use sparse checkout to only fetch infra/ and the target project
+            logging.info(f"Using sparse checkout for project: {project_name}")
+            run_git([
+                "clone",
+                "--filter=blob:none",
+                "--no-checkout",
+                "--depth", "1",
+                "https://github.com/google/oss-fuzz",
+                str(oss_fuzz_dir),
+            ])
+            # Initialize sparse checkout and set paths
+            run_git(["sparse-checkout", "init", "--cone"], cwd=oss_fuzz_dir)
+            run_git(
+                ["sparse-checkout", "set", "infra", f"projects/{project_name}"],
+                cwd=oss_fuzz_dir,
+            )
+            # Checkout the sparse tree
+            run_git(["checkout"], cwd=oss_fuzz_dir)
+        else:
+            # Full shallow clone (legacy behavior)
+            run_git([
+                "clone",
+                "--depth", "1",
+                "https://github.com/google/oss-fuzz",
+                str(oss_fuzz_dir),
+            ])
+
         logging.info(f"Successfully cloned OSS-Fuzz to {oss_fuzz_dir}")
         return True
     except subprocess.CalledProcessError:

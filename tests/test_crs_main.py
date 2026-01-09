@@ -348,3 +348,351 @@ class TestCloneOssFuzzEdgeCases:
         )
 
         assert result is False
+
+
+# =============================================================================
+# Multi-Project Isolation Tests
+# =============================================================================
+
+class TestMultiProjectIsolation:
+    """Test that multiple projects can be copied to separate directories."""
+
+    def test_copy_multiple_projects_to_separate_destinations(
+        self, temp_oss_fuzz_source: Path, tmp_path: Path
+    ):
+        """Verify multiple projects can be copied to isolated directories."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        # Copy json-c to its own directory
+        dest_json_c = tmp_path / "crs" / "oss-fuzz" / "json-c"
+        result1 = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest_json_c,
+            source_oss_fuzz_dir=temp_oss_fuzz_source,
+            project_name="json-c",
+        )
+        assert result1 is True
+
+        # Copy libxml2 to its own directory
+        dest_libxml2 = tmp_path / "crs" / "oss-fuzz" / "libxml2"
+        result2 = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest_libxml2,
+            source_oss_fuzz_dir=temp_oss_fuzz_source,
+            project_name="libxml2",
+        )
+        assert result2 is True
+
+        # Each should have only its own project
+        assert (dest_json_c / "projects" / "json-c").exists()
+        assert not (dest_json_c / "projects" / "libxml2").exists()
+
+        assert (dest_libxml2 / "projects" / "libxml2").exists()
+        assert not (dest_libxml2 / "projects" / "json-c").exists()
+
+        # Each should have infra/
+        assert (dest_json_c / "infra").exists()
+        assert (dest_libxml2 / "infra").exists()
+
+    def test_copy_same_project_overwrites_existing(
+        self, temp_oss_fuzz_source: Path, tmp_path: Path
+    ):
+        """Verify copying to existing directory works (rsync overwrites)."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "crs" / "oss-fuzz" / "json-c"
+
+        # First copy
+        result1 = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest,
+            source_oss_fuzz_dir=temp_oss_fuzz_source,
+            project_name="json-c",
+        )
+        assert result1 is True
+
+        # Modify a file in destination
+        marker_file = dest / "marker.txt"
+        marker_file.write_text("modified")
+
+        # Second copy should work (rsync handles existing directories)
+        result2 = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest,
+            source_oss_fuzz_dir=temp_oss_fuzz_source,
+            project_name="json-c",
+        )
+        assert result2 is True
+        assert (dest / "projects" / "json-c").exists()
+
+
+# =============================================================================
+# Sparse Checkout Tests
+# =============================================================================
+
+class TestSparseCheckout:
+    """Test sparse checkout functionality for git clone."""
+
+    def test_sparse_checkout_with_project_name(self, tmp_path: Path):
+        """Verify sparse checkout is used when project_name is provided."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "sparse_clone"
+        git_calls = []
+
+        def mock_run_git(args, **kwargs):
+            git_calls.append((args, kwargs))
+            # Create minimal structure for subsequent git commands
+            if args[0] == "clone":
+                dest.mkdir(parents=True, exist_ok=True)
+            return None
+
+        with patch("bug_finding.src.crs_main.run_git", side_effect=mock_run_git):
+            result = _clone_oss_fuzz_if_needed(
+                oss_fuzz_dir=dest,
+                source_oss_fuzz_dir=None,  # No source = git clone
+                project_name="json-c",
+            )
+
+        assert result is True
+        assert len(git_calls) == 4
+
+        # Verify clone uses sparse checkout flags
+        clone_args = git_calls[0][0]
+        assert "clone" in clone_args
+        assert "--filter=blob:none" in clone_args
+        assert "--no-checkout" in clone_args
+        assert "--depth" in clone_args
+
+        # Verify sparse-checkout init
+        sparse_init_args = git_calls[1][0]
+        assert "sparse-checkout" in sparse_init_args
+        assert "init" in sparse_init_args
+        assert "--cone" in sparse_init_args
+
+        # Verify sparse-checkout set with correct paths
+        sparse_set_args = git_calls[2][0]
+        assert "sparse-checkout" in sparse_set_args
+        assert "set" in sparse_set_args
+        assert "infra" in sparse_set_args
+        assert "projects/json-c" in sparse_set_args
+
+        # Verify checkout is called
+        checkout_args = git_calls[3][0]
+        assert "checkout" in checkout_args
+
+    def test_full_clone_without_project_name(self, tmp_path: Path):
+        """Verify full shallow clone is used when no project_name."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "full_clone"
+        git_calls = []
+
+        def mock_run_git(args, **kwargs):
+            git_calls.append((args, kwargs))
+            dest.mkdir(parents=True, exist_ok=True)
+            return None
+
+        with patch("bug_finding.src.crs_main.run_git", side_effect=mock_run_git):
+            result = _clone_oss_fuzz_if_needed(
+                oss_fuzz_dir=dest,
+                source_oss_fuzz_dir=None,
+                project_name=None,  # No project = full clone
+            )
+
+        assert result is True
+        assert len(git_calls) == 1
+
+        # Verify it's a shallow clone without sparse checkout
+        clone_args = git_calls[0][0]
+        assert "clone" in clone_args
+        assert "--depth" in clone_args
+        assert "--filter=blob:none" not in clone_args
+        assert "--no-checkout" not in clone_args
+
+    def test_skip_clone_if_valid_directory_exists(self, tmp_path: Path):
+        """Verify clone is skipped if directory already exists with valid structure."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "existing_clone"
+        dest.mkdir(parents=True)
+
+        # Create valid structure (infra/ and projects/json-c/)
+        (dest / "infra").mkdir()
+        (dest / "projects" / "json-c").mkdir(parents=True)
+
+        git_calls = []
+
+        def mock_run_git(args, **kwargs):
+            git_calls.append((args, kwargs))
+            return None
+
+        with patch("bug_finding.src.crs_main.run_git", side_effect=mock_run_git):
+            result = _clone_oss_fuzz_if_needed(
+                oss_fuzz_dir=dest,
+                source_oss_fuzz_dir=None,
+                project_name="json-c",
+            )
+
+        assert result is True
+        # No git calls should be made - directory already valid
+        assert len(git_calls) == 0
+
+    def test_reclone_if_invalid_directory_exists(self, tmp_path: Path):
+        """Verify clone happens if directory exists but is invalid."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "invalid_clone"
+        dest.mkdir(parents=True)
+
+        # Create invalid structure (missing infra/)
+        (dest / "projects" / "json-c").mkdir(parents=True)
+
+        git_calls = []
+
+        def mock_run_git(args, **kwargs):
+            git_calls.append((args, kwargs))
+            if args[0] == "clone":
+                # Recreate directory after shutil.rmtree
+                dest.mkdir(parents=True, exist_ok=True)
+            return None
+
+        with patch("bug_finding.src.crs_main.run_git", side_effect=mock_run_git):
+            result = _clone_oss_fuzz_if_needed(
+                oss_fuzz_dir=dest,
+                source_oss_fuzz_dir=None,
+                project_name="json-c",
+            )
+
+        assert result is True
+        # Git clone should be called (directory was invalid and removed)
+        assert len(git_calls) == 4  # clone + sparse-checkout init + set + checkout
+
+
+# =============================================================================
+# Size Validation Tests
+# =============================================================================
+
+class TestCopySizeValidation:
+    """Test that rsync copy produces reasonably sized output."""
+
+    def test_rsync_copy_excludes_large_directories(
+        self, temp_oss_fuzz_source: Path, tmp_path: Path
+    ):
+        """Verify rsync copy is smaller than full source."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "crs" / "oss-fuzz" / "json-c"
+
+        result = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest,
+            source_oss_fuzz_dir=temp_oss_fuzz_source,
+            project_name="json-c",
+        )
+        assert result is True
+
+        # Calculate sizes
+        def get_dir_size(path: Path) -> int:
+            total = 0
+            for f in path.rglob("*"):
+                if f.is_file():
+                    total += f.stat().st_size
+            return total
+
+        source_size = get_dir_size(temp_oss_fuzz_source)
+        dest_size = get_dir_size(dest)
+
+        # Destination should be smaller (excludes other projects and .git)
+        assert dest_size < source_size
+
+    def test_rsync_copy_under_size_limit(
+        self, temp_oss_fuzz_source: Path, tmp_path: Path
+    ):
+        """Verify rsync copy is under 50MB threshold."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "crs" / "oss-fuzz" / "json-c"
+
+        result = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest,
+            source_oss_fuzz_dir=temp_oss_fuzz_source,
+            project_name="json-c",
+        )
+        assert result is True
+
+        # Calculate destination size
+        def get_dir_size(path: Path) -> int:
+            total = 0
+            for f in path.rglob("*"):
+                if f.is_file():
+                    total += f.stat().st_size
+            return total
+
+        dest_size = get_dir_size(dest)
+        max_size = 50 * 1024 * 1024  # 50MB
+
+        assert dest_size < max_size, f"Copy size {dest_size} exceeds 50MB limit"
+
+
+# =============================================================================
+# Sparse Checkout Size Validation Tests (Integration)
+# =============================================================================
+
+@pytest.mark.integration
+class TestSparseCheckoutSizeValidation:
+    """Integration tests for sparse checkout size validation.
+
+    These tests actually clone from GitHub and validate the resulting size.
+    Run with: pytest -m integration
+    """
+
+    def test_sparse_checkout_under_size_limit(self, tmp_path: Path):
+        """Verify sparse checkout is under 50MB threshold."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "crs" / "oss-fuzz" / "json-c"
+
+        result = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest,
+            source_oss_fuzz_dir=None,  # No source = git clone
+            project_name="json-c",
+        )
+        assert result is True
+
+        # Verify expected structure exists
+        assert (dest / "infra").exists(), "infra/ should exist"
+        assert (dest / "projects" / "json-c").exists(), "projects/json-c/ should exist"
+
+        # Calculate destination size
+        def get_dir_size(path: Path) -> int:
+            total = 0
+            for f in path.rglob("*"):
+                if f.is_file():
+                    total += f.stat().st_size
+            return total
+
+        dest_size = get_dir_size(dest)
+        max_size = 60 * 1024 * 1024  # 50MB
+
+        assert dest_size < max_size, (
+            f"Sparse checkout size {dest_size / 1024 / 1024:.2f}MB exceeds 60MB limit"
+        )
+
+    def test_sparse_checkout_excludes_other_projects(self, tmp_path: Path):
+        """Verify sparse checkout only includes target project."""
+        from bug_finding.src.crs_main import _clone_oss_fuzz_if_needed
+
+        dest = tmp_path / "crs" / "oss-fuzz" / "json-c"
+
+        result = _clone_oss_fuzz_if_needed(
+            oss_fuzz_dir=dest,
+            source_oss_fuzz_dir=None,
+            project_name="json-c",
+        )
+        assert result is True
+
+        # Target project should exist
+        assert (dest / "projects" / "json-c").exists()
+
+        # Other projects should NOT exist (sparse checkout)
+        projects_dir = dest / "projects"
+        project_dirs = [d for d in projects_dir.iterdir() if d.is_dir()]
+        assert len(project_dirs) == 1, (
+            f"Expected only json-c in projects/, found: {[d.name for d in project_dirs]}"
+        )
