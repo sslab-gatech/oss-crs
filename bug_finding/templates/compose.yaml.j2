@@ -189,9 +189,9 @@ services:
 {%- for vol in crs.volumes %}
       - {{ vol }}
 {%- endfor %}
-{%- if shared_seed_dir %}
-      # Shared seeds - read-only mount populated by seed_watcher service
-      - {{ shared_seed_dir }}:/seed_share_dir:ro
+{%- if ensemble_dir %}
+      # Ensemble shared corpus - read-only mount populated by seed_watcher service
+      - {{ ensemble_dir }}/corpus:/seed_share_dir:ro
 {%- endif %}
     cpuset: {{ crs.cpuset }}
     deploy:
@@ -202,26 +202,35 @@ services:
 {%- endif %}
 {%- endfor %}
 
-{%- if mode == 'run' and shared_seed_dir and harness_name %}
-  # Seed Watcher - monitors corpus directories, deduplicates by content hash
-  seed_watcher:
+{%- if mode == 'run' and ensemble_dir and harness_name %}
+  # Ensemble Watcher - monitors corpus and povs directories, deduplicates by content hash
+  ensemble_watcher:
     build:
       context: {{ seed_watcher_path }}
       dockerfile: Dockerfile
     volumes:
-      # Shared seed directory - writable for the watcher
-      - {{ shared_seed_dir }}:/shared_seeds:rw
+      # Ensemble shared directories - writable for the watcher
+      - {{ ensemble_dir }}/corpus:/ensemble/corpus:rw
+      - {{ ensemble_dir }}/povs:/ensemble/povs:rw
       # Mount each CRS corpus directory as read-only
 {%- for crs in crs_list %}
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus:/corpus/{{ crs.name }}:ro
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus:/watch/corpus/{{ crs.name }}:ro
+{%- endfor %}
+      # Mount each CRS povs directory as read-only
+{%- for crs in crs_list %}
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/povs:/watch/povs/{{ crs.name }}:ro
 {%- endfor %}
     command:
       - python3
       - seed_watcher.py
       - --corpus-dirs
-      - "{% for crs in crs_list %}/corpus/{{ crs.name }}{% if not loop.last %},{% endif %}{% endfor %}"
-      - --shared-dir
-      - /shared_seeds
+      - "{% for crs in crs_list %}/watch/corpus/{{ crs.name }}{% if not loop.last %},{% endif %}{% endfor %}"
+      - --shared-corpus-dir
+      - /ensemble/corpus
+      - --povs-dirs
+      - "{% for crs in crs_list %}/watch/povs/{{ crs.name }}{% if not loop.last %},{% endif %}{% endfor %}"
+      - --shared-povs-dir
+      - /ensemble/povs
 {%- endif %}
 
 {%- if not external_litellm %}

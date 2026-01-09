@@ -15,6 +15,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN chmod +x seed_watcher.py
 
 # Create directories for mounts
-RUN mkdir -p /corpus /shared_seeds
+RUN mkdir -p /watch/corpus /watch/povs /ensemble/corpus /ensemble/povs
 
 CMD ["python3", "seed_watcher.py"]

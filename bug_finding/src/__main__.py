@@ -135,21 +135,21 @@ def main():
         "--gitcache", action="store_true", help="Use gitcache for git clone operations"
     )
     run_parser.add_argument(
-        "--shared-seed-dir",
+        "--ensemble-dir",
         type=Path,
         default=None,
-        help="Base directory for shared seeds (default: build/shared/{project}/ for ensemble)",
+        help="Base directory for ensemble sharing (default: build/ensemble/<config>/<project>/<harness>/)",
     )
     run_parser.add_argument(
-        "--disable-shared-seed",
+        "--disable-ensemble",
         action="store_true",
-        help="Disable automatic shared seed directory for ensemble mode",
+        help="Disable automatic ensemble directory for multi-CRS mode",
     )
     run_parser.add_argument(
         "--corpus",
         type=Path,
         default=None,
-        help="Directory containing initial corpus files to copy to shared seed directory",
+        help="Directory containing initial corpus files to copy to ensemble corpus",
     )
 
     args = parser.parse_args()
@@ -246,10 +246,10 @@ def main():
         if source_oss_fuzz_dir:
             run_kwargs["source_oss_fuzz_dir"] = source_oss_fuzz_dir
 
-        # Shared seed directory options
-        if args.shared_seed_dir:
-            run_kwargs["shared_seed_dir"] = args.shared_seed_dir.resolve()
-        run_kwargs["disable_shared_seed"] = getattr(args, "disable_shared_seed", False)
+        # Ensemble directory options
+        if args.ensemble_dir:
+            run_kwargs["ensemble_dir"] = args.ensemble_dir.resolve()
+        run_kwargs["disable_ensemble"] = getattr(args, "disable_ensemble", False)
         if args.corpus:
             run_kwargs["corpus_dir"] = args.corpus.resolve()
 
