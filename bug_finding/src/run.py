@@ -6,9 +6,9 @@ import logging
 import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
-from typing import Optional
 
 from bug_finding.src.render import compose as render_compose
 from bug_finding.src.crs_utils import (
@@ -22,31 +22,32 @@ from bug_finding.src.crs_utils import (
 logger = logging.getLogger(__name__)
 
 # Default registry path
-DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"
+# __package__ is guaranteed to be set when running as a module
+DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"  # type: ignore[arg-type]
 
 
 def run_crs(
     config_dir: Path,
     project_name: str,
     fuzzer_name: str,
-    fuzzer_args: list,
+    fuzzer_args: list[str],
     oss_fuzz_dir: Path,
     build_dir: Path,
     worker: str = "local",
     engine: str = "libfuzzer",
     sanitizer: str = "address",
     architecture: str = "x86_64",
-    check_project_fn=None,
+    check_project_fn: Callable[[], bool] | None = None,
     registry_dir: Path = DEFAULT_REGISTRY_DIR,
-    hints_dir: Optional[Path] = None,
-    harness_source: Optional[Path] = None,
-    diff_path: Optional[Path] = None,
+    hints_dir: Path | None = None,
+    harness_source: Path | None = None,
+    diff_path: Path | None = None,
     external_litellm: bool = False,
-    source_oss_fuzz_dir: Optional[Path] = None,
-    ensemble_dir: Optional[Path] = None,
+    source_oss_fuzz_dir: Path | None = None,
+    ensemble_dir: Path | None = None,
     disable_ensemble: bool = False,
-    corpus_dir: Optional[Path] = None,
-):
+    corpus_dir: Path | None = None,
+) -> bool:
     """
     Run CRS using docker compose.
 
@@ -138,24 +139,21 @@ def run_crs(
     fuzzer_command = [fuzzer_name] + fuzzer_args
     try:
         config_hash, crs_build_dir = render_compose.render_run_compose(
-            config_dir=str(config_dir),
-            build_dir=str(build_dir),
-            oss_fuzz_dir=str(oss_fuzz_dir),
+            config_dir=config_dir,
+            build_dir=build_dir,
+            oss_fuzz_dir=oss_fuzz_dir,
             project=project_name,
             engine=engine,
             sanitizer=sanitizer,
             architecture=architecture,
-            registry_dir=str(registry_dir),
+            registry_dir=registry_dir,
             worker=worker,
             fuzzer_command=fuzzer_command,
             harness_source=str(harness_source) if harness_source else None,
-            diff_path=str(diff_path) if diff_path else None,
+            diff_path=diff_path,
             external_litellm=external_litellm,
-            ensemble_dir=str(final_ensemble_dir)
-            if final_ensemble_dir
-            else None,
+            ensemble_dir=final_ensemble_dir,
         )
-        crs_build_dir = Path(crs_build_dir)
     except Exception as e:
         logger.error("Failed to generate compose file: %s", e)
         return False

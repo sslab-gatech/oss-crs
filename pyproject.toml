@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "oss-crs"
 version = "0.1.0"
 description = "Cyber Reasoning System (CRS) build and run tools for bug finding and fixing"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Team Atlanta"}
@@ -30,6 +30,7 @@ oss-bugfix-crs = "bug_fixing.src.__main__:main"
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "watchdog>=4.0.0",
 ]
 
 [tool.setuptools]

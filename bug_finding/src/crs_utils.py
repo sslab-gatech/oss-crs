@@ -7,7 +7,6 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from dotenv import dotenv_values
@@ -69,7 +68,7 @@ def verify_external_litellm(config_dir: Path) -> bool:
 
 
 def validate_oss_fuzz_structure(
-    source_dir: Path, project_name: Optional[str] = None
+    source_dir: Path, project_name: str | None = None
 ) -> bool:
     """Validate OSS-Fuzz directory structure.
 
@@ -109,8 +108,8 @@ def validate_oss_fuzz_structure(
 
 def clone_oss_fuzz_if_needed(
     oss_fuzz_dir: Path,
-    source_oss_fuzz_dir: Optional[Path] = None,
-    project_name: Optional[str] = None,
+    source_oss_fuzz_dir: Path | None = None,
+    project_name: str | None = None,
 ) -> bool:
     """Clone or copy OSS-Fuzz to the standard location if needed.
 
@@ -282,7 +281,7 @@ def clone_oss_fuzz_if_needed(
 
 
 def validate_crs_modes(
-    config_dir: Path, worker: str, registry_dir: Path, diff_path: Path
+    config_dir: Path, worker: str, registry_dir: Path, diff_path: Path | None
 ) -> bool:
     """
     Validate that CRS mode requirements match the provided diff_path.

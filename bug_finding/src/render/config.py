@@ -5,7 +5,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
 
@@ -27,13 +27,13 @@ class ComposeEnvironment:
     crs_build_dir: Path
     output_dir: Path
     oss_crs_registry_path: Path
-    config: Dict[str, Any]
-    resource_config: Dict[str, Any]
-    crs_paths: Dict[str, str]
-    crs_pkg_data: Dict[str, Dict[str, Any]]
+    config: dict[str, Any]
+    resource_config: dict[str, Any]
+    crs_paths: dict[str, str]
+    crs_pkg_data: dict[str, dict[str, Any]]
 
 
-def load_config(config_dir: Path) -> Dict[str, Any]:
+def load_config(config_dir: Path) -> dict[str, Any]:
     """Load all configuration files from the config directory."""
     config = {}
 
@@ -55,7 +55,7 @@ def load_config(config_dir: Path) -> Dict[str, Any]:
     return config
 
 
-def parse_cpu_range(cpu_spec: str) -> List[int]:
+def parse_cpu_range(cpu_spec: str) -> list[int]:
     """
     Parse CPU specification and return list of CPU cores.
 
@@ -90,7 +90,7 @@ def parse_cpu_range(cpu_spec: str) -> List[int]:
     return sorted(set(cpu_list))
 
 
-def format_cpu_list(cpu_list: List[int]) -> str:
+def format_cpu_list(cpu_list: list[int]) -> str:
     """
     Format a list of CPU cores as comma-separated string.
 
@@ -139,7 +139,7 @@ def format_memory(memory_mb: int) -> str:
 
 def clone_crs_if_needed(
     crs_name: str, crs_build_dir: Path, registry_dir: Path
-) -> Optional[Path]:
+) -> Path | None:
     """
     Clone a CRS repository if needed, or return local path if specified.
 
@@ -233,10 +233,10 @@ def clone_crs_if_needed(
 
 def get_crs_for_worker(
     worker_name: str,
-    resource_config: Dict[str, Any],
-    crs_paths: Dict[str, str],
-    crs_pkg_data: Dict[str, Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+    resource_config: dict[str, Any],
+    crs_paths: dict[str, str],
+    crs_pkg_data: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
     """
     Extract CRS configurations for a specific worker.
 

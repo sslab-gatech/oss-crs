@@ -6,8 +6,10 @@ import logging
 import shutil
 import subprocess
 import uuid
+from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -22,7 +24,8 @@ from bug_finding.src.utils import run_git
 logger = logging.getLogger(__name__)
 
 # Default registry path
-DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"
+# __package__ is guaranteed to be set when running as a module
+DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"  # type: ignore[arg-type]
 
 
 def _build_project_image(
@@ -47,8 +50,11 @@ def _build_project_image(
 
 
 def _save_parent_image_tarballs(
-    crs_list: list, project_name: str, build_dir: Path, project_image_prefix: str
-):
+    crs_list: list[dict[str, Any]],
+    project_name: str,
+    build_dir: Path,
+    project_image_prefix: str,
+) -> str | None:
     """
     Save parent image tarballs for CRS that need dind.
 
@@ -159,16 +165,16 @@ def build_crs(
     engine: str = "libfuzzer",
     sanitizer: str = "address",
     architecture: str = "x86_64",
-    source_path: Path = None,
-    project_path: Path = None,
+    source_path: Path | None = None,
+    project_path: Path | None = None,
     overwrite: bool = False,
     clone: bool = False,
-    check_project_fn=None,
+    check_project_fn: Callable[[], bool] | None = None,
     registry_dir: Path = DEFAULT_REGISTRY_DIR,
     project_image_prefix: str = "gcr.io/oss-fuzz",
     external_litellm: bool = False,
-    source_oss_fuzz_dir: Path = None,
-):
+    source_oss_fuzz_dir: Path | None = None,
+) -> bool:
     """
     Build CRS for a project using docker compose.
 
@@ -262,11 +268,9 @@ def build_crs(
 
     # Compute source_tag for image versioning if source_path provided
     source_tag = None
-    source_path_str = None
     if source_path:
-        source_path_str = str(source_path)
         source_tag = hashlib.sha256(
-            source_path_str.encode() + project_name.encode()
+            str(source_path).encode() + project_name.encode()
         ).hexdigest()[:12]
         logger.info("Using source tag for image versioning: %s", source_tag)
 
@@ -275,20 +279,19 @@ def build_crs(
     try:
         build_profiles, config_hash, crs_build_dir, crs_list = (
             render_compose.render_build_compose(
-                config_dir=str(config_dir),
-                build_dir=str(build_dir),
-                oss_fuzz_dir=str(oss_fuzz_dir),
+                config_dir=config_dir,
+                build_dir=build_dir,
+                oss_fuzz_dir=oss_fuzz_dir,
                 project=project_name,
                 engine=engine,
                 sanitizer=sanitizer,
                 architecture=architecture,
-                registry_dir=str(registry_dir),
-                source_path=source_path_str,
+                registry_dir=registry_dir,
+                source_path=source_path,
                 project_image_prefix=project_image_prefix,
                 external_litellm=external_litellm,
             )
         )
-        crs_build_dir = Path(crs_build_dir)
     except Exception as e:
         logger.error("Failed to generate compose files: %s", e)
         return False

@@ -10,9 +10,13 @@ import argparse
 import logging
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from seed_utils import copy_seed
 from watchdog.events import FileCreatedEvent, FileSystemEventHandler
+
+if TYPE_CHECKING:
+    from watchdog.events import FileSystemEvent
 from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 
@@ -26,7 +30,7 @@ logger = logging.getLogger("ensemble_watcher")
 class FileHandler(FileSystemEventHandler):
     """Handles new files by copying to shared directory with hash-based naming."""
 
-    def __init__(self, shared_dir: Path):
+    def __init__(self, shared_dir: Path) -> None:
         self.shared_dir = shared_dir
         self.shared_dir.mkdir(parents=True, exist_ok=True)
 
@@ -37,9 +41,12 @@ class FileHandler(FileSystemEventHandler):
         """
         return copy_seed(src_path, self.shared_dir)
 
-    def on_created(self, event):
+    def on_created(self, event: "FileSystemEvent") -> None:
         if isinstance(event, FileCreatedEvent):
-            self._copy_file(Path(event.src_path))
+            src_path = event.src_path
+            if isinstance(src_path, bytes):
+                src_path = src_path.decode()
+            self._copy_file(Path(src_path))
 
 
 def scan_existing_files(watch_dirs: list[Path], handler: FileHandler) -> int:
@@ -58,7 +65,7 @@ def scan_existing_files(watch_dirs: list[Path], handler: FileHandler) -> int:
     return copied
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Watch corpus and povs directories, sync with hash-based deduplication"
     )

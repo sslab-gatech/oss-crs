@@ -11,7 +11,7 @@ from bug_finding.src.run import run_crs
 from bug_finding.src.utils import set_gitcache
 
 
-def main():
+def main() -> int:
     """Main entry point for CRS CLI."""
     # FIXME: does not work
     # logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')

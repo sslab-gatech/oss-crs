@@ -4,7 +4,6 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Dict, List
 
 from dotenv import dotenv_values
 
@@ -85,7 +84,7 @@ def get_dockerfile_workdir(project_path: Path) -> str:
         return "/src"
 
 
-def get_crs_env_vars(config_dir: Path) -> List[str]:
+def get_crs_env_vars(config_dir: Path) -> list[str]:
     """Extract CRS_* prefixed variable names from .env file.
 
     Args:
@@ -101,7 +100,7 @@ def get_crs_env_vars(config_dir: Path) -> List[str]:
     return sorted([k for k in env_vars.keys() if k.startswith("CRS_")])
 
 
-def get_dot_env_vars(config_dir: Path) -> Dict[str, str]:
+def get_dot_env_vars(config_dir: Path) -> dict[str, str]:
     """Load all environment variables from .env file.
 
     Args:
@@ -113,12 +112,13 @@ def get_dot_env_vars(config_dir: Path) -> Dict[str, str]:
     env_file = config_dir / ".env"
     if not env_file.exists():
         return {}
-    return dict(dotenv_values(str(env_file)))
+    # Filter out None values from dotenv_values
+    return {k: v for k, v in dotenv_values(str(env_file)).items() if v is not None}
 
 
 def merge_env_vars(
-    registry_env: Dict[str, str], dot_env: Dict[str, str], crs_name: str, phase: str
-) -> Dict[str, str]:
+    registry_env: dict[str, str], dot_env: dict[str, str], crs_name: str, phase: str
+) -> dict[str, str]:
     """Merge registry env vars with .env vars.
 
     .env wins on conflict, with warning logged.
@@ -148,7 +148,7 @@ def merge_env_vars(
     return merged
 
 
-def expand_volume_vars(volumes: List[str], env_vars: Dict[str, str]) -> List[str]:
+def expand_volume_vars(volumes: list[str], env_vars: dict[str, str]) -> list[str]:
     """Expand ${VAR} in volume strings using env vars.
 
     Docker Compose uses .env for variable substitution, but we've moved
@@ -165,8 +165,10 @@ def expand_volume_vars(volumes: List[str], env_vars: Dict[str, str]) -> List[str
     expanded = []
     for vol in volumes:
         # Match ${VAR} or $VAR patterns
-        def replace_var(match: re.Match) -> str:
+        def replace_var(match: re.Match[str]) -> str:
             var_name = match.group(1) or match.group(2)
+            if var_name is None:
+                return match.group(0)
             return env_vars.get(var_name, match.group(0))
 
         expanded_vol = re.sub(r"\$\{(\w+)\}|\$(\w+)", replace_var, vol)
