@@ -773,7 +773,7 @@ def _pull_docker_image(image_name: str, timeout: int = 600) -> bool:
         return False
 
 
-def _retag_docker_image(src_image: str, dst_image: str) -> bool:
+def retag_docker_image(src_image: str, dst_image: str) -> bool:
     """Retag a Docker image."""
     proc = subprocess.run(
         f"docker tag {src_image} {dst_image}",
@@ -815,7 +815,7 @@ def ensure_inc_build_image(
     ossfuzz_image = get_ossfuzz_inc_image_name(project_name, sanitizer)
     if docker_image_exists(ossfuzz_image):
         logger.info(f'Found "{ossfuzz_image}", retagging to builder format...')
-        return _retag_docker_image(ossfuzz_image, builder_inc_image)
+        return retag_docker_image(ossfuzz_image, builder_inc_image)
 
     # Try to pull from remote registry
     remote_image = get_inc_build_remote_image_name(project_name, sanitizer, registry)
@@ -823,11 +823,11 @@ def ensure_inc_build_image(
     # Check if remote image exists locally (maybe already pulled with different tag)
     if docker_image_exists(remote_image):
         logger.info(f'Found "{remote_image}" locally, retagging to builder format...')
-        return _retag_docker_image(remote_image, builder_inc_image)
+        return retag_docker_image(remote_image, builder_inc_image)
 
     # Pull from remote
     if _pull_docker_image(remote_image):
-        return _retag_docker_image(remote_image, builder_inc_image)
+        return retag_docker_image(remote_image, builder_inc_image)
 
     logger.info(f"Inc-build image not available from registry, will build locally.")
     return False

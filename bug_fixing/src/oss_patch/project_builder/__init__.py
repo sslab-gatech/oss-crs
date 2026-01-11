@@ -10,14 +10,15 @@ import sys
 from contextlib import contextmanager
 
 from bug_fixing.src.oss_patch.functions import (
-    create_docker_volume,
     docker_image_exists,
     get_base_runner_image_name,
+    get_incremental_build_image_name,
     get_builder_image_name,
     run_command,
     is_git_repository,
     change_ownership_with_docker,
     ensure_inc_build_image,
+    retag_docker_image,
 )
 from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
@@ -71,40 +72,6 @@ def temp_build_context(path_name="temp_data"):
                 shutil.rmtree(temp_path)
             except OSError:
                 pass
-
-
-def _clone_project_repo(
-    proj_yaml_path: Path, dst_path: Path, use_gitcache: bool = False
-) -> bool:
-    if not proj_yaml_path.exists():
-        logger.error(f'Target project "{proj_yaml_path}" not found')
-        return False
-
-    with open(proj_yaml_path) as f:
-        yaml_data = yaml.safe_load(f)
-
-    if not "main_repo" in yaml_data.keys():
-        logger.error(f"Invalid project.yaml file: {proj_yaml_path}")
-        return False
-
-    logger.info(
-        f'Cloning the target project repository from "{yaml_data["main_repo"]}" to "{dst_path}"'
-    )
-
-    git_prefix = "gitcache " if use_gitcache else ""
-    clone_command = f"{git_prefix}git clone {yaml_data['main_repo']} --shallow-submodules --recurse-submodules {dst_path}"
-    # @TODO: how to properly handle `--shallow-submodules --recurse-submodules` options
-
-    try:
-        subprocess.check_call(
-            clone_command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            shell=True,
-        )
-        return True
-    except subprocess.CalledProcessError:
-        return False
 
 
 def _read_lang_from_project_yaml(proj_yaml_path: Path) -> str:
@@ -372,7 +339,6 @@ class OSSPatchProjectBuilder:
 
         return True
 
-
     def _prepare_builder_image(self) -> bool:
         builder_image_name = get_builder_image_name(
             self.oss_fuzz_path, self.project_name
@@ -592,7 +558,7 @@ class OSSPatchProjectBuilder:
                 f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
-                f"{container_name} {builder_image_name}:inc-{sanitizer}"
+                f"{container_name} {get_incremental_build_image_name(self.oss_fuzz_path, self.project_name, sanitizer)}"
             )
 
             proc = subprocess.run(
@@ -776,7 +742,7 @@ class OSSPatchProjectBuilder:
                 f"{env_options}"
                 f'-c "WORKDIR {new_workdir}" '
                 f'-c "CMD [\\"compile\\"]" '
-                f"{container_name} {builder_image_name}:inc-{sanitizer}"
+                f"{container_name} {get_incremental_build_image_name(self.oss_fuzz_path, self.project_name, sanitizer)}"
             )
 
             proc = subprocess.run(
@@ -826,27 +792,42 @@ class OSSPatchProjectBuilder:
             f'"{source_path}" is not a git repository'
         )
 
-        if not docker_image_exists(
-            get_builder_image_name(self.oss_fuzz_path, self.project_name)
-        ):
+        builder_image_name = get_builder_image_name(
+            self.oss_fuzz_path, self.project_name
+        )
+
+        if not docker_image_exists(builder_image_name):
             logger.error(
-                f'The project builder image "{get_builder_image_name(self.oss_fuzz_path, self.project_name)}" does not exist.'
+                f'The project builder image "{builder_image_name}" does not exist.'
             )
             return False
 
         if self.project_lang in ["c", "c++"]:
-            return self._take_incremental_build_snapshot_for_c(
+            if not self._take_incremental_build_snapshot_for_c(
                 source_path, rts_enabled, sanitizer
-            )
+            ):
+                return False
         elif self.project_lang == "jvm":
-            return self._take_incremental_build_snapshot_for_java(
+            if not self._take_incremental_build_snapshot_for_java(
                 source_path, rts_enabled, rts_tool, sanitizer
-            )
+            ):
+                return False
         else:
             logger.error(
                 f'Incremental build for language "{self.project_lang}" is not supported.'
             )
             return False
+
+        # Replace the current :latest with incremental build snapshot
+        retag_docker_image(builder_image_name, f"{builder_image_name}:original")
+        retag_docker_image(
+            get_incremental_build_image_name(
+                self.oss_fuzz_path, self.project_name, sanitizer
+            ),
+            f"{builder_image_name}:latest",
+        )
+
+        return True
 
     def _get_patched_compile_sh(self) -> str | None:
         compile_sh_path = (

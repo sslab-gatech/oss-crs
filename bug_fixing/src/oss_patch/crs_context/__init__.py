@@ -195,24 +195,11 @@ class OSSPatchCRSContext:
 
         return True
 
-    def _load_necessary_images_to_docker_root(self, oss_fuzz_path: Path) -> bool:
-        # Choose between incremental-build-enabled builder image and original builder image
-        if docker_image_exists(
-            get_incremental_build_image_name(
-                oss_fuzz_path, self.project_name, "address"
-            )
-        ):
-            builder_image_name = get_incremental_build_image_name(
-                oss_fuzz_path, self.project_name, "address"
-            )
-        else:
-            builder_image_name = get_builder_image_name(
-                oss_fuzz_path, self.project_name
-            )
-
+    def _load_necessary_images_to_docker_root(self) -> bool:
+        # @NOTE: if incremental build is enabled, image with inc-address tag is re-tagged to latest image. Refer to `take_incremental_build_snapshot` method for a more detail.
         images_to_load = [
-            builder_image_name,
-            get_base_runner_image_name(oss_fuzz_path),
+            get_builder_image_name(self.oss_fuzz_path, self.project_name),
+            get_base_runner_image_name(self.oss_fuzz_path),
         ]
         # TODO: optimize speed; caching
         if not load_docker_images_to_dir(
@@ -258,7 +245,7 @@ class OSSPatchCRSContext:
             self.proj_src_path
         )  # FIXME: should support non-git source
 
-        if not self._load_necessary_images_to_docker_root(oss_fuzz_path):
+        if not self._load_necessary_images_to_docker_root():
             return False
 
         return True
