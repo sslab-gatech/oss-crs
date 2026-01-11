@@ -23,7 +23,6 @@ from bug_fixing.src.oss_patch.globals import (
     OSS_PATCH_RUNNER_DATA_PATH,
     OSS_PATCH_DIR,
 )
-from bug_fixing.src.oss_patch.models import CRSMode
 from tempfile import TemporaryDirectory
 
 logger = logging.getLogger()
