@@ -457,8 +457,6 @@ class OSSPatchCRSContext:
                     f"{get_crs_image_name(crs_name)}"
                 )
 
-                print(command)
-                exit(-1)
                 try:
                     # @TODO: ensure the clean-up of existing docker processes
                     # subprocess.check_call(command, shell=True)
