@@ -6,15 +6,16 @@ This service provisions API keys for LiteLLM proxy by making requests to the
 LiteLLM proxy's key management endpoints.
 """
 
+import argparse
+import logging
 import os
 import sys
 import time
-import logging
-import requests
-import argparse
-import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
+
+import requests
+import yaml
 
 # Configure logging
 logging.basicConfig(
@@ -56,11 +57,10 @@ class LiteLLMKeyProvisioner:
             if response.status_code == 200:
                 logger.info("LiteLLM proxy service is healthy")
                 return True
-            else:
-                logger.warning(
-                    f"LiteLLM proxy health check failed: {response.status_code}"
-                )
-                return False
+            logger.warning(
+                f"LiteLLM proxy health check failed: {response.status_code}"
+            )
+            return False
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to connect to LiteLLM proxy: {e}")
             return False
@@ -68,12 +68,12 @@ class LiteLLMKeyProvisioner:
     def generate_key(
         self,
         user_id: str,
-        max_budget: Optional[float] = None,
-        models: Optional[list] = None,
-        duration: Optional[str] = None,
-        tpm_limit: Optional[int] = None,
-        rpm_limit: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
+        max_budget: float | None = None,
+        models: list | None = None,
+        duration: str | None = None,
+        tpm_limit: int | None = None,
+        rpm_limit: int | None = None,
+    ) -> dict[str, Any] | None:
         """
         Generate a new API key for a user.
 
@@ -88,7 +88,7 @@ class LiteLLMKeyProvisioner:
         Returns:
           Dictionary containing key information if successful, None otherwise
         """
-        payload = {"user_id": user_id}
+        payload: dict[str, Any] = {"user_id": user_id}
 
         if max_budget is not None:
             payload["max_budget"] = max_budget
@@ -110,17 +110,16 @@ class LiteLLMKeyProvisioner:
                 key_data = response.json()
                 logger.info(f"Successfully generated key for user {user_id}")
                 return key_data
-            else:
-                logger.error(
-                    f"Failed to generate key: {response.status_code} - {response.text}"
-                )
-                return None
+            logger.error(
+                f"Failed to generate key: {response.status_code} - {response.text}"
+            )
+            return None
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Request failed while generating key: {e}")
             return None
 
-    def store_key(self, user_id: str, key_data: Dict[str, Any]) -> bool:
+    def store_key(self, user_id: str, key_data: dict[str, Any]) -> bool:
         """
         Store the generated key to a file.
 
@@ -160,7 +159,7 @@ class LiteLLMKeyProvisioner:
             return False
 
 
-def load_config(config_dir: str) -> Dict[str, Any]:
+def load_config(config_dir: str) -> dict[str, Any]:
     """Load all configuration files from config directory."""
     config = {}
 
@@ -195,7 +194,7 @@ def load_config(config_dir: str) -> Dict[str, Any]:
     return config
 
 
-def calculate_budgets(config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def calculate_budgets(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """
     Calculate budget allocations for each CRS.
 
@@ -275,7 +274,7 @@ def calculate_budgets(config: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     return budgets
 
 
-def get_models_list(config: Dict[str, Any], crs_name: str) -> List[str]:
+def get_models_list(config: dict[str, Any], crs_name: str) -> list[str]:
     """
     Get list of allowed models for a specific CRS from CRS configuration.
 
@@ -349,6 +348,7 @@ def main():
                 "LITELLM_KEY environment variable is required for external LiteLLM mode"
             )
             sys.exit(1)
+        assert litellm_key is not None  # for type narrowing after sys.exit
 
         # Check if specified CRS exists in budgets
         if args.crs not in budgets:
@@ -391,6 +391,7 @@ def main():
     if not master_key:
         logger.error("LITELLM_MASTER_KEY environment variable is required")
         sys.exit(1)
+    assert master_key is not None  # for type narrowing after sys.exit
 
     # Initialize the provisioner
     provisioner = LiteLLMKeyProvisioner(litellm_url, master_key)

@@ -6,11 +6,12 @@ import logging
 import sys
 from pathlib import Path
 
-from .crs_main import build_crs, run_crs
-from .utils import set_gitcache
+from bug_finding.src.build import build_crs
+from bug_finding.src.run import run_crs
+from bug_finding.src.utils import set_gitcache
 
 
-def main():
+def main() -> int:
     """Main entry point for CRS CLI."""
     # FIXME: does not work
     # logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -135,21 +136,21 @@ def main():
         "--gitcache", action="store_true", help="Use gitcache for git clone operations"
     )
     run_parser.add_argument(
-        "--shared-seed-dir",
+        "--ensemble-dir",
         type=Path,
         default=None,
-        help="Base directory for shared seeds (default: build/shared/{project}/ for ensemble)",
+        help="Base directory for ensemble sharing (default: build/ensemble/<config>/<project>/<harness>/)",
     )
     run_parser.add_argument(
-        "--disable-shared-seed",
+        "--disable-ensemble",
         action="store_true",
-        help="Disable automatic shared seed directory for ensemble mode",
+        help="Disable automatic ensemble directory for multi-CRS mode",
     )
     run_parser.add_argument(
         "--corpus",
         type=Path,
         default=None,
-        help="Directory containing initial corpus files to copy to shared seed directory",
+        help="Directory containing initial corpus files to copy to ensemble corpus",
     )
 
     args = parser.parse_args()
@@ -167,8 +168,8 @@ def main():
         logging.info(f"Creating build directory: {build_dir}")
         build_dir.mkdir(parents=True, exist_ok=True)
 
-    # Always use standard oss-fuzz directory location
-    oss_fuzz_dir = (build_dir / "crs" / "oss-fuzz").resolve()
+    # Always use standard oss-fuzz directory location (per-project isolation)
+    oss_fuzz_dir = (build_dir / "crs" / "oss-fuzz" / args.project).resolve()
 
     # Resolve source oss-fuzz directory if provided (for copying)
     source_oss_fuzz_dir = args.oss_fuzz_dir.resolve() if args.oss_fuzz_dir else None
@@ -246,10 +247,10 @@ def main():
         if source_oss_fuzz_dir:
             run_kwargs["source_oss_fuzz_dir"] = source_oss_fuzz_dir
 
-        # Shared seed directory options
-        if args.shared_seed_dir:
-            run_kwargs["shared_seed_dir"] = args.shared_seed_dir.resolve()
-        run_kwargs["disable_shared_seed"] = getattr(args, "disable_shared_seed", False)
+        # Ensemble directory options
+        if args.ensemble_dir:
+            run_kwargs["ensemble_dir"] = args.ensemble_dir.resolve()
+        run_kwargs["disable_ensemble"] = getattr(args, "disable_ensemble", False)
         if args.corpus:
             run_kwargs["corpus_dir"] = args.corpus.resolve()
 

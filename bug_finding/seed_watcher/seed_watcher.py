@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Seed watcher service for CRS ensemble seed sharing.
+"""Ensemble watcher service for CRS ensemble sharing.
 
-Monitors corpus directories from multiple CRS instances and copies
-new seeds to a shared directory. Seeds are deduplicated by content hash -
+Monitors corpus and povs directories from multiple CRS instances and copies
+new files to shared directories. Files are deduplicated by content hash -
 the filename in the shared directory is the SHA256 hash of the content.
 """
 
@@ -10,58 +10,64 @@ import argparse
 import logging
 import time
 from pathlib import Path
-
-from watchdog.observers import Observer
-from watchdog.observers.polling import PollingObserver
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent
+from typing import TYPE_CHECKING
 
 from seed_utils import copy_seed
+from watchdog.events import FileCreatedEvent, FileSystemEventHandler
+
+if TYPE_CHECKING:
+    from watchdog.events import FileSystemEvent
+from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 logging.basicConfig(
     level=logging.ERROR,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("seed_watcher")
+logger = logging.getLogger("ensemble_watcher")
 
 
-class SeedHandler(FileSystemEventHandler):
-    """Handles new seed files by copying to shared directory with hash-based naming."""
+class FileHandler(FileSystemEventHandler):
+    """Handles new files by copying to shared directory with hash-based naming."""
 
-    def __init__(self, shared_dir: Path):
+    def __init__(self, shared_dir: Path) -> None:
         self.shared_dir = shared_dir
         self.shared_dir.mkdir(parents=True, exist_ok=True)
 
-    def _copy_seed(self, src_path: Path) -> bool:
-        """Copy seed to shared directory using content hash as filename.
+    def _copy_file(self, src_path: Path) -> bool:
+        """Copy file to shared directory using content hash as filename.
 
-        Returns True if seed was new and copied, False if duplicate.
+        Returns True if file was new and copied, False if duplicate.
         """
         return copy_seed(src_path, self.shared_dir)
 
-    def on_created(self, event):
+    def on_created(self, event: "FileSystemEvent") -> None:
         if isinstance(event, FileCreatedEvent):
-            self._copy_seed(Path(event.src_path))
+            src_path = event.src_path
+            if isinstance(src_path, bytes):
+                src_path = src_path.decode()
+            self._copy_file(Path(src_path))
 
 
-def scan_existing_seeds(corpus_dirs: list[Path], handler: SeedHandler) -> int:
-    """Scan existing seeds in corpus directories.
+def scan_existing_files(watch_dirs: list[Path], handler: FileHandler) -> int:
+    """Scan existing files in watch directories.
 
-    Returns count of new seeds copied.
+    Returns count of new files copied.
     """
     copied = 0
-    for corpus_dir in corpus_dirs:
-        if not corpus_dir.exists():
+    for watch_dir in watch_dirs:
+        if not watch_dir.exists():
             continue
-        for seed_file in corpus_dir.iterdir():
-            if seed_file.is_file():
-                if handler._copy_seed(seed_file):
+        for file_path in watch_dir.iterdir():
+            if file_path.is_file():
+                if handler._copy_file(file_path):
                     copied += 1
     return copied
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Watch corpus directories and sync seeds with hash-based deduplication"
+        description="Watch corpus and povs directories, sync with hash-based deduplication"
     )
     parser.add_argument(
         "--corpus-dirs",
@@ -69,9 +75,19 @@ def main():
         help="Comma-separated list of corpus directories to watch"
     )
     parser.add_argument(
-        "--shared-dir",
+        "--shared-corpus-dir",
         required=True,
-        help="Shared directory to copy seeds to"
+        help="Shared directory to copy corpus seeds to"
+    )
+    parser.add_argument(
+        "--povs-dirs",
+        default="",
+        help="Comma-separated list of povs directories to watch (optional)"
+    )
+    parser.add_argument(
+        "--shared-povs-dir",
+        default="",
+        help="Shared directory to copy povs to (optional)"
     )
     parser.add_argument(
         "--scan-interval",
@@ -84,32 +100,64 @@ def main():
         action="store_true",
         help="Use polling observer instead of inotify"
     )
+    # Legacy argument for backwards compatibility
+    parser.add_argument(
+        "--shared-dir",
+        default="",
+        help="(Deprecated) Use --shared-corpus-dir instead"
+    )
     args = parser.parse_args()
 
-    corpus_dirs = [Path(d.strip()) for d in args.corpus_dirs.split(",")]
-    shared_dir = Path(args.shared_dir)
+    # Handle legacy --shared-dir argument
+    shared_corpus_dir = Path(args.shared_corpus_dir or args.shared_dir)
 
-    handler = SeedHandler(shared_dir)
+    corpus_dirs = [Path(d.strip()) for d in args.corpus_dirs.split(",") if d.strip()]
 
-    # Initial scan of existing seeds
-    scan_existing_seeds(corpus_dirs, handler)
+    # Setup corpus handler
+    corpus_handler = FileHandler(shared_corpus_dir)
 
-    # Setup watchdog observers for each corpus directory
+    # Setup povs handler if directories provided
+    povs_handler = None
+    povs_dirs = []
+    if args.povs_dirs and args.shared_povs_dir:
+        povs_dirs = [Path(d.strip()) for d in args.povs_dirs.split(",") if d.strip()]
+        shared_povs_dir = Path(args.shared_povs_dir)
+        povs_handler = FileHandler(shared_povs_dir)
+
+    # Initial scan of existing files
+    scan_existing_files(corpus_dirs, corpus_handler)
+    if povs_handler:
+        scan_existing_files(povs_dirs, povs_handler)
+
+    # Setup watchdog observers
     observer_cls = PollingObserver if args.use_polling else Observer
     observer = observer_cls()
 
+    # Watch corpus directories
     for corpus_dir in corpus_dirs:
         corpus_dir.mkdir(parents=True, exist_ok=True)
-        observer.schedule(handler, str(corpus_dir), recursive=False)
+        observer.schedule(corpus_handler, str(corpus_dir), recursive=False)
+
+    # Watch povs directories
+    if povs_handler:
+        for povs_dir in povs_dirs:
+            povs_dir.mkdir(parents=True, exist_ok=True)
+            observer.schedule(povs_handler, str(povs_dir), recursive=False)
 
     observer.start()
-    print(f"Seed watcher started. Watching {len(corpus_dirs)} corpus dirs -> {shared_dir}")
+
+    watch_info = f"corpus dirs: {len(corpus_dirs)}"
+    if povs_dirs:
+        watch_info += f", povs dirs: {len(povs_dirs)}"
+    print(f"Ensemble watcher started. Watching {watch_info}")
 
     try:
         while True:
             # Periodic scan to catch any missed files
             time.sleep(args.scan_interval)
-            scan_existing_seeds(corpus_dirs, handler)
+            scan_existing_files(corpus_dirs, corpus_handler)
+            if povs_handler:
+                scan_existing_files(povs_dirs, povs_handler)
     except KeyboardInterrupt:
         observer.stop()
 

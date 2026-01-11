@@ -4,7 +4,6 @@ import logging
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +17,12 @@ def set_gitcache(enabled: bool):
     USE_GITCACHE = enabled
 
 
-def run_git(args: List[str], **kwargs) -> subprocess.CompletedProcess:
+def run_git(args: list[str], **kwargs) -> subprocess.CompletedProcess:
     """Run git command, optionally with gitcache prefix."""
     if USE_GITCACHE:
         cmd = f"gitcache git {' '.join(args)}"
         return subprocess.run(cmd, shell=True, check=True, **kwargs)
-    else:
-        return subprocess.run(["git"] + args, check=True, **kwargs)
+    return subprocess.run(["git"] + args, check=True, **kwargs)
 
 
 def check_rsync_available() -> bool:
@@ -46,7 +44,7 @@ def check_rsync_available() -> bool:
 def run_rsync(
     source: Path,
     dest: Path,
-    exclude: Optional[List[str]] = None,
+    exclude: list[str] | None = None,
     *,
     archive: bool = True,
     verbose: bool = True,

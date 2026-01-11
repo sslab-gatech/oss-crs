@@ -4,13 +4,15 @@ import logging
 import tempfile
 from pathlib import Path
 
-from bug_finding.src.render_compose import (
-    expand_volume_vars,
+from bug_finding.src.render_compose.config import (
     format_cpu_list,
+    parse_cpu_range,
+)
+from bug_finding.src.render_compose.helpers import (
+    expand_volume_vars,
     get_crs_env_vars,
     get_dot_env_vars,
     merge_env_vars,
-    parse_cpu_range,
 )
 
 
