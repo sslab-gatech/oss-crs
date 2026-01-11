@@ -471,9 +471,7 @@ class OSSPatchCRSContext:
             finally:
                 change_ownership_with_docker(crs_run_tmp_dir)
                 change_ownership_with_docker(self.out_dir)
-                # remove_directory_with_docker(tmp_docker_root_dir)
-                # self._unmount_docker_root_in_overlay(mount_base_dir)
-                # change_ownership_with_docker(mount_base_dir)
+                remove_directory_with_docker(tmp_docker_root_dir)
 
     def _prepare_hints(self, hints_path: Path):
         shutil.copytree(hints_path, self.work_dir / "hints")
