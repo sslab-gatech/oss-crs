@@ -9,39 +9,14 @@ from .functions import (
     prepare_docker_cache_builder,
     get_project_rts_config,
     resolve_rts_config,
-    copy_git_repo,
 )
 from .globals import (
     OSS_PATCH_BASE_WORK_DIR_NAME,
     DEFAULT_PROJECT_SOURCE_NAME,
 )
 import logging
-import shutil
 
 logger = logging.getLogger()
-
-
-def _copy_oss_fuzz_if_needed(
-    dest_oss_fuzz_dir: Path,
-    source_oss_fuzz_dir: Path,
-    overwrite: bool = False,
-) -> bool:
-    """Copy OSS-Fuzz to work directory."""
-    if dest_oss_fuzz_dir.exists():
-        if not overwrite:
-            logger.info(
-                f"OSS-Fuzz already exists at {dest_oss_fuzz_dir}, skipping copy"
-            )
-            return True
-        logger.info(f"Overwriting existing OSS-Fuzz at {dest_oss_fuzz_dir}")
-        shutil.rmtree(dest_oss_fuzz_dir)
-
-    logger.info(
-        f'Copying OSS-Fuzz from "{source_oss_fuzz_dir}" to "{dest_oss_fuzz_dir}"'
-    )
-    dest_oss_fuzz_dir.parent.mkdir(parents=True, exist_ok=True)
-    copy_git_repo(source_oss_fuzz_dir, dest_oss_fuzz_dir)
-    return True
 
 
 class OSSPatch:
@@ -120,7 +95,6 @@ class OSSPatch:
         custom_source_path: Path | None = None,
         local_crs: Path | None = None,
         registry_path: Path | None = None,
-        overwrite: bool = False,
         use_gitcache: bool = False,
         force_rebuild: bool = False,
         inc_build_enabled: bool = True,
