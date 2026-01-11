@@ -12,7 +12,6 @@ from bug_fixing.src.oss_patch.functions import (
     docker_image_exists_in_dir,
     load_docker_images_to_dir,
     get_builder_image_name,
-    get_incremental_build_image_name,
     get_base_runner_image_name,
     get_git_commit_hash,
     get_crs_image_name,
