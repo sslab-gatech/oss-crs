@@ -1,6 +1,7 @@
 from pathlib import Path
 from .crs_builder import OSSPatchCRSBuilder
 from .crs_context import OSSPatchCRSContext
+from .crs_runner import OSSPatchCRSRunner
 from .inc_build_checker import IncrementalBuildChecker, IncrementalSnapshotMaker
 from .functions import (
     prepare_docker_cache_builder,
@@ -130,7 +131,7 @@ class OSSPatch:
         povs_dir: Path,
         litellm_api_key: str,
         litellm_api_base: str,
-        hints_dir: Path | None,
+        diff_path: Path | None,
         out_dir: Path,
         log_dir: Path | None = None,
         cpuset: str | None = None,
@@ -141,23 +142,25 @@ class OSSPatch:
         # Default log_dir to out_dir/logs if not specified
         effective_log_dir = log_dir if log_dir else out_dir / "logs"
 
-        oss_patch_runner = OSSPatchCRSContext(
+        crs_context = OSSPatchCRSContext(self.project_name, self.project_work_dir)
+
+        crs_runner = OSSPatchCRSRunner(
             self.project_name,
+            crs_context,
             self.project_work_dir,
-            out_dir,
             log_dir=effective_log_dir,
-            cpuset=cpuset,
-            memory=memory,
         )
 
-        return oss_patch_runner.run_crs_against_povs(
+        return crs_runner.run_crs_against_povs(
             self.crs_name,
             harness_name,
             povs_dir,
+            out_dir,
             litellm_api_key,
             litellm_api_base,
-            hints_dir,
-            "full",  # TODO: support delta mode
+            diff_path,
+            cpuset=cpuset,
+            memory=memory,
         )
 
     # Testing purpose function

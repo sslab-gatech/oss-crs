@@ -100,7 +100,7 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             Path(args.povs),
             litellm_key,
             litellm_base,
-            _get_path_or_none(args.hints),
+            _get_path_or_none(args.diff),
             Path(args.out),
             log_dir=log_dir,
             cpuset=args.cpuset,
@@ -248,7 +248,7 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     # run_crs_parser.add_argument(
     #     "--harness-source", help="path to harness source file for analysis"
     # )
-    run_crs_parser.add_argument("--hints", help="path to hint text file for the crs")
+    run_crs_parser.add_argument("--diff", help="path to diff file for the delta mode")
     run_crs_parser.add_argument(
         "--out", required=True, help="path to crs output directory"
     )
