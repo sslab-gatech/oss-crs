@@ -211,7 +211,7 @@ class OSSPatchCRSRunner:
             f"-e LITELLM_API_KEY={litellm_api_key} "
             f"-e TARGET_PROJ={self.project_name} "
             f"-e OSS_FUZZ=/oss-fuzz "
-            f"-e CP_SOURCES=/cp-sources "
+            f"-e PROJECT_SOURCE=/cp-sources "
             f"{get_crs_image_name(crs_name)}"
         )
 
