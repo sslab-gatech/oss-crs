@@ -91,6 +91,15 @@ services:
 {%- if source_path %}
       - {{ source_path }}:/local-source-mount
 {%- endif %}
+{%- if crs.cpuset %}
+    cpuset: {{ crs.cpuset }}
+{%- endif %}
+{%- if crs.memory_limit %}
+    deploy:
+      resources:
+        limits:
+          memory: {{ crs.memory_limit }}
+{%- endif %}
 {%- endif %}
 
 {%- if mode == 'run' %}
