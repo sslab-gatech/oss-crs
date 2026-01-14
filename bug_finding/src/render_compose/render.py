@@ -238,13 +238,6 @@ def render_compose_for_worker(
     # Get project language
     project_language = get_project_language(oss_fuzz_path, project)
 
-    # Compute source_tag from source_path if provided
-    source_tag = None
-    if source_path:
-        source_tag = hashlib.sha256(
-            str(source_path).encode() + project.encode()
-        ).hexdigest()[:12]
-
     # Load .env vars and merge with each CRS's run_env/build_env
     dot_env = get_dot_env_vars(config_dir)
 
@@ -286,7 +279,6 @@ def render_compose_for_worker(
         mode=mode,
         config_hash=config_hash,
         source_path=str(source_path) if source_path else None,
-        source_tag=source_tag,
         source_workdir=source_workdir,
         harness_source=harness_source,
         harness_name=harness_name,
@@ -446,21 +438,10 @@ def render_run_compose(
         raise ValueError(f"No CRS instances configured for worker '{worker}'")
 
     # Validate that CRS builder images exist (validates build was run)
-    # Compute source_tag if source_path is provided
-    source_tag = None
-    if source_path:
-        source_tag = hashlib.sha256(
-            str(source_path).encode() + project.encode()
-        ).hexdigest()[:12]
-
     for crs in crs_list:
         crs_name = crs["name"]
         builder_image = f"{project}_{crs_name}_builder"
-        if source_tag:
-            builder_image += f":{source_tag}"
-
-        # Use check_any_tag=True when no source_tag, to find images built with source_path
-        if not check_image_exists(builder_image, check_any_tag=(source_tag is None)):
+        if not check_image_exists(builder_image):
             raise FileNotFoundError(
                 f"CRS builder image not found: {builder_image}. "
                 f"Please run 'oss-crs build' first to build the CRS."

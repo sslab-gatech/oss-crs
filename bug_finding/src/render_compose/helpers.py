@@ -8,31 +8,19 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 
-def check_image_exists(image_name: str, check_any_tag: bool = False) -> bool:
+def check_image_exists(image_name: str) -> bool:
     """Check if Docker image exists locally.
 
     Args:
-        image_name: Full Docker image name (e.g., 'json-c_crs-multilang_builder:abc123')
-        check_any_tag: If True and image_name has no tag, check if any image with that name exists
+        image_name: Docker image name (e.g., 'json-c_crs-multilang_builder')
 
     Returns:
         True if image exists locally, False otherwise
     """
-    # First try exact match
     result = subprocess.run(
         ["docker", "image", "inspect", image_name], capture_output=True
     )
-    if result.returncode == 0:
-        return True
-
-    # If check_any_tag is True and no tag specified, check for any tag
-    if check_any_tag and ":" not in image_name:
-        result = subprocess.run(
-            ["docker", "images", "-q", image_name], capture_output=True, text=True
-        )
-        return bool(result.stdout.strip())
-
-    return False
+    return result.returncode == 0
 
 
 WORKDIR_REGEX = re.compile(r"\s*WORKDIR\s*([^\s]+)")

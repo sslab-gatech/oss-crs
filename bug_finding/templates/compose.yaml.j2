@@ -34,7 +34,7 @@ services:
   {{ crs.name }}_builder:
     profiles:
       - {{ crs.name }}_builder
-    image: {{ project }}_{{ crs.name }}_builder{% if source_tag %}:{{ source_tag }}{% endif %}
+    image: {{ project }}_{{ crs.name }}_builder
 {%- if crs.dind and not crs.host_docker_builder %}
     privileged: true
 {%- endif %}
