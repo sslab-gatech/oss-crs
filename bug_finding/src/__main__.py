@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from bug_finding.src.build import build_crs
+from bug_finding.src.prepare import prepare_crs
 from bug_finding.src.run import run_crs
 from bug_finding.src.utils import set_gitcache
 
@@ -20,6 +21,23 @@ def main() -> int:
         description="CRS (Cyber Reasoning System) build and run tool"
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
+
+    # prepare subcommand
+    prepare_parser = subparsers.add_parser(
+        "prepare", help="Prepare CRS by pre-building docker images for dind"
+    )
+    prepare_parser.add_argument(
+        "crs_name", help="Name of the CRS to prepare (must exist in registry)"
+    )
+    prepare_parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=Path.cwd() / "build",
+        help="Path to build directory (default: ./build)",
+    )
+    prepare_parser.add_argument(
+        "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
+    )
 
     # build_crs subcommand
     build_parser = subparsers.add_parser("build", help="Build CRS for a project")
@@ -175,7 +193,28 @@ def main() -> int:
         parser.print_help()
         return 1
 
-    # Resolve all paths immediately after parsing
+    # Handle prepare command (doesn't need config_dir, project, oss_fuzz_dir, gitcache)
+    if args.command == "prepare":
+        from importlib.resources import files
+
+        build_dir = args.build_dir.resolve()
+        if not build_dir.exists():
+            logging.info(f"Creating build directory: {build_dir}")
+            build_dir.mkdir(parents=True, exist_ok=True)
+
+        # Default registry path
+        _pkg_files = files("bug_finding.src")
+        DEFAULT_REGISTRY_DIR = Path(str(_pkg_files)).parent.parent / "crs_registry"
+
+        prepare_kwargs = {
+            "crs_name": args.crs_name,
+            "build_dir": build_dir,
+            "registry_dir": args.registry_dir.resolve() if args.registry_dir else DEFAULT_REGISTRY_DIR,
+        }
+        result = prepare_crs(**prepare_kwargs)
+        return 0 if result else 1
+
+    # For build and run commands, resolve paths
     config_dir = args.config_dir.resolve()
     build_dir = args.build_dir.resolve()
 
@@ -184,6 +223,7 @@ def main() -> int:
         logging.info(f"Creating build directory: {build_dir}")
         build_dir.mkdir(parents=True, exist_ok=True)
 
+    # For build and run commands, set up additional paths
     # Always use standard oss-fuzz directory location (per-project isolation)
     oss_fuzz_dir = (build_dir / "crs" / "oss-fuzz" / args.project).resolve()
 

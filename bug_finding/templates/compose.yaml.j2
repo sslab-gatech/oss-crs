@@ -172,8 +172,6 @@ services:
     build:
       context: {{ crs.path }}
       dockerfile: runner.Dockerfile
-      args:
-        - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
 {%- if coverage_build_dir %}
