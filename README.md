@@ -48,7 +48,26 @@ export OPENAI_API_KEY=sk-fake-key
 
 Note: Most CRSs in this demo have minimal or zero OpenAI API quota usage.
 
-### 3. Build a CRS
+### 3. Prepare CRS (Optional)
+
+For CRS that use Docker-in-Docker (dind), you can optionally run a prepare phase to pre-build project-independent docker images. This speeds up subsequent builds by pre-loading base images into the dind container's docker daemon.
+
+```bash
+# Prepare dind images for a CRS (by name from registry)
+uv run oss-bugfind-crs prepare mock-dind
+```
+
+The prepare phase:
+1. Looks for `docker-bake.hcl` in the CRS source directory
+2. Runs `docker buildx bake` to build all images defined in the bake file
+3. Saves images from the `dind-images` group to tarballs
+4. Loads them into a prepared docker-data directory
+
+Prepared docker-data is stored at `build/docker-data/<crs-name>/prepared/` and is automatically copied to per-project locations during the build phase.
+
+**Note**: This step is optional. If skipped, the build phase will still work but may take longer for dind-based CRS.
+
+### 4. Build a CRS
 
 Choose a configured CRS from `example_configs` and build it:
 
@@ -61,7 +80,7 @@ uv run oss-bugfind-crs build example_configs/ensemble-java java-example
 
 Built artifacts will be available under `build/crs` and `build/out`.
 
-### 4. Run a Built CRS
+### 5. Run a Built CRS
 
 Execute a built CRS with a specific fuzzer target:
 
@@ -125,6 +144,7 @@ The build directory contains:
 - `out/` - Build outputs and fuzzing results
 - `src/` - Cloned project sources (when using `--clone`)
 - `crs/parent-images/` - Parent image tarballs for Docker-in-Docker CRSs
+- `docker-data/` - Docker daemon data for dind CRSs (prepared and per-project)
 
 ```bash
 # Use custom build directory

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CRS build operations."""
 
-import hashlib
 import logging
 import shutil
 import subprocess
@@ -100,6 +99,52 @@ def _save_parent_image_tarballs(
             return None
 
     return str(parent_images_dir)
+
+
+def _copy_prepared_docker_data(
+    crs_list: list[dict[str, Any]],
+    project_name: str,
+    build_dir: Path,
+) -> None:
+    """
+    Copy prepared docker-data to per-project location for dind CRS.
+
+    The prepare phase saves docker-data to build/docker-data/<crs-name>/prepared/.
+    The build/run phases expect it at build/docker-data/<crs-name>/<project>/.
+    This function copies from prepared to per-project location if prepared exists.
+
+    Args:
+        crs_list: List of CRS configurations with 'name' and 'dind' keys
+        project_name: Name of the project
+        build_dir: Path to build directory (already resolved)
+    """
+    dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
+    if not dind_crs:
+        return
+
+    for crs in dind_crs:
+        crs_name = crs["name"]
+        prepared_path = build_dir / "docker-data" / crs_name / "prepared"
+        project_path = build_dir / "docker-data" / crs_name / project_name
+
+        if not prepared_path.exists():
+            logger.info(
+                f"No prepared docker-data found for CRS '{crs_name}', skipping copy"
+            )
+            continue
+
+        if project_path.exists():
+            logger.info(
+                f"Project docker-data already exists for CRS '{crs_name}', skipping copy"
+            )
+            continue
+
+        logger.info(
+            f"Copying prepared docker-data for CRS '{crs_name}' to {project_path}"
+        )
+        project_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(prepared_path, project_path)
+        logger.info(f"Successfully copied prepared docker-data to {project_path}")
 
 
 def _clone_project_source(
@@ -266,14 +311,6 @@ def build_crs(
     # Build project image
     _build_project_image(project_name, oss_fuzz_dir, architecture)
 
-    # Compute source_tag for image versioning if source_path provided
-    source_tag = None
-    if source_path:
-        source_tag = hashlib.sha256(
-            str(source_path).encode() + project_name.encode()
-        ).hexdigest()[:12]
-        logger.info("Using source tag for image versioning: %s", source_tag)
-
     # Generate compose files using render_compose module
     logger.info("Generating compose-build.yaml")
     try:
@@ -302,6 +339,9 @@ def build_crs(
     )
     if parent_images_dir:
         logger.info(f"Parent image tarballs saved to: {parent_images_dir}")
+
+    # Copy prepared docker-data to per-project location for dind CRS
+    _copy_prepared_docker_data(crs_list, project_name, build_dir)
 
     if not build_profiles:
         logger.error("No build profiles found")
@@ -354,10 +394,7 @@ def build_crs(
 
                     # Generate unique container name for docker commit
                     container_name = f"crs-source-copy-{uuid.uuid4().hex}"
-                    # Use tagged image name for version control if source_tag exists
                     image_name = f"{project_name}_{crs_name}_builder"
-                    if source_tag:
-                        image_name = f"{image_name}:{source_tag}"
 
                     logger.info(
                         "Copying source from /local-source-mount to workdir for: %s",
