@@ -18,6 +18,11 @@ from bug_finding.src.crs_utils import (
     fix_build_dir_permissions,
     get_command_string,
 )
+from bug_finding.src.prepare import (
+    check_images_exist,
+    get_all_bake_image_tags,
+    prepare_crs,
+)
 from bug_finding.src.utils import run_git
 
 logger = logging.getLogger(__name__)
@@ -338,6 +343,26 @@ def build_crs(
     except Exception as e:
         logger.error("Failed to generate compose files: %s", e)
         return False
+
+    # Auto-prepare CRS if docker-bake.hcl exists and images are missing
+    for crs in crs_list:
+        crs_name = crs["name"]
+        crs_path = Path(crs["path"])
+        bake_file = crs_path / "docker-bake.hcl"
+
+        if bake_file.exists():
+            image_tags = get_all_bake_image_tags(bake_file)
+            if image_tags:
+                missing = check_images_exist(image_tags)
+                if missing:
+                    logger.info(
+                        f"CRS '{crs_name}' has missing bake images: {missing}. "
+                        f"Running prepare..."
+                    )
+                    if not prepare_crs(crs_name, build_dir, clone_dir, registry_dir):
+                        logger.error(f"Failed to auto-prepare CRS '{crs_name}'")
+                        return False
+                    logger.info(f"Auto-prepare completed for CRS '{crs_name}'")
 
     # Save parent image tarballs for dind CRS
     parent_images_dir = _save_parent_image_tarballs(

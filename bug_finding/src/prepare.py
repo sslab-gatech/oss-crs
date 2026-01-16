@@ -106,6 +106,34 @@ def get_dind_image_tags(bake_path: Path) -> list[str]:
     return image_tags
 
 
+def check_images_exist(image_tags: list[str]) -> list[str]:
+    """Check which images don't exist locally.
+
+    Args:
+        image_tags: List of image tags to check
+
+    Returns:
+        List of image tags that don't exist locally
+    """
+    if not image_tags:
+        return []
+
+    # Get all local images
+    result = subprocess.run(
+        ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}"],
+        capture_output=True,
+        text=True,
+    )
+    local_images = set(result.stdout.strip().split("\n")) if result.stdout.strip() else set()
+
+    missing = []
+    for tag in image_tags:
+        if tag not in local_images:
+            missing.append(tag)
+
+    return missing
+
+
 def build_bake_images(crs_path: Path) -> bool:
     """Run docker buildx bake to build all images.
 
