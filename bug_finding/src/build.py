@@ -226,6 +226,7 @@ def build_crs(
     external_litellm: bool = False,
     source_oss_fuzz_dir: Path | None = None,
     skip_oss_fuzz_clone: bool = False,
+    prepare_images: bool = True,
 ) -> bool:
     """
     Build CRS for a project using docker compose.
@@ -249,6 +250,7 @@ def build_crs(
         external_litellm: Use external LiteLLM instance (default: False)
         source_oss_fuzz_dir: Optional source OSS-Fuzz directory to copy from (Path, already resolved)
         skip_oss_fuzz_clone: Skip cloning oss-fuzz (default: False)
+        prepare_images: Auto-prepare CRS if bake images are missing (default: True)
 
     Returns:
         bool: True if successful, False otherwise
@@ -345,24 +347,25 @@ def build_crs(
         return False
 
     # Auto-prepare CRS if docker-bake.hcl exists and images are missing
-    for crs in crs_list:
-        crs_name = crs["name"]
-        crs_path = Path(crs["path"])
-        bake_file = crs_path / "docker-bake.hcl"
+    if prepare_images:
+        for crs in crs_list:
+            crs_name = crs["name"]
+            crs_path = Path(crs["path"])
+            bake_file = crs_path / "docker-bake.hcl"
 
-        if bake_file.exists():
-            image_tags = get_all_bake_image_tags(bake_file)
-            if image_tags:
-                missing = check_images_exist(image_tags)
-                if missing:
-                    logger.info(
-                        f"CRS '{crs_name}' has missing bake images: {missing}. "
-                        f"Running prepare..."
-                    )
-                    if not prepare_crs(crs_name, build_dir, clone_dir, registry_dir):
-                        logger.error(f"Failed to auto-prepare CRS '{crs_name}'")
-                        return False
-                    logger.info(f"Auto-prepare completed for CRS '{crs_name}'")
+            if bake_file.exists():
+                image_tags = get_all_bake_image_tags(bake_file)
+                if image_tags:
+                    missing = check_images_exist(image_tags)
+                    if missing:
+                        logger.info(
+                            f"CRS '{crs_name}' has missing bake images: {missing}. "
+                            f"Running prepare..."
+                        )
+                        if not prepare_crs(crs_name, build_dir, clone_dir, registry_dir):
+                            logger.error(f"Failed to auto-prepare CRS '{crs_name}'")
+                            return False
+                        logger.info(f"Auto-prepare completed for CRS '{crs_name}'")
 
     # Save parent image tarballs for dind CRS
     parent_images_dir = _save_parent_image_tarballs(
