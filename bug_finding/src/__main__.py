@@ -118,6 +118,12 @@ def main() -> int:
         action="store_true",
         help="Skip cloning oss-fuzz (user guarantees oss-fuzz is already available)",
     )
+    build_parser.add_argument(
+        "--no-prepare-images",
+        action="store_false",
+        dest="prepare_images",
+        help="Disable auto-prepare when CRS bake images are missing",
+    )
 
     # run_crs subcommand
     run_parser = subparsers.add_parser("run", help="Run CRS")
@@ -282,6 +288,7 @@ def main() -> int:
             "project_image_prefix": args.project_image_prefix,
             "external_litellm": args.external_litellm,
             "skip_oss_fuzz_clone": args.skip_oss_fuzz_clone,
+            "prepare_images": args.prepare_images,
         }
 
         # Only add optional paths if provided
