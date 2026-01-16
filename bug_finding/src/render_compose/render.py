@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 def _setup_compose_environment(
     config_dir: Path,
     build_dir: Path,
+    clone_dir: Path,
     oss_fuzz_path: Path,
     registry_dir: Path,
     env_file: Path | None = None,
@@ -47,6 +48,7 @@ def _setup_compose_environment(
     Args:
         config_dir: Directory containing CRS configuration files
         build_dir: Path to build directory
+        clone_dir: Path to clone directory for CRS repos
         oss_fuzz_path: Path to oss-fuzz directory
         registry_dir: Path to local oss-crs-registry directory
         env_file: Optional path to environment file
@@ -100,11 +102,13 @@ def _setup_compose_environment(
     resource_config = config["resource"]
 
     # Clone all required CRS repositories and build path mapping
+    crs_clone_dir = clone_dir / "crs"
+    crs_clone_dir.mkdir(parents=True, exist_ok=True)
     crs_configs = resource_config.get("crs", {})
     crs_paths = {}
     crs_pkg_data = {}
     for crs_name in crs_configs.keys():
-        crs_path = clone_crs_if_needed(crs_name, crs_build_dir, oss_crs_registry_path)
+        crs_path = clone_crs_if_needed(crs_name, crs_clone_dir, oss_crs_registry_path)
         if crs_path is None:
             raise RuntimeError(f"Failed to prepare CRS '{crs_name}'")
         crs_paths[crs_name] = str(crs_path)
@@ -296,6 +300,7 @@ def render_compose_for_worker(
 def render_build_compose(
     config_dir: Path,
     build_dir: Path,
+    clone_dir: Path,
     oss_fuzz_dir: Path,
     project: str,
     engine: str,
@@ -315,7 +320,7 @@ def render_build_compose(
     """
     # Common setup
     env = _setup_compose_environment(
-        config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode="build"
+        config_dir, build_dir, clone_dir, oss_fuzz_dir, registry_dir, env_file, mode="build"
     )
 
     config_dir = env.config_dir
@@ -387,6 +392,7 @@ def render_build_compose(
 def render_run_compose(
     config_dir: Path,
     build_dir: Path,
+    clone_dir: Path,
     oss_fuzz_dir: Path,
     project: str,
     engine: str,
@@ -414,7 +420,7 @@ def render_run_compose(
     """
     # Common setup
     env = _setup_compose_environment(
-        config_dir, build_dir, oss_fuzz_dir, registry_dir, env_file, mode="run"
+        config_dir, build_dir, clone_dir, oss_fuzz_dir, registry_dir, env_file, mode="run"
     )
 
     config_dir = env.config_dir

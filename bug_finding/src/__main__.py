@@ -22,6 +22,9 @@ def main() -> int:
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
+    # Default clone directory (hidden at cwd)
+    default_clone_dir = Path.cwd() / ".oss-bugfind"
+
     # prepare subcommand
     prepare_parser = subparsers.add_parser(
         "prepare", help="Prepare CRS by pre-building docker images for dind"
@@ -34,6 +37,12 @@ def main() -> int:
         type=Path,
         default=Path.cwd() / "build",
         help="Path to build directory (default: ./build)",
+    )
+    prepare_parser.add_argument(
+        "--clone-dir",
+        type=Path,
+        default=default_clone_dir,
+        help="Path to clone directory (default: ./.oss-bugfind)",
     )
     prepare_parser.add_argument(
         "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
@@ -58,10 +67,16 @@ def main() -> int:
         "--project-path", type=Path, help="Path to local OSS-compatible project"
     )
     build_parser.add_argument(
+        "--clone-dir",
+        type=Path,
+        default=default_clone_dir,
+        help="Path to clone directory (default: ./.oss-bugfind)",
+    )
+    build_parser.add_argument(
         "--oss-fuzz-dir",
         type=Path,
         default=None,
-        help="Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)",
+        help="Path to source oss-fuzz directory to copy from",
     )
     build_parser.add_argument(
         "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
@@ -124,10 +139,16 @@ def main() -> int:
         help="Path to build directory (default: ./build)",
     )
     run_parser.add_argument(
+        "--clone-dir",
+        type=Path,
+        default=default_clone_dir,
+        help="Path to clone directory (default: ./.oss-bugfind)",
+    )
+    run_parser.add_argument(
         "--oss-fuzz-dir",
         type=Path,
         default=None,
-        help="Path to oss-fuzz directory (default: ${BUILD_DIR}/crs/oss-fuzz)",
+        help="Path to source oss-fuzz directory to copy from",
     )
     run_parser.add_argument(
         "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
@@ -198,9 +219,15 @@ def main() -> int:
         from importlib.resources import files
 
         build_dir = args.build_dir.resolve()
+        clone_dir = args.clone_dir.resolve()
+
         if not build_dir.exists():
             logging.info(f"Creating build directory: {build_dir}")
             build_dir.mkdir(parents=True, exist_ok=True)
+
+        if not clone_dir.exists():
+            logging.info(f"Creating clone directory: {clone_dir}")
+            clone_dir.mkdir(parents=True, exist_ok=True)
 
         # Default registry path
         _pkg_files = files("bug_finding.src")
@@ -209,6 +236,7 @@ def main() -> int:
         prepare_kwargs = {
             "crs_name": args.crs_name,
             "build_dir": build_dir,
+            "clone_dir": clone_dir,
             "registry_dir": args.registry_dir.resolve() if args.registry_dir else DEFAULT_REGISTRY_DIR,
         }
         result = prepare_crs(**prepare_kwargs)
@@ -217,15 +245,20 @@ def main() -> int:
     # For build and run commands, resolve paths
     config_dir = args.config_dir.resolve()
     build_dir = args.build_dir.resolve()
+    clone_dir = args.clone_dir.resolve()
 
-    # Ensure build_dir exists
+    # Ensure directories exist
     if not build_dir.exists():
         logging.info(f"Creating build directory: {build_dir}")
         build_dir.mkdir(parents=True, exist_ok=True)
 
+    if not clone_dir.exists():
+        logging.info(f"Creating clone directory: {clone_dir}")
+        clone_dir.mkdir(parents=True, exist_ok=True)
+
     # For build and run commands, set up additional paths
-    # Always use standard oss-fuzz directory location (per-project isolation)
-    oss_fuzz_dir = (build_dir / "crs" / "oss-fuzz" / args.project).resolve()
+    # OSS-Fuzz goes into build_dir (per-project, tied to build artifacts)
+    oss_fuzz_dir = (build_dir / "oss-fuzz" / args.project).resolve()
 
     # Resolve source oss-fuzz directory if provided (for copying)
     source_oss_fuzz_dir = args.oss_fuzz_dir.resolve() if args.oss_fuzz_dir else None
@@ -240,6 +273,7 @@ def main() -> int:
             "project_name": args.project,
             "oss_fuzz_dir": oss_fuzz_dir,
             "build_dir": build_dir,
+            "clone_dir": clone_dir,
             "engine": args.engine,
             "sanitizer": args.sanitizer,
             "architecture": args.architecture,
@@ -285,6 +319,7 @@ def main() -> int:
             "fuzzer_args": args.fuzzer_args,
             "oss_fuzz_dir": oss_fuzz_dir,
             "build_dir": build_dir,
+            "clone_dir": clone_dir,
             "worker": args.worker,
             "engine": args.engine,
             "sanitizer": args.sanitizer,
