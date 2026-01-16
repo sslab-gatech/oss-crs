@@ -207,6 +207,7 @@ def build_crs(
     project_name: str,
     oss_fuzz_dir: Path,
     build_dir: Path,
+    clone_dir: Path,
     engine: str = "libfuzzer",
     sanitizer: str = "address",
     architecture: str = "x86_64",
@@ -229,6 +230,7 @@ def build_crs(
         project_name: Name of the OSS-Fuzz project
         oss_fuzz_dir: Path to OSS-Fuzz root directory (Path, already resolved)
         build_dir: Path to build directory (Path, already resolved)
+        clone_dir: Path to clone directory for CRS repos (Path, already resolved)
         engine: Fuzzing engine (default: libfuzzer)
         sanitizer: Sanitizer to use (default: address)
         architecture: Architecture (default: x86_64)
@@ -321,6 +323,7 @@ def build_crs(
             render_compose.render_build_compose(
                 config_dir=config_dir,
                 build_dir=build_dir,
+                clone_dir=clone_dir,
                 oss_fuzz_dir=oss_fuzz_dir,
                 project=project_name,
                 engine=engine,

@@ -56,6 +56,26 @@ def parse_bake_hcl(bake_path: Path) -> dict:
         return {"group": {}, "target": {}}
 
 
+def get_all_bake_image_tags(bake_path: Path) -> list[str]:
+    """Get all image tags from docker-bake.hcl.
+
+    Args:
+        bake_path: Path to docker-bake.hcl file
+
+    Returns:
+        List of all image tags from all targets
+    """
+    parsed = parse_bake_hcl(bake_path)
+    targets = parsed.get("target", {})
+
+    image_tags = []
+    for target_data in targets.values():
+        tags = target_data.get("tags", [])
+        image_tags.extend(tags)
+
+    return image_tags
+
+
 def get_dind_image_tags(bake_path: Path) -> list[str]:
     """Get image tags from dind-images group in docker-bake.hcl.
 
@@ -230,6 +250,7 @@ def load_images_to_docker_data(images: list[str], docker_data_path: Path) -> boo
 def prepare_crs(
     crs_name: str,
     build_dir: Path,
+    clone_dir: Path,
     registry_dir: Path,
 ) -> bool:
     """Prepare a CRS by pre-building docker images for dind.
@@ -246,6 +267,7 @@ def prepare_crs(
     Args:
         crs_name: Name of the CRS to prepare (must exist in registry)
         build_dir: Build output directory
+        clone_dir: Directory for cloned repositories
         registry_dir: Path to crs_registry
 
     Returns:
@@ -253,46 +275,42 @@ def prepare_crs(
     """
     logger.info("Preparing CRS: %s", crs_name)
 
-    # Create crs build directory
-    crs_build_dir = build_dir / "crs"
-    crs_build_dir.mkdir(parents=True, exist_ok=True)
+    # Create crs clone directory
+    crs_clone_dir = clone_dir / "crs"
+    crs_clone_dir.mkdir(parents=True, exist_ok=True)
 
     # Clone/locate CRS source
-    crs_path = clone_crs_if_needed(crs_name, crs_build_dir, registry_dir)
+    crs_path = clone_crs_if_needed(crs_name, crs_clone_dir, registry_dir)
     if crs_path is None:
         logger.error("Failed to locate CRS '%s'", crs_name)
         return False
 
     # Check if docker-bake.hcl exists
     bake_file = crs_path / "docker-bake.hcl"
-    if not bake_file.exists():
-        logger.error("No docker-bake.hcl found for CRS '%s' at %s", crs_name, crs_path)
-        return False
+    if bake_file.exists():
+        # Build images with docker buildx bake
+        if not build_bake_images(crs_path):
+            logger.error("Failed to build images for CRS '%s'", crs_name)
+            return False
 
-    # Build images with docker buildx bake
-    if not build_bake_images(crs_path):
-        logger.error("Failed to build images for CRS '%s'", crs_name)
-        return False
+        # Get dind-images group tags and load into docker-data
+        dind_images = get_dind_image_tags(bake_file)
+        if dind_images:
+            logger.info("Found %d dind images: %s", len(dind_images), dind_images)
+
+            # Load images into docker-data directory
+            # Uses same base path as compose template: build/docker-data/<crs-name>/
+            # Note: compose expects build/docker-data/<crs-name>/<project>/ but prepare is project-independent
+            docker_data_path = build_dir / "docker-data" / crs_name / "prepared"
+            if not load_images_to_docker_data(dind_images, docker_data_path):
+                logger.error("Failed to load images for CRS '%s'", crs_name)
+                return False
+    else:
+        logger.info("No docker-bake.hcl found for CRS '%s', skipping bake", crs_name)
 
     # Build runner image
     if not build_runner_image(crs_path, crs_name):
         logger.error("Failed to build runner image for CRS '%s'", crs_name)
-        return False
-
-    # Get dind-images group tags
-    dind_images = get_dind_image_tags(bake_file)
-    if not dind_images:
-        logger.info("No dind-images defined for CRS '%s', nothing to prepare", crs_name)
-        return True
-
-    logger.info("Found %d dind images: %s", len(dind_images), dind_images)
-
-    # Load images into docker-data directory
-    # Uses same base path as compose template: build/docker-data/<crs-name>/
-    # Note: compose expects build/docker-data/<crs-name>/<project>/ but prepare is project-independent
-    docker_data_path = build_dir / "docker-data" / crs_name / "prepared"
-    if not load_images_to_docker_data(dind_images, docker_data_path):
-        logger.error("Failed to load images for CRS '%s'", crs_name)
         return False
 
     logger.info("Successfully prepared CRS '%s'", crs_name)

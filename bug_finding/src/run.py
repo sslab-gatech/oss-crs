@@ -33,6 +33,7 @@ def run_crs(
     fuzzer_args: list[str],
     oss_fuzz_dir: Path,
     build_dir: Path,
+    clone_dir: Path,
     worker: str = "local",
     engine: str = "libfuzzer",
     sanitizer: str = "address",
@@ -60,6 +61,7 @@ def run_crs(
         fuzzer_args: Arguments to pass to the fuzzer
         oss_fuzz_dir: Path to OSS-Fuzz root directory (Path, already resolved)
         build_dir: Path to build directory (Path, already resolved)
+        clone_dir: Path to clone directory for CRS repos (Path, already resolved)
         worker: Worker name to run CRS on (default: local)
         engine: Fuzzing engine (default: libfuzzer)
         sanitizer: Sanitizer to use (default: address)
@@ -145,6 +147,7 @@ def run_crs(
         config_hash, crs_build_dir = render_compose.render_run_compose(
             config_dir=config_dir,
             build_dir=build_dir,
+            clone_dir=clone_dir,
             oss_fuzz_dir=oss_fuzz_dir,
             project=project_name,
             engine=engine,
