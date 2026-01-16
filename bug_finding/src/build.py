@@ -21,6 +21,7 @@ from bug_finding.src.crs_utils import (
 from bug_finding.src.prepare import (
     check_images_exist,
     get_all_bake_image_tags,
+    load_images_to_docker_data,
     prepare_crs,
 )
 from bug_finding.src.utils import run_git
@@ -150,6 +151,58 @@ def _copy_prepared_docker_data(
         project_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(prepared_path, project_path)
         logger.info(f"Successfully copied prepared docker-data to {project_path}")
+
+
+def _load_project_image_to_docker_data(
+    crs_list: list[dict[str, Any]],
+    project_name: str,
+    build_dir: Path,
+    project_image_prefix: str,
+) -> bool:
+    """
+    Load the project image into docker-data for dind CRS.
+
+    This makes the project image available inside the dind environment
+    so the CRS builder/runner can use it without pulling from registry.
+
+    Args:
+        crs_list: List of CRS configurations with 'name' and 'dind' keys
+        project_name: Name of the project
+        build_dir: Path to build directory (already resolved)
+        project_image_prefix: Image prefix (e.g., 'gcr.io/oss-fuzz')
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
+    if not dind_crs:
+        return True
+
+    project_image = f"{project_image_prefix}/{project_name}"
+    logger.info(f"Loading project image '{project_image}' into docker-data for dind CRS")
+
+    for crs in dind_crs:
+        crs_name = crs["name"]
+        docker_data_path = build_dir / "docker-data" / crs_name / project_name
+
+        if not docker_data_path.exists():
+            logger.warning(
+                f"Docker-data path does not exist for CRS '{crs_name}': {docker_data_path}. "
+                f"Creating it."
+            )
+            docker_data_path.mkdir(parents=True, exist_ok=True)
+
+        if not load_images_to_docker_data([project_image], docker_data_path):
+            logger.error(
+                f"Failed to load project image into docker-data for CRS '{crs_name}'"
+            )
+            return False
+
+        logger.info(
+            f"Successfully loaded project image into docker-data for CRS '{crs_name}'"
+        )
+
+    return True
 
 
 def _clone_project_source(
@@ -376,6 +429,12 @@ def build_crs(
 
     # Copy prepared docker-data to per-project location for dind CRS
     _copy_prepared_docker_data(crs_list, project_name, build_dir)
+
+    # Load project image into docker-data for dind CRS
+    if not _load_project_image_to_docker_data(
+        crs_list, project_name, build_dir, project_image_prefix
+    ):
+        return False
 
     if not build_profiles:
         logger.error("No build profiles found")
