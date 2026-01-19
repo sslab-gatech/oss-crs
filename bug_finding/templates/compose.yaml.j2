@@ -78,7 +78,7 @@ services:
       - {{ build_dir }}/crs/parent-images/{{ project }}.tar:/project-image.tar:ro
 {%- endif %}
 {%- if crs.dind and not crs.host_docker_builder %}
-      - {{ build_dir }}/docker-data/{{ crs.name }}/{{ project }}:/var/lib/docker
+      - {{ build_dir }}/docker-data/{{ crs.name }}/build/{{ project }}:/var/lib/docker
 {%- endif %}
 {%- if crs.host_docker_builder %}
       - /var/run/docker.sock:/var/run/docker.sock
@@ -191,7 +191,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 {%- endif %}
 {%- if crs.dind and not crs.host_docker_builder %}
-      - {{ build_dir }}/docker-data/{{ crs.name }}/{{ project }}:/var/lib/docker
+      - {{ build_dir }}/docker-data/{{ crs.name }}/run/{{ project }}:/var/lib/docker
 {%- endif %}
 {%- if harness_source %}
       - {{ harness_source }}:/harness-source:ro

@@ -48,7 +48,9 @@ def run_rsync(
     *,
     archive: bool = True,
     verbose: bool = True,
-    safe_links: bool = True,
+    delete: bool = False,
+    link_dest: Path | None = None,
+    hard_links: bool = False,
 ) -> bool:
     """Run rsync command with specified options.
 
@@ -58,7 +60,9 @@ def run_rsync(
         exclude: List of patterns to exclude
         archive: Use archive mode (-a) to preserve permissions, symlinks, etc.
         verbose: Show progress output (-v)
-        safe_links: Skip symlinks pointing outside source tree (--safe-links)
+        delete: Delete extraneous files from dest (--delete)
+        link_dest: Reference directory for creating hardlinks to unchanged files
+        hard_links: Preserve existing hard links in source (-H)
 
     Returns:
         bool: True if rsync succeeded, False otherwise.
@@ -69,8 +73,13 @@ def run_rsync(
         cmd.append("-a")
     if verbose:
         cmd.append("-v")
-    if safe_links:
-        cmd.append("--safe-links")
+    if delete:
+        cmd.append("--delete")
+    if hard_links:
+        cmd.append("-H")
+    if link_dest:
+        # --link-dest must be absolute path for rsync to work correctly
+        cmd.extend(["--link-dest", str(link_dest.resolve())])
 
     if exclude:
         for pattern in exclude:

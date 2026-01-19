@@ -24,7 +24,8 @@ from bug_finding.src.prepare import (
     load_images_to_docker_data,
     prepare_crs,
 )
-from bug_finding.src.utils import run_git
+from bug_finding.src.utils import run_git, run_rsync
+from bug_fixing.src.oss_patch.functions import remove_directory_with_docker
 
 logger = logging.getLogger(__name__)
 
@@ -107,63 +108,28 @@ def _save_parent_image_tarballs(
     return str(parent_images_dir)
 
 
-def _copy_prepared_docker_data(
-    crs_list: list[dict[str, Any]],
-    project_name: str,
-    build_dir: Path,
-) -> None:
-    """
-    Copy prepared docker-data to per-project location for dind CRS.
-
-    The prepare phase saves docker-data to build/docker-data/<crs-name>/prepared/.
-    The build/run phases expect it at build/docker-data/<crs-name>/<project>/.
-    This function copies from prepared to per-project location if prepared exists.
-
-    Args:
-        crs_list: List of CRS configurations with 'name' and 'dind' keys
-        project_name: Name of the project
-        build_dir: Path to build directory (already resolved)
-    """
-    dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
-    if not dind_crs:
-        return
-
-    for crs in dind_crs:
-        crs_name = crs["name"]
-        prepared_path = build_dir / "docker-data" / crs_name / "prepared"
-        project_path = build_dir / "docker-data" / crs_name / project_name
-
-        if not prepared_path.exists():
-            logger.info(
-                f"No prepared docker-data found for CRS '{crs_name}', skipping copy"
-            )
-            continue
-
-        if project_path.exists():
-            logger.info(
-                f"Project docker-data already exists for CRS '{crs_name}', skipping copy"
-            )
-            continue
-
-        logger.info(
-            f"Copying prepared docker-data for CRS '{crs_name}' to {project_path}"
-        )
-        project_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(prepared_path, project_path)
-        logger.info(f"Successfully copied prepared docker-data to {project_path}")
-
-
-def _load_project_image_to_docker_data(
+def _setup_build_docker_data(
     crs_list: list[dict[str, Any]],
     project_name: str,
     build_dir: Path,
     project_image_prefix: str,
 ) -> bool:
     """
-    Load the project image into docker-data for dind CRS.
+    Set up docker-data for build phase with prepared images + project image.
 
-    This makes the project image available inside the dind environment
-    so the CRS builder/runner can use it without pulling from registry.
+    For each dind CRS:
+    1. Wipes existing build/<project>/ docker-data
+    2. rsync's prepared/ -> build/<project>/
+    3. Loads project image into build/<project>/
+
+    The builder will mount this docker-data as /var/lib/docker.
+    Run phase will later copy from build/<project>/ to run/<project>/.
+
+    Directory structure:
+        build/docker-data/<crs-name>/
+        ├── prepared/           # From prepare phase (dind-images only)
+        ├── build/<project>/    # For build phase (dind + project image)
+        └── run/<project>/      # For run phase (created by run.py)
 
     Args:
         crs_list: List of CRS configurations with 'name' and 'dind' keys
@@ -178,28 +144,49 @@ def _load_project_image_to_docker_data(
     if not dind_crs:
         return True
 
-    project_image = f"{project_image_prefix}/{project_name}"
-    logger.info(f"Loading project image '{project_image}' into docker-data for dind CRS")
+    project_image = f"{project_image_prefix}/{project_name}:latest"
 
     for crs in dind_crs:
         crs_name = crs["name"]
-        docker_data_path = build_dir / "docker-data" / crs_name / project_name
+        prepared_path = build_dir / "docker-data" / crs_name / "prepared"
+        build_docker_data = build_dir / "docker-data" / crs_name / "build" / project_name
 
-        if not docker_data_path.exists():
-            logger.warning(
-                f"Docker-data path does not exist for CRS '{crs_name}': {docker_data_path}. "
-                f"Creating it."
+        # Check prepared exists for dind CRS
+        if not prepared_path.exists():
+            logger.error(
+                f"Prepared docker-data not found for CRS '{crs_name}': {prepared_path}. "
+                f"Run 'oss-bugfind-crs prepare {crs_name}' first."
             )
-            docker_data_path.mkdir(parents=True, exist_ok=True)
+            return False
 
-        if not load_images_to_docker_data([project_image], docker_data_path):
+        # Wipe existing build docker-data
+        if build_docker_data.exists():
+            logger.info(f"Removing existing build docker-data for CRS '{crs_name}'")
+            if not remove_directory_with_docker(build_docker_data):
+                shutil.rmtree(build_docker_data)
+
+        build_docker_data.mkdir(parents=True, exist_ok=True)
+
+        # rsync prepared -> build/<project>/
+        logger.info(
+            f"Copying prepared docker-data to build/{project_name} for CRS '{crs_name}'"
+        )
+        if not run_rsync(prepared_path, build_docker_data, hard_links=True):
+            logger.error(f"Failed to copy prepared docker-data for '{crs_name}'")
+            return False
+
+        # Load project image into build docker-data
+        logger.info(
+            f"Loading project image '{project_image}' into build docker-data for CRS '{crs_name}'"
+        )
+        if not load_images_to_docker_data([project_image], build_docker_data):
             logger.error(
                 f"Failed to load project image into docker-data for CRS '{crs_name}'"
             )
             return False
 
         logger.info(
-            f"Successfully loaded project image into docker-data for CRS '{crs_name}'"
+            f"Successfully set up build docker-data for CRS '{crs_name}'"
         )
 
     return True
@@ -400,6 +387,7 @@ def build_crs(
         return False
 
     # Auto-prepare CRS if docker-bake.hcl exists and images are missing
+    # or if dind CRS has no prepared docker-data
     if prepare_images:
         for crs in crs_list:
             crs_name = crs["name"]
@@ -407,18 +395,37 @@ def build_crs(
             bake_file = crs_path / "docker-bake.hcl"
 
             if bake_file.exists():
+                needs_prepare = False
+                reason = ""
+
+                # Check if bake images are missing on host
                 image_tags = get_all_bake_image_tags(bake_file)
                 if image_tags:
                     missing = check_images_exist(image_tags)
                     if missing:
-                        logger.info(
-                            f"CRS '{crs_name}' has missing bake images: {missing}. "
-                            f"Running prepare..."
-                        )
-                        if not prepare_crs(crs_name, build_dir, clone_dir, registry_dir):
-                            logger.error(f"Failed to auto-prepare CRS '{crs_name}'")
-                            return False
-                        logger.info(f"Auto-prepare completed for CRS '{crs_name}'")
+                        needs_prepare = True
+                        reason = f"missing bake images: {missing}"
+
+                # For dind CRS, also check if prepared docker-data exists and has content
+                if crs.get("dind", False) and not needs_prepare:
+                    prepared_path = build_dir / "docker-data" / crs_name / "prepared"
+                    prepared_empty = (
+                        not prepared_path.exists()
+                        or not prepared_path.is_dir()
+                        or not any(prepared_path.iterdir())
+                    )
+                    if prepared_empty:
+                        needs_prepare = True
+                        reason = "docker-data not prepared for dind"
+
+                if needs_prepare:
+                    logger.info(
+                        f"CRS '{crs_name}' needs prepare ({reason}). Running prepare..."
+                    )
+                    if not prepare_crs(crs_name, build_dir, clone_dir, registry_dir):
+                        logger.error(f"Failed to auto-prepare CRS '{crs_name}'")
+                        return False
+                    logger.info(f"Auto-prepare completed for CRS '{crs_name}'")
 
     # Save parent image tarballs for dind CRS
     parent_images_dir = _save_parent_image_tarballs(
@@ -427,11 +434,8 @@ def build_crs(
     if parent_images_dir:
         logger.info(f"Parent image tarballs saved to: {parent_images_dir}")
 
-    # Copy prepared docker-data to per-project location for dind CRS
-    _copy_prepared_docker_data(crs_list, project_name, build_dir)
-
-    # Load project image into docker-data for dind CRS
-    if not _load_project_image_to_docker_data(
+    # Set up docker-data for build phase (prepared + project image)
+    if not _setup_build_docker_data(
         crs_list, project_name, build_dir, project_image_prefix
     ):
         return False

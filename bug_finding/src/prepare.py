@@ -3,6 +3,7 @@
 
 import json
 import logging
+import shutil
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -11,6 +12,7 @@ from bug_fixing.src.oss_patch.functions import (
     change_ownership_with_docker,
     docker_image_exists,
     prepare_docker_cache_builder,
+    remove_directory_with_docker,
 )
 from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
@@ -228,11 +230,15 @@ def load_images_to_docker_data(images: list[str], docker_data_path: Path) -> boo
 
         # Save each image to tarball
         for image_name in images:
+            # Ensure :latest tag to avoid saving all tags
+            if ":" not in image_name:
+                image_name = f"{image_name}:latest"
+
             if not docker_image_exists(image_name):
                 logger.error("Image '%s' does not exist in docker daemon", image_name)
                 return False
 
-            # Use image name (without tag) as tarball name
+            # Use image name (with tag) as tarball name
             tarball_name = image_name.replace("/", "_").replace(":", "_") + ".tar"
             tarball_path = images_path / tarball_name
 
@@ -330,6 +336,17 @@ def prepare_crs(
             # Uses same base path as compose template: build/docker-data/<crs-name>/
             # Note: compose expects build/docker-data/<crs-name>/<project>/ but prepare is project-independent
             docker_data_path = build_dir / "docker-data" / crs_name / "prepared"
+
+            # Wipe existing docker-data to ensure fresh state
+            # Use docker to remove since files are owned by root from dind
+            if docker_data_path.exists() and docker_data_path.is_dir():
+                logger.info("Removing existing docker-data at %s", docker_data_path)
+                if not remove_directory_with_docker(docker_data_path):
+                    logger.warning(
+                        "Failed to remove docker-data with docker, trying shutil"
+                    )
+                    shutil.rmtree(docker_data_path)
+
             if not load_images_to_docker_data(dind_images, docker_data_path):
                 logger.error("Failed to load images for CRS '%s'", crs_name)
                 return False

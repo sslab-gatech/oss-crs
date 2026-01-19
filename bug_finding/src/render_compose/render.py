@@ -408,7 +408,7 @@ def render_run_compose(
     external_litellm: bool = False,
     ensemble_dir: Path | None = None,
     coverage_build_dir: Path | None = None,
-) -> tuple[str, Path]:
+) -> tuple[str, Path, list[dict]]:
     """
     Programmatic interface for run mode.
 
@@ -416,7 +416,7 @@ def render_run_compose(
         ensemble_dir: Optional base directory for shared seeds between CRS instances
 
     Returns:
-      Tuple of (config_hash, crs_build_dir)
+      Tuple of (config_hash, crs_build_dir, crs_list)
     """
     # Common setup
     env = _setup_compose_environment(
@@ -497,4 +497,4 @@ def render_run_compose(
     output_file = output_dir / f"compose-{worker}.yaml"
     output_file.write_text(rendered)
 
-    return config_hash, crs_build_dir
+    return config_hash, crs_build_dir, crs_list
