@@ -81,6 +81,9 @@ def _setup_run_docker_data(
         run_docker_data.mkdir(parents=True, exist_ok=True)
 
         # rsync build/<project>/ -> run/<project>/ with hardlinks
+        # Exclude overlayfs work directories - these are ephemeral kernel structures
+        # created with d--------- permissions that rsync can't read. containerd
+        # recreates them on startup.
         logger.info(
             f"Copying build docker-data to run/{project_name} for CRS '{crs_name}' (using hardlinks)"
         )
@@ -89,6 +92,7 @@ def _setup_run_docker_data(
             run_docker_data,
             hard_links=True,
             link_dest=build_docker_data,
+            exclude=["**/work/work"],
         ):
             logger.error(f"Failed to copy build docker-data for '{crs_name}'")
             return False
