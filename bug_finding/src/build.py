@@ -24,8 +24,7 @@ from bug_finding.src.prepare import (
     load_images_to_docker_data,
     prepare_crs,
 )
-from bug_finding.src.utils import run_git, run_rsync
-from bug_fixing.src.oss_patch.functions import remove_directory_with_docker
+from bug_finding.src.utils import copy_docker_data, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -118,18 +117,8 @@ def _setup_build_docker_data(
     Set up docker-data for build phase with prepared images + project image.
 
     For each dind CRS:
-    1. Wipes existing build/<project>/ docker-data
-    2. rsync's prepared/ -> build/<project>/
-    3. Loads project image into build/<project>/
-
-    The builder will mount this docker-data as /var/lib/docker.
-    Run phase will later copy from build/<project>/ to run/<project>/.
-
-    Directory structure:
-        build/docker-data/<crs-name>/
-        ├── prepared/           # From prepare phase (dind-images only)
-        ├── build/<project>/    # For build phase (dind + project image)
-        └── run/<project>/      # For run phase (created by run.py)
+    1. Copies prepared/ -> build/<project>/ using rsync with hardlinks
+    2. Loads project image into build/<project>/
 
     Args:
         crs_list: List of CRS configurations with 'name' and 'dind' keys
@@ -140,6 +129,16 @@ def _setup_build_docker_data(
     Returns:
         bool: True if successful, False otherwise
     """
+    # Copy prepared -> build using shared helper
+    if not copy_docker_data(
+        crs_list, project_name, build_dir,
+        source_subdir="prepared",
+        dest_subdir="build",
+        phase_name="Build",
+    ):
+        return False
+
+    # Load project image into build docker-data
     dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
     if not dind_crs:
         return True
@@ -148,42 +147,8 @@ def _setup_build_docker_data(
 
     for crs in dind_crs:
         crs_name = crs["name"]
-        prepared_path = build_dir / "docker-data" / crs_name / "prepared"
         build_docker_data = build_dir / "docker-data" / crs_name / "build" / project_name
 
-        # Check prepared exists for dind CRS
-        if not prepared_path.exists():
-            logger.error(
-                f"Prepared docker-data not found for CRS '{crs_name}': {prepared_path}. "
-                f"Run 'oss-bugfind-crs prepare {crs_name}' first."
-            )
-            return False
-
-        # Wipe existing build docker-data
-        if build_docker_data.exists():
-            logger.info(f"Removing existing build docker-data for CRS '{crs_name}'")
-            if not remove_directory_with_docker(build_docker_data):
-                shutil.rmtree(build_docker_data)
-
-        build_docker_data.mkdir(parents=True, exist_ok=True)
-
-        # rsync prepared -> build/<project>/ with hardlinks to save space
-        # Exclude overlayfs work directories - ephemeral kernel structures with
-        # d--------- permissions that rsync can't read
-        logger.info(
-            f"Copying prepared docker-data to build/{project_name} for CRS '{crs_name}' (using hardlinks)"
-        )
-        if not run_rsync(
-            prepared_path,
-            build_docker_data,
-            hard_links=True,
-            link_dest=prepared_path,
-            exclude=["**/work/work"],
-        ):
-            logger.error(f"Failed to copy prepared docker-data for '{crs_name}'")
-            return False
-
-        # Load project image into build docker-data
         logger.info(
             f"Loading project image '{project_image}' into build docker-data for CRS '{crs_name}'"
         )
@@ -192,10 +157,6 @@ def _setup_build_docker_data(
                 f"Failed to load project image into docker-data for CRS '{crs_name}'"
             )
             return False
-
-        logger.info(
-            f"Successfully set up build docker-data for CRS '{crs_name}'"
-        )
 
     return True
 

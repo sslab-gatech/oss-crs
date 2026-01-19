@@ -10,8 +10,6 @@ from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
 
-from typing import Any
-
 from bug_finding.src.render_compose import render as render_compose
 from bug_finding.src.crs_utils import (
     clone_oss_fuzz_if_needed,
@@ -20,86 +18,9 @@ from bug_finding.src.crs_utils import (
     validate_crs_modes,
     verify_external_litellm,
 )
-from bug_finding.src.utils import run_rsync
-from bug_fixing.src.oss_patch.functions import remove_directory_with_docker
+from bug_finding.src.utils import copy_docker_data
 
 logger = logging.getLogger(__name__)
-
-
-def _setup_run_docker_data(
-    crs_list: list[dict[str, Any]],
-    project_name: str,
-    build_dir: Path,
-) -> bool:
-    """
-    Set up docker-data for run phase by copying from build phase.
-
-    For each dind CRS:
-    1. Copies build/<project>/ -> run/<project>/ using rsync with hardlinks
-
-    This creates a fresh copy of the build-phase docker-data for each run,
-    allowing the run to be repeated without contaminating the build state.
-
-    Directory structure:
-        build/docker-data/<crs-name>/
-        ├── prepared/           # From prepare phase (dind-images only)
-        ├── build/<project>/    # From build phase (dind + project image)
-        └── run/<project>/      # For run phase (fresh copy from build)
-
-    Args:
-        crs_list: List of CRS configurations with 'name' and 'dind' keys
-        project_name: Name of the project
-        build_dir: Path to build directory (already resolved)
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
-    if not dind_crs:
-        return True
-
-    for crs in dind_crs:
-        crs_name = crs["name"]
-        build_docker_data = build_dir / "docker-data" / crs_name / "build" / project_name
-        run_docker_data = build_dir / "docker-data" / crs_name / "run" / project_name
-
-        # Check build docker-data exists
-        if not build_docker_data.exists():
-            logger.error(
-                f"Build docker-data not found for CRS '{crs_name}': {build_docker_data}. "
-                f"Run 'oss-bugfind-crs build' first."
-            )
-            return False
-
-        # Wipe existing run docker-data for fresh state
-        if run_docker_data.exists():
-            logger.info(f"Removing existing run docker-data for CRS '{crs_name}'")
-            if not remove_directory_with_docker(run_docker_data):
-                import shutil
-                shutil.rmtree(run_docker_data)
-
-        run_docker_data.mkdir(parents=True, exist_ok=True)
-
-        # rsync build/<project>/ -> run/<project>/ with hardlinks
-        # Exclude overlayfs work directories - these are ephemeral kernel structures
-        # created with d--------- permissions that rsync can't read. containerd
-        # recreates them on startup.
-        logger.info(
-            f"Copying build docker-data to run/{project_name} for CRS '{crs_name}' (using hardlinks)"
-        )
-        if not run_rsync(
-            build_docker_data,
-            run_docker_data,
-            hard_links=True,
-            link_dest=build_docker_data,
-            exclude=["**/work/work"],
-        ):
-            logger.error(f"Failed to copy build docker-data for '{crs_name}'")
-            return False
-
-        logger.info(f"Successfully set up run docker-data for CRS '{crs_name}'")
-
-    return True
 
 # Default registry path
 # __package__ is guaranteed to be set when running as a module
@@ -247,7 +168,12 @@ def run_crs(
         return False
 
     # Set up docker-data for run phase (fresh copy from build phase)
-    if not _setup_run_docker_data(crs_list, project_name, build_dir):
+    if not copy_docker_data(
+        crs_list, project_name, build_dir,
+        source_subdir="build",
+        dest_subdir="run",
+        phase_name="Run",
+    ):
         return False
 
     # Look for compose files
