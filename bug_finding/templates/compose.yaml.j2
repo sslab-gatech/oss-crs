@@ -74,9 +74,6 @@ services:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
       - {{ build_dir }}/work/{{ crs.name }}/{{ project }}:/work
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}:/artifacts
-{%- if crs.dind %}
-      - {{ build_dir }}/crs/parent-images/{{ project }}.tar:/project-image.tar:ro
-{%- endif %}
 {%- if crs.dind and not crs.host_docker_builder %}
       - {{ build_dir }}/docker-data/{{ crs.name }}/build/{{ project }}:/var/lib/docker
 {%- endif %}
