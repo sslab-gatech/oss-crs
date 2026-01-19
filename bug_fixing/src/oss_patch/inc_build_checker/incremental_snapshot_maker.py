@@ -216,8 +216,8 @@ class IncrementalSnapshotMaker:
         Args:
             rts_tool: RTS tool to use. JVM: jcgeks, openclover. C/C++: binaryrts.
                       If None, RTS is disabled.
-            push: Push mode - 'base' (base image only), 'inc' (incremental only),
-                  'both' (base and incremental), or None (no push)
+            push: Push mode - 'original' (original image only), 'inc' (incremental only),
+                  'both' (original and incremental), or None (no push)
             force_rebuild: Force rebuild even if image exists (default: True)
             skip_clone: Skip source code cloning
             force_push: Force push even if images already exist in remote registry
@@ -336,14 +336,14 @@ class IncrementalSnapshotMaker:
         logger.info(f"Sanitizers: {self.required_sanitizers}")
         logger.info(f"Rebuilt: {need_rebuild}")
         logger.info("Local images:")
-        logger.info(f"  - {base_image} (base)")
+        logger.info(f"  - {base_image}:original (original)")
         for source_img, _ in images_to_process:
             logger.info(f"  - {source_img}")
         if push:
             logger.info(f"Push mode: {push}")
             logger.info("Target images (remote):")
-            if push in ("base", "both"):
-                logger.info(f"  - {base_target_image} (base)")
+            if push in ("original", "both"):
+                logger.info(f"  - {base_target_image} (original)")
             if push in ("inc", "both"):
                 for _, target_img in images_to_process:
                     logger.info(f"  - {target_img}")
@@ -353,18 +353,18 @@ class IncrementalSnapshotMaker:
         if push:
             logger.info(f"Pushing images to registry: {DEFAULT_REGISTRY}")
 
-            # Push base image if requested
-            if push in ("base", "both"):
+            # Push original image if requested
+            if push in ("original", "both"):
                 if not force_push and self._check_remote_image_exists(
                     base_target_image
                 ):
                     logger.info(
-                        f"Skipping push: base image already exists in remote: {base_target_image}"
+                        f"Skipping push: original image already exists in remote: {base_target_image}"
                     )
                 else:
-                    logger.info("Pushing base image...")
-                    if not self._push_image(base_image, base_target_image):
-                        logger.error(f"Failed to push base image: {base_target_image}")
+                    logger.info("Pushing original image...")
+                    if not self._push_image(f"{base_image}:original", base_target_image):
+                        logger.error(f"Failed to push original image: {base_target_image}")
                         return False
 
             # Push incremental images if requested
