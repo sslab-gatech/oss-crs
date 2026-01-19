@@ -2,4 +2,4 @@ name: atlantis-c-bullseye
 type: bug-finding
 source:
   url: git@github.com:Team-Atlanta/atlantis-c-bullseye
-  ref: main
+  ref: oss-crs-prepare

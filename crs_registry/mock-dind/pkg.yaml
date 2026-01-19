@@ -2,4 +2,4 @@ name: mock-dind
 type: bug-finding
 source:
   url: https://github.com/Team-Atlanta/crs-libfuzzer
-  ref: dind
+  ref: dind-prepare
