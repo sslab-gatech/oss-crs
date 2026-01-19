@@ -191,13 +191,35 @@ def clone_crs_if_needed(
         return local_path_resolved
 
     if crs_url:
-        if crs_path.exists():
-            logging.info(f"CRS '{crs_name}' already exists at {crs_path}")
-            return crs_path
-
-        # Clone the CRS repository from URL
-        logging.info(f"Cloning CRS '{crs_name}' from {crs_url}")
         try:
+            if crs_path.exists():
+                # Fetch and checkout the ref if directory already exists
+                logging.info(f"CRS '{crs_name}' exists at {crs_path}, fetching updates")
+                run_git(
+                    ["-C", str(crs_path), "fetch", "--all"],
+                    stdout=subprocess.DEVNULL,
+                )
+                if crs_ref:
+                    run_git(
+                        ["-C", str(crs_path), "checkout", crs_ref],
+                        stdout=subprocess.DEVNULL,
+                    )
+                    run_git(
+                        [
+                            "-C",
+                            str(crs_path),
+                            "submodule",
+                            "update",
+                            "--init",
+                            "--recursive",
+                        ],
+                        stdout=subprocess.DEVNULL,
+                    )
+                logging.info(f"CRS '{crs_name}' updated to ref '{crs_ref or 'HEAD'}'")
+                return crs_path
+
+            # Clone the CRS repository from URL
+            logging.info(f"Cloning CRS '{crs_name}' from {crs_url}")
             run_git(["clone", crs_url, str(crs_path)], stdout=subprocess.DEVNULL)
 
             if crs_ref:
@@ -213,8 +235,6 @@ def clone_crs_if_needed(
                         "update",
                         "--init",
                         "--recursive",
-                        "--depth",
-                        "1",
                     ],
                     stdout=subprocess.DEVNULL,
                 )
@@ -223,7 +243,7 @@ def clone_crs_if_needed(
             return crs_path
 
         except subprocess.CalledProcessError as e:
-            print(f"ERROR: Failed to clone CRS '{crs_name}': {e}")
+            print(f"ERROR: Failed to clone/update CRS '{crs_name}': {e}")
             return None
 
     else:
