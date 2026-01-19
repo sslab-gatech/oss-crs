@@ -133,7 +133,6 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
         logger.info(f"Logging to: {log_file}")
         result = oss_patch.make_inc_snapshot(
             Path(args.oss_fuzz),
-            rts_tool=args.rts_tool,
             push=args.push,
             force_rebuild=not args.no_rebuild,
             log_file=log_file,
@@ -361,20 +360,12 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
     make_inc_snapshot_parser.add_argument("project", help="name of the project")
     make_inc_snapshot_parser.add_argument("oss_fuzz", help="path to OSS-Fuzz")
     make_inc_snapshot_parser.add_argument(
-        "--rts-tool",
-        choices=["jcgeks", "openclover", "binaryrts"],
-        default=None,
-        help="RTS tool override. JVM: jcgeks, openclover. C/C++: binaryrts. "
-        "If not specified, uses project.yaml 'rts_mode'. "
-        "If project.yaml has no rts_mode, RTS is disabled.",
-    )
-    make_inc_snapshot_parser.add_argument(
         "--push",
-        choices=["base", "inc", "both"],
+        choices=["original", "inc", "both"],
         default=None,
         help="Push images to Docker registry (ghcr.io/team-atlanta/crsbench/{project}). "
-        "Choices: 'base' (base builder image only), 'inc' (incremental snapshot only), "
-        "'both' (both base and incremental images).",
+        "Choices: 'original' (original builder image only), 'inc' (incremental snapshot only), "
+        "'both' (both original and incremental images).",
     )
     make_inc_snapshot_parser.add_argument(
         "--no-rebuild",

@@ -229,7 +229,6 @@ class OSSPatch:
     def make_inc_snapshot(
         self,
         oss_fuzz_path: Path,
-        rts_tool: str | None = None,
         push: str | None = None,
         force_rebuild: bool = True,
         source_path: Path | None = None,
@@ -240,11 +239,10 @@ class OSSPatch:
         """Create incremental build snapshot and optionally push to registry.
 
         This assumes test-inc-build has already been run successfully.
+        RTS mode is determined solely from project.yaml 'rts_mode' field.
 
         Args:
             oss_fuzz_path: Path to OSS-Fuzz repository
-            rts_tool: RTS tool override. If None, uses project.yaml rts_mode.
-                      JVM: jcgeks, openclover. C/C++: binaryrts.
             push: Push mode - 'base' (base image only), 'inc' (incremental only),
                   'both' (base and incremental), or None (no push)
             force_rebuild: Force rebuild even if image exists (default: True)
@@ -263,9 +261,8 @@ class OSSPatch:
         project_config = get_project_rts_config(project_path)
         logger.info(f"Project config from project.yaml: {project_config}")
 
-        # Resolve final configuration (CLI overrides project.yaml)
-        # For make-inc-snapshot, we don't use --with-rts flag, so pass False
-        _, effective_rts_mode = resolve_rts_config(False, rts_tool, project_config)
+        # Resolve final configuration from project.yaml only (no CLI override)
+        _, effective_rts_mode = resolve_rts_config(False, None, project_config)
         rts_enabled = effective_rts_mode != "none"
 
         logger.info(
