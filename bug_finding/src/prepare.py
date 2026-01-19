@@ -18,6 +18,7 @@ from bug_fixing.src.oss_patch.globals import (
     DEFAULT_DOCKER_ROOT_DIR,
     OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE,
 )
+from bug_finding.src.crs_utils import fix_build_dir_permissions
 from bug_finding.src.render_compose.config import clone_crs_if_needed
 
 logger = logging.getLogger(__name__)
@@ -357,6 +358,9 @@ def prepare_crs(
     if not build_runner_image(crs_path, crs_name):
         logger.error("Failed to build runner image for CRS '%s'", crs_name)
         return False
+
+    # Fix ownership of build directory (containers run as root)
+    fix_build_dir_permissions(build_dir)
 
     logger.info("Successfully prepared CRS '%s'", crs_name)
     return True
