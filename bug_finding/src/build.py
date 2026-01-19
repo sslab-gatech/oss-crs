@@ -54,59 +54,6 @@ def _build_project_image(
     return True
 
 
-def _save_parent_image_tarballs(
-    crs_list: list[dict[str, Any]],
-    project_name: str,
-    build_dir: Path,
-    project_image_prefix: str,
-) -> str | None:
-    """
-    Save parent image tarballs for CRS that need dind.
-
-    Args:
-        crs_list: List of CRS configurations with 'name' and 'dind' keys
-        project_name: Name of the project
-        build_dir: Path to build directory (already resolved)
-        project_image_prefix: Prefix for project images (e.g., gcr.io/oss-fuzz)
-
-    Returns:
-        str: Path to parent image tarball directory, or None if no dind CRS
-    """
-    # Check if any CRS needs dind
-    dind_crs = [crs for crs in crs_list if crs.get("dind", False)]
-    if not dind_crs:
-        return None
-
-    # Create parent-images directory
-    parent_images_dir = build_dir / "crs" / "parent-images"
-    parent_images_dir.mkdir(parents=True, exist_ok=True)
-
-    # Parent image name
-    parent_image = f"{project_image_prefix}/{project_name}"
-    tarball_path = parent_images_dir / f"{project_name}.tar"
-
-    # Save parent image to tarball if not already exists
-    if tarball_path.exists() and tarball_path.is_file():
-        logger.info(f"Parent image tarball already exists: {tarball_path}")
-    else:
-        # Remove if it exists as a directory (docker-compose creates directory on failed mounts)
-        if tarball_path.exists() and tarball_path.is_dir():
-            shutil.rmtree(tarball_path)
-        # Create parent directories if needed (project_name may contain slashes)
-        tarball_path.parent.mkdir(parents=True, exist_ok=True)
-        # Specify :latest tag explicitly to avoid saving all tags in the repository
-        logger.info(f"Saving parent image {parent_image}:latest to {tarball_path}")
-        save_cmd = ["docker", "save", f"{parent_image}:latest", "-o", str(tarball_path)]
-        try:
-            subprocess.check_call(save_cmd)
-            logger.info(f"Successfully saved parent image to {tarball_path}")
-        except subprocess.CalledProcessError:
-            logger.error(f"Failed to save parent image {parent_image}")
-            return None
-
-    return str(parent_images_dir)
-
-
 def _setup_build_docker_data(
     crs_list: list[dict[str, Any]],
     project_name: str,
@@ -395,13 +342,6 @@ def build_crs(
                         logger.error(f"Failed to auto-prepare CRS '{crs_name}'")
                         return False
                     logger.info(f"Auto-prepare completed for CRS '{crs_name}'")
-
-    # Save parent image tarballs for dind CRS
-    parent_images_dir = _save_parent_image_tarballs(
-        crs_list, project_name, build_dir, project_image_prefix
-    )
-    if parent_images_dir:
-        logger.info(f"Parent image tarballs saved to: {parent_images_dir}")
 
     # Set up docker-data for build phase (prepared + project image)
     if not _setup_build_docker_data(
