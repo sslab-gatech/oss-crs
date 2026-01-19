@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from bug_finding.src.build import build_crs
+from bug_finding.src.clean import clean_all, clean_crs, clean_crs_project
 from bug_finding.src.prepare import prepare_crs
 from bug_finding.src.run import run_crs
 from bug_finding.src.utils import set_gitcache
@@ -46,6 +47,35 @@ def main() -> int:
     )
     prepare_parser.add_argument(
         "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
+    )
+
+    # clean subcommand
+    clean_parser = subparsers.add_parser(
+        "clean", help="Clean build artifacts and cached data"
+    )
+    clean_parser.add_argument(
+        "--crs",
+        type=str,
+        default=None,
+        help="Clean only artifacts for this CRS (optional)",
+    )
+    clean_parser.add_argument(
+        "--project",
+        type=str,
+        default=None,
+        help="Clean only artifacts for this project (requires --crs)",
+    )
+    clean_parser.add_argument(
+        "--build-dir",
+        type=Path,
+        default=Path.cwd() / "build",
+        help="Path to build directory (default: ./build)",
+    )
+    clean_parser.add_argument(
+        "--clone-dir",
+        type=Path,
+        default=default_clone_dir,
+        help="Path to clone directory (default: ./.oss-bugfind)",
     )
 
     # build_crs subcommand
@@ -246,6 +276,28 @@ def main() -> int:
             "registry_dir": args.registry_dir.resolve() if args.registry_dir else DEFAULT_REGISTRY_DIR,
         }
         result = prepare_crs(**prepare_kwargs)
+        return 0 if result else 1
+
+    # Handle clean command
+    if args.command == "clean":
+        build_dir = args.build_dir.resolve()
+        clone_dir = args.clone_dir.resolve()
+
+        # Validate --project requires --crs
+        if args.project and not args.crs:
+            logging.error("--project requires --crs to be specified")
+            return 1
+
+        if args.crs and args.project:
+            # Clean specific CRS + project combination
+            result = clean_crs_project(args.crs, args.project, build_dir)
+        elif args.crs:
+            # Clean specific CRS (all projects)
+            result = clean_crs(args.crs, build_dir, clone_dir)
+        else:
+            # Clean everything
+            result = clean_all(build_dir, clone_dir)
+
         return 0 if result else 1
 
     # For build and run commands, resolve paths
