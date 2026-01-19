@@ -51,6 +51,7 @@ def run_rsync(
     delete: bool = False,
     link_dest: Path | None = None,
     hard_links: bool = False,
+    include_only: list[str] | None = None,
 ) -> bool:
     """Run rsync command with specified options.
 
@@ -63,6 +64,8 @@ def run_rsync(
         delete: Delete extraneous files from dest (--delete)
         link_dest: Reference directory for creating hardlinks to unchanged files
         hard_links: Preserve existing hard links in source (-H)
+        include_only: List of patterns to include (excludes everything else).
+                      Use '*/' to include directories for traversal.
 
     Returns:
         bool: True if rsync succeeded, False otherwise.
@@ -81,9 +84,17 @@ def run_rsync(
         # --link-dest must be absolute path for rsync to work correctly
         cmd.extend(["--link-dest", str(link_dest.resolve())])
 
+    # Exclude patterns come first (processed top-to-bottom by rsync)
     if exclude:
         for pattern in exclude:
             cmd.extend(["--exclude", pattern])
+
+    # include_only patterns: include specified, then exclude everything else
+    if include_only:
+        for pattern in include_only:
+            cmd.extend(["--include", pattern])
+        # Exclude everything not matched by include patterns
+        cmd.extend(["--exclude", "*"])
 
     # Add trailing slash to source to copy contents, not the directory itself
     source_str = str(source)
@@ -118,7 +129,15 @@ def copy_docker_data(
     For each dind CRS:
     1. Checks source docker-data exists
     2. Wipes existing destination docker-data
-    3. rsync's source -> dest with hardlinks
+    3. rsync's source -> dest with hardlinks (except mutable .db files)
+
+    Two-phase rsync is used to handle mutable database files:
+    - Phase 1: rsync with --link-dest for all files except *.db (hardlinks for blobs)
+    - Phase 2: rsync *.db files without --link-dest (full copies to avoid corruption)
+
+    The containerd metadata database (meta.db) is mutable and must NOT be hardlinked.
+    If hardlinked, updates during build phase would corrupt the prepared/ directory,
+    causing "blob not found" errors on subsequent builds.
 
     Directory structure:
         build/docker-data/<crs-name>/
@@ -170,19 +189,33 @@ def copy_docker_data(
 
         dest_path.mkdir(parents=True, exist_ok=True)
 
-        # rsync with hardlinks, exclude overlayfs work directories
+        # Phase 1: rsync with hardlinks, excluding mutable .db files and overlayfs work dirs
         logger.info(
             f"Copying {source_subdir} docker-data to {dest_subdir}/{project_name} "
-            f"for CRS '{crs_name}' (using hardlinks)"
+            f"for CRS '{crs_name}' (using hardlinks for immutable files)"
         )
         if not run_rsync(
             source_path,
             dest_path,
             hard_links=True,
             link_dest=source_path,
-            exclude=["**/work/work"],
+            exclude=["**/work/work", "*.db"],
         ):
-            logger.error(f"Failed to copy docker-data for '{crs_name}'")
+            logger.error(f"Failed to copy docker-data for '{crs_name}' (phase 1: hardlinks)")
+            return False
+
+        # Phase 2: rsync .db files WITHOUT hardlinks (full copies to avoid corruption)
+        # These mutable database files must not be hardlinked to preserve source integrity
+        logger.info(f"Copying mutable database files for CRS '{crs_name}' (full copies)")
+        if not run_rsync(
+            source_path,
+            dest_path,
+            hard_links=False,
+            link_dest=None,  # No hardlinks for mutable files
+            exclude=["**/work/work"],  # Skip overlayfs work directories
+            include_only=["*/", "*.db"],  # Only directories and .db files
+        ):
+            logger.error(f"Failed to copy docker-data for '{crs_name}' (phase 2: db files)")
             return False
 
         logger.info(f"Successfully set up {dest_subdir} docker-data for CRS '{crs_name}'")
