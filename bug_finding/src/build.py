@@ -167,11 +167,16 @@ def _setup_build_docker_data(
 
         build_docker_data.mkdir(parents=True, exist_ok=True)
 
-        # rsync prepared -> build/<project>/
+        # rsync prepared -> build/<project>/ with hardlinks to save space
         logger.info(
-            f"Copying prepared docker-data to build/{project_name} for CRS '{crs_name}'"
+            f"Copying prepared docker-data to build/{project_name} for CRS '{crs_name}' (using hardlinks)"
         )
-        if not run_rsync(prepared_path, build_docker_data, hard_links=True):
+        if not run_rsync(
+            prepared_path,
+            build_docker_data,
+            hard_links=True,
+            link_dest=prepared_path,
+        ):
             logger.error(f"Failed to copy prepared docker-data for '{crs_name}'")
             return False
 
