@@ -168,6 +168,8 @@ def _setup_build_docker_data(
         build_docker_data.mkdir(parents=True, exist_ok=True)
 
         # rsync prepared -> build/<project>/ with hardlinks to save space
+        # Exclude overlayfs work directories - ephemeral kernel structures with
+        # d--------- permissions that rsync can't read
         logger.info(
             f"Copying prepared docker-data to build/{project_name} for CRS '{crs_name}' (using hardlinks)"
         )
@@ -176,6 +178,7 @@ def _setup_build_docker_data(
             build_docker_data,
             hard_links=True,
             link_dest=prepared_path,
+            exclude=["**/work/work"],
         ):
             logger.error(f"Failed to copy prepared docker-data for '{crs_name}'")
             return False
