@@ -357,9 +357,12 @@ class OSSPatchProjectBuilder:
         )
 
         old_workdir = _workdir_from_dockerfile(project_path, self.project_name)
-        if self._detect_incremental_build(builder_image_name):
+
+        # Check if inc-{sanitizer} image already exists
+        inc_image_name = f"{builder_image_name}:inc-{sanitizer}"
+        if docker_image_exists(inc_image_name):
             logger.info(
-                f'Builder image "{builder_image_name}" is already a snapshot image for incremental build'
+                f'Incremental build image already exists: "{inc_image_name}", skipping snapshot creation'
             )
             return True
 
@@ -412,6 +415,22 @@ class OSSPatchProjectBuilder:
             rts_init_path = OSS_PATCH_RUNNER_DATA_PATH / "rts_init_c.py"
             volume_mounts += f"-v={rts_init_path}:/rts_init_c.py:ro "
 
+        # Determine base image: prefer :original if exists, otherwise use :latest
+        original_image = f"{builder_image_name}:original"
+        if docker_image_exists(original_image):
+            base_image = original_image
+            logger.info(f'Using :original tag as base image: "{base_image}"')
+        else:
+            # Fallback to :latest, but verify it's not an incremental build
+            if self._detect_incremental_build(builder_image_name):
+                logger.error(
+                    f'Builder image "{builder_image_name}" is already an incremental build. '
+                    f'Please rebuild the original image.'
+                )
+                return False
+            base_image = builder_image_name
+            logger.info(f'Using :latest tag as base image: "{base_image}"')
+
         try:
             create_container_command = (
                 f"docker create --privileged "
@@ -421,18 +440,18 @@ class OSSPatchProjectBuilder:
                 # f"--env=CAPTURE_REPLAY_SCRIPT=1 "
                 f"--name={container_name} "
                 f"{volume_mounts}"
-                f"{builder_image_name} "
+                f"{base_image} "
                 f'/bin/bash -c "{container_cmd}"'
             )
 
             proc = subprocess.run(
                 create_container_command,
                 shell=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
             if proc.returncode != 0:
-                logger.error("docker create command has failed")
+                logger.error(f"docker create command has failed: stderr: {proc.stderr.decode()}\n, stdout: {proc.stdout.decode()}")
                 return False
 
             proc = subprocess.run(
@@ -758,7 +777,10 @@ class OSSPatchProjectBuilder:
             return False
 
         # Replace the current :latest with incremental build snapshot
-        retag_docker_image(builder_image_name, f"{builder_image_name}:original")
+        # Only create :original tag if it doesn't exist (to prevent overwriting on re-runs)
+        original_tag = f"{builder_image_name}:original"
+        if not docker_image_exists(original_tag):
+            retag_docker_image(builder_image_name, original_tag)
         retag_docker_image(
             get_incremental_build_image_name(
                 self.oss_fuzz_path, self.project_name, sanitizer
