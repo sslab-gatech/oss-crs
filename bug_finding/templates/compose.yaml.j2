@@ -53,6 +53,8 @@ services:
 {%- for key, value in crs.build_env.items() %}
       - {{ key }}={{ value }}
 {%- endfor %}
+      - CPUSET_CPUS={{ crs.cpuset }}
+      - MEMORY_LIMIT={{ crs.memory_limit | string }}
 {%- if crs.host_docker_builder %}
       - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}
