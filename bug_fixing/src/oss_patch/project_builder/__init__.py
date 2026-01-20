@@ -593,10 +593,10 @@ class OSSPatchProjectBuilder:
             # Add RTS initialization after compile
             # rts_init_jvm.py and rts_config_jvm.py are copied to root (/)
             # test.sh is expected to be in $SRC/
-            rts_cmd = f" && python3 /rts_init_jvm.py {old_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
+            rts_cmd = f" && cp -r /src /test-src && python3 /rts_init_jvm.py {test_workdir} --tool {rts_tool} || :; {patch_apply_test_cmd}"
             container_cmd = base_cmd + rts_cmd
         else:
-            container_cmd = base_cmd + f" && {patch_apply_test_cmd}"
+            container_cmd = base_cmd + f" && cp -r /src /test-src && {patch_apply_test_cmd}"
 
         # Validate RTS files early if enabled
         if rts_enabled:
