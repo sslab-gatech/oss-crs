@@ -224,6 +224,7 @@ def render_compose_for_worker(
     external_litellm: bool = False,
     ensemble_dir: Path | None = None,
     harness_name: str | None = None,
+    coverage_build_dir: str | None = None,
 ) -> str:
     """Render the compose template for a specific worker."""
     if not template_path.exists():
@@ -286,6 +287,7 @@ def render_compose_for_worker(
         parent_image_prefix=project_image_prefix,
         external_litellm=external_litellm,
         ensemble_dir=str(ensemble_dir) if ensemble_dir else None,
+        coverage_build_dir=coverage_build_dir,
     )
 
     return rendered
@@ -399,6 +401,7 @@ def render_run_compose(
     diff_path: Path | None = None,
     external_litellm: bool = False,
     ensemble_dir: Path | None = None,
+    coverage_build_dir: Path | None = None,
 ) -> tuple[str, Path]:
     """
     Programmatic interface for run mode.
@@ -482,6 +485,7 @@ def render_run_compose(
         external_litellm=external_litellm,
         ensemble_dir=ensemble_dir,
         harness_name=harness_name,
+        coverage_build_dir=str(coverage_build_dir) if coverage_build_dir else None,
     )
 
     output_file = output_dir / f"compose-{worker}.yaml"

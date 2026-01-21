@@ -162,6 +162,12 @@ def main() -> int:
         action="store_true",
         help="Skip cloning oss-fuzz (user guarantees oss-fuzz is already available)",
     )
+    run_parser.add_argument(
+        "--coverage-build-dir",
+        type=Path,
+        default=None,
+        help="Directory containing coverage-instrumented binaries to mount at /coverage-out",
+    )
 
     args = parser.parse_args()
 
@@ -265,6 +271,8 @@ def main() -> int:
         run_kwargs["disable_ensemble"] = getattr(args, "disable_ensemble", False)
         if args.corpus:
             run_kwargs["corpus_dir"] = args.corpus.resolve()
+        if args.coverage_build_dir:
+            run_kwargs["coverage_build_dir"] = args.coverage_build_dir.resolve()
 
         result = run_crs(**run_kwargs)
     else:

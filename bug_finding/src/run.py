@@ -48,6 +48,7 @@ def run_crs(
     disable_ensemble: bool = False,
     corpus_dir: Path | None = None,
     skip_oss_fuzz_clone: bool = False,
+    coverage_build_dir: Path | None = None,
 ) -> bool:
     """
     Run CRS using docker compose.
@@ -156,6 +157,7 @@ def run_crs(
             diff_path=diff_path,
             external_litellm=external_litellm,
             ensemble_dir=final_ensemble_dir,
+            coverage_build_dir=coverage_build_dir,
         )
     except Exception as e:
         logger.error("Failed to generate compose file: %s", e)

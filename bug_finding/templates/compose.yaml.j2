@@ -175,6 +175,9 @@ services:
         - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}:/out
+{%- if coverage_build_dir %}
+      - {{ coverage_build_dir }}:/coverage-out:ro
+{%- endif %}
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}:/artifacts
 {%- if harness_name %}
       # Per-harness artifact overlays (povs, corpus, crs-data are per-harness)
