@@ -40,9 +40,9 @@ services:
 {%- endif %}
     shm_size: 2g
     environment:
+      - SOURCE_WORKDIR={{ source_workdir }}
 {%- if crs.dind %}
       - PARENT_IMAGE={{ parent_image_prefix }}/{{ project }}
-      - SOURCE_WORKDIR={{ source_workdir }}
 {%- endif %}
       - FUZZING_ENGINE={{ engine }}
       - SANITIZER={{ sanitizer }}
@@ -151,6 +151,7 @@ services:
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
       - CRS_TARGET={{ project }}
       - CRS_NAME={{ crs.name }}
+      - SOURCE_WORKDIR={{ source_workdir }}
 {%- for key, value in crs.run_env.items() %}
       - {{ key }}={{ value }}
 {%- endfor %}
