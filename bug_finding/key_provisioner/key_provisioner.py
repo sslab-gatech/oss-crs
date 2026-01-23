@@ -68,6 +68,7 @@ class LiteLLMKeyProvisioner:
     def generate_key(
         self,
         user_id: str,
+        fixed_key: str | None = None,
         max_budget: float | None = None,
         models: list | None = None,
         duration: str | None = None,
@@ -79,6 +80,7 @@ class LiteLLMKeyProvisioner:
 
         Args:
           user_id: Unique identifier for the user
+          fixed_key: Optional fixed key value to register (instead of auto-generating)
           max_budget: Maximum budget for the key (optional)
           models: List of allowed models (optional)
           duration: Key duration (optional)
@@ -90,6 +92,8 @@ class LiteLLMKeyProvisioner:
         """
         payload: dict[str, Any] = {"user_id": user_id}
 
+        if fixed_key is not None:
+            payload["key"] = fixed_key
         if max_budget is not None:
             payload["max_budget"] = max_budget
         if models is not None:
@@ -306,12 +310,6 @@ def parse_arguments():
         "--config-dir", type=str, required=True, help="Path to configuration directory"
     )
     parser.add_argument(
-        "--crs",
-        type=str,
-        required=True,
-        help="CRS name to provision key for (only one CRS per invocation)",
-    )
-    parser.add_argument(
         "--duration",
         type=str,
         default=None,
@@ -411,40 +409,44 @@ def main():
         logger.error("LiteLLM proxy service is not ready after maximum retries")
         sys.exit(1)
 
-    # Check if specified CRS exists in budgets
-    if args.crs not in budgets:
-        logger.error(f"CRS '{args.crs}' not found in configuration")
-        sys.exit(1)
+    # Register keys for all CRS instances
+    registered_count = 0
+    for crs_name, budget_config in budgets.items():
+        # Get fixed key from environment variable LITELLM_KEY_<crs_name>
+        fixed_key = os.getenv(f"LITELLM_KEY_{crs_name}")
+        if not fixed_key:
+            logger.info(f"Skipping CRS '{crs_name}': no LITELLM_KEY_{crs_name} env var")
+            continue
 
-    # Generate key for specified CRS only
-    crs_name = args.crs
-    budget_config = budgets[crs_name]
+        logger.info(f"Registering fixed key for CRS: {crs_name}")
 
-    logger.info(f"Generating key for CRS: {crs_name}")
+        # Get models list for this specific CRS
+        models = get_models_list(config, crs_name)
 
-    # Get models list for this specific CRS
-    models = get_models_list(config, crs_name)
+        key_data = provisioner.generate_key(
+            user_id=crs_name,
+            fixed_key=fixed_key,
+            max_budget=budget_config["max_budget"],
+            models=models,
+            duration=args.duration,
+            tpm_limit=budget_config["max_tpm"],
+            rpm_limit=budget_config["max_rpm"],
+        )
 
-    key_data = provisioner.generate_key(
-        user_id=crs_name,
-        max_budget=budget_config["max_budget"],
-        models=models,
-        duration=args.duration,
-        tpm_limit=budget_config["max_tpm"],
-        rpm_limit=budget_config["max_rpm"],
-    )
-
-    if key_data:
-        if provisioner.store_key(crs_name, key_data):
-            logger.info(f"Successfully provisioned and stored key for CRS {crs_name}")
+        if key_data:
+            logger.info(f"Successfully registered key for CRS {crs_name}")
+            registered_count += 1
         else:
-            logger.error(f"Failed to store key for CRS {crs_name}")
+            logger.error(f"Failed to register key for CRS {crs_name}")
             sys.exit(1)
-    else:
-        logger.error(f"Failed to generate key for CRS {crs_name}")
+
+    if registered_count == 0:
+        logger.error("No keys were registered - no LITELLM_KEY_<crs_name> env vars found")
         sys.exit(1)
 
-    logger.info(f"Key provisioning completed successfully for {crs_name}")
+    # Touch marker file for healthcheck
+    Path("/tmp/key_provisioned").touch()
+    logger.info(f"Key provisioning completed successfully for {registered_count} CRS")
 
     # Sleep infinitely to keep container running
     logger.info("Key provisioning complete. Sleeping indefinitely...")

@@ -59,6 +59,31 @@ services:
     command: --config /app/config.yaml
 {%- endif %}
 
+{%- if mode == 'run' and not external_litellm %}
+  # Key Provisioner - registers budgeted keys for all CRS instances
+  key_provisioner:
+    build:
+      context: {{ key_provisioner_path }}
+      dockerfile: Dockerfile
+    depends_on:
+      litellm:
+        condition: service_healthy
+    environment:
+{{ litellm_url_env() }}
+      - LITELLM_MASTER_KEY={{ litellm_master_key }}
+{%- for crs in crs_list %}
+      - LITELLM_KEY_{{ crs.name }}={{ litellm_keys[crs.name] }}
+{%- endfor %}
+    volumes:
+      - {{ config_dir }}:/config:ro
+    command: ["python", "key_provisioner.py", "--config-dir", "/config"]
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/key_provisioned"]
+      interval: 2s
+      timeout: 1s
+      retries: 30
+{%- endif %}
+
 {%- for crs in crs_list %}
 
 {%- if mode == 'build' %}
@@ -132,29 +157,6 @@ services:
 {%- endif %}
 
 {%- if mode == 'run' %}
-{%- if not external_litellm %}
-  # Key Provisioner {{ loop.index }} - {{ crs.name }} (internal LiteLLM only)
-  {{ crs.name }}_key_provisioner:
-    build:
-      context: {{ key_provisioner_path }}
-      dockerfile: Dockerfile
-    depends_on:
-      litellm:
-        condition: service_healthy
-    environment:
-{{ litellm_url_env() }}
-      - LITELLM_MASTER_KEY={{ litellm_master_key }}
-    volumes:
-      - {{ volume_name('keys_data', crs.name) }}:/keys/{{ crs.name }}
-      - {{ config_dir }}:/config:ro
-    command: ["python", "key_provisioner.py", "--config-dir", "/config", "--crs", "{{ crs.name }}"]
-    healthcheck:
-      test: ["CMD", "test", "-f", "/keys/{{ crs.name }}/api_key"]
-      interval: 2s
-      timeout: 1s
-      retries: 30
-{%- endif %}
-
   # CRS Runner {{ loop.index }} - {{ crs.name }}
   {{ crs.name }}_runner:
     image: {{ crs.name }}_runner
@@ -164,13 +166,15 @@ services:
     shm_size: 2g
 {%- if not external_litellm %}
     depends_on:
-      {{ crs.name }}_key_provisioner:
+      key_provisioner:
         condition: service_healthy
 {%- endif %}
     environment:
 {{ litellm_url_env() }}
 {%- if external_litellm %}
       - LITELLM_KEY=${LITELLM_KEY}
+{%- else %}
+      - LITELLM_KEY={{ litellm_keys[crs.name] }}
 {%- endif %}
       - FUZZING_ENGINE={{ engine }}
       - SANITIZER={{ sanitizer }}
@@ -208,9 +212,6 @@ services:
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/povs:/artifacts/povs
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus:/artifacts/corpus
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/crs-data:/artifacts/crs-data
-{%- endif %}
-{%- if not external_litellm %}
-      - {{ volume_name('keys_data', crs.name) }}:/keys:ro
 {%- endif %}
 {%- if crs.host_docker_builder %}
       - /var/run/docker.sock:/var/run/docker.sock
@@ -271,10 +272,3 @@ services:
       - /ensemble/povs
 {%- endif %}
 
-{%- if mode == 'run' and not external_litellm %}
-volumes:
-{%- for crs in crs_list %}
-  {{ volume_name('keys_data', crs.name) }}:
-    name: {{ volume_name('keys_data', crs.name) }}
-{%- endfor %}
-{%- endif %}

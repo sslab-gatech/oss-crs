@@ -23,6 +23,17 @@ def generate_secret() -> str:
     return secrets.token_hex(16)
 
 
+def generate_litellm_key() -> str:
+    """
+    Generate a LiteLLM API key in the standard format.
+
+    Returns:
+        A key in the format 'sk-<16 hex chars>'
+    """
+    import secrets
+    return f"sk-{secrets.token_hex(8)}"
+
+
 def extract_env_vars_from_litellm_config(config_path: Path) -> list[str]:
     """
     Parse config-litellm.yaml and extract environment variable names.
@@ -280,6 +291,7 @@ def render_compose_for_worker(
     # LiteLLM-related parameters (for run mode with internal LiteLLM)
     postgres_password: str | None = None,
     litellm_master_key: str | None = None,
+    litellm_keys: dict[str, str] | None = None,
     litellm_config_path: Path | None = None,
     litellm_env_vars: list[str] | None = None,
 ) -> str:
@@ -348,6 +360,7 @@ def render_compose_for_worker(
         # LiteLLM-related variables (for run mode with internal LiteLLM)
         postgres_password=postgres_password,
         litellm_master_key=litellm_master_key,
+        litellm_keys=litellm_keys or {},
         litellm_config_path=str(litellm_config_path) if litellm_config_path else None,
         litellm_env_vars=litellm_env_vars or [],
     )
@@ -504,12 +517,16 @@ def render_run_compose(
     # Generate random secrets and get LiteLLM config (for internal LiteLLM mode)
     postgres_password = None
     litellm_master_key = None
+    litellm_keys: dict[str, str] = {}
     litellm_config_path = None
     litellm_env_vars = None
 
     if not external_litellm:
         postgres_password = generate_secret()
-        litellm_master_key = generate_secret()
+        litellm_master_key = generate_litellm_key()
+        # Generate a unique key for each CRS
+        for crs in crs_list:
+            litellm_keys[crs["name"]] = generate_litellm_key()
         litellm_config_path = get_litellm_config_path(config_dir)
         litellm_env_vars = extract_env_vars_from_litellm_config(litellm_config_path)
         logger.info(f"Using LiteLLM config: {litellm_config_path}")
@@ -542,6 +559,7 @@ def render_run_compose(
         coverage_build_dir=str(coverage_build_dir) if coverage_build_dir else None,
         postgres_password=postgres_password,
         litellm_master_key=litellm_master_key,
+        litellm_keys=litellm_keys,
         litellm_config_path=litellm_config_path,
         litellm_env_vars=litellm_env_vars,
     )
