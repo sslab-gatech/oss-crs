@@ -48,7 +48,17 @@ export OPENAI_API_KEY=sk-fake-key
 
 Note: Most CRSs in this demo have minimal or zero OpenAI API quota usage.
 
-### 3. Build a CRS
+### 3. Prepare CRS (optional)
+
+Pre-build CRS docker images. This step runs automatically during build if needed, but can be run explicitly:
+
+```bash
+uv run oss-bugfind-crs prepare mock-dind
+# Force rebuild of all images
+uv run oss-bugfind-crs prepare mock-dind --force-rebuild
+```
+
+### 4. Build a CRS
 
 Choose a configured CRS from `example_configs` and build it:
 
@@ -57,11 +67,13 @@ Choose a configured CRS from `example_configs` and build it:
 uv run oss-bugfind-crs build example_configs/ensemble-c json-c
 # Example 2: Build ensemble-java for the java-example project
 uv run oss-bugfind-crs build example_configs/ensemble-java java-example
+# Force rebuild without docker cache
+uv run oss-bugfind-crs build --force-rebuild example_configs/ensemble-c json-c
 ```
 
-Built artifacts will be available under `build/crs` and `build/out`.
+Built artifacts will be available under `build/out` and `build/artifacts`.
 
-### 4. Run a Built CRS
+### 5. Run a Built CRS
 
 Execute a built CRS with a specific fuzzer target:
 
@@ -73,6 +85,21 @@ uv run oss-bugfind-crs run example_configs/ensemble-java java-example ExampleFuz
 ```
 
 **Expected Output**: The CRS will launch successfully with running logs showing CPU core allocation (base numbers 0-15). For ensemble CRSs, CPU cores are evenly distributed among the contained CRSs.
+
+### 6. Clean Up
+
+Remove build artifacts and cached data:
+
+```bash
+# Clean everything
+uv run oss-bugfind-crs clean
+
+# Clean specific CRS
+uv run oss-bugfind-crs clean --crs atlantis-c-libafl
+
+# Clean specific CRS + project combination
+uv run oss-bugfind-crs clean --crs atlantis-c-libafl --project json-c
+```
 
 ## Testing
 
@@ -120,11 +147,14 @@ The run test script automatically:
 Specify a custom build directory for CRS artifacts. Defaults to `./build` in the current directory.
 
 The build directory contains:
-- `crs/` - CRS Docker images and configuration
-- `crs/oss-fuzz/` - OSS-Fuzz repository (cloned automatically if needed)
-- `out/` - Build outputs and fuzzing results
-- `src/` - Cloned project sources (when using `--clone`)
-- `crs/parent-images/` - Parent image tarballs for Docker-in-Docker CRSs
+- `docker-data/<crs>/` - Docker data for dind CRSs (prepared, build, run phases)
+- `out/<crs>/<project>/` - Compiled fuzzers (mounted at `/out`)
+- `work/<crs>/<project>/` - Intermediate build files (mounted at `/work`)
+- `artifacts/<crs>/<project>/` - Run artifacts (mounted at `/artifacts`)
+- `oss-fuzz/<project>/` - OSS-Fuzz clone
+- `crs/<hash>/` - Generated compose files
+- `src/<project>/` - Cloned project sources (when using `--clone`)
+- `ensemble/<config>/<project>/<harness>/` - Ensemble shared dirs (when ensemble enabled)
 
 ```bash
 # Use custom build directory
@@ -143,12 +173,12 @@ uv run oss-bugfind-crs run --build-dir /tmp/my-builds \
 
 ### OSS-Fuzz Directory (`--oss-fuzz-dir`)
 
-Specify a custom OSS-Fuzz repository location. Defaults to `${BUILD_DIR}/crs/oss-fuzz`.
+Specify a source OSS-Fuzz repository to copy from. Without this flag, OSS-Fuzz is cloned from GitHub. The working copy is always created at `${BUILD_DIR}/oss-fuzz/${PROJECT}/`.
 
 Useful when:
 - Using a forked or customized OSS-Fuzz repository
 - Working with AIxCC or other OSS-Fuzz variants
-- Managing multiple OSS-Fuzz instances
+- Avoiding repeated cloning from GitHub
 
 ```bash
 # Use custom OSS-Fuzz directory
@@ -170,7 +200,7 @@ uv run oss-bugfind-crs run --oss-fuzz-dir oss-fuzz-aixcc \
 ```
 
 **Note:**
-- If the OSS-Fuzz directory doesn't exist, it will be cloned from https://github.com/google/oss-fuzz
+- Without `--oss-fuzz-dir`, OSS-Fuzz is cloned from https://github.com/google/oss-fuzz (sparse checkout with only `infra/` and the target project)
 - Use `--project-image-prefix` when working with non-standard OSS-Fuzz forks (e.g., AIxCC uses `aixcc-afc` instead of `gcr.io/oss-fuzz`)
 
 ### CRS Registry Directory (`--registry-dir`)
@@ -235,40 +265,43 @@ uv run oss-bugfind-crs build --external-litellm example_configs/atlantis-c-libaf
 uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-c-libafl json-c json_array_fuzzer
 ```
 
-### Shared Seed Directory (`--shared-seed-dir`, `--disable-shared-seed`)
+### Ensemble Directory (`--ensemble-dir`, `--disable-ensemble`)
 
-Enable cross-CRS seed sharing for ensemble mode. When multiple CRS instances run on the same worker, they can share discovered seeds to improve overall fuzzing coverage.
+Enable cross-CRS seed sharing for ensemble mode. When multiple CRS instances run on the same worker, an ensemble watcher service monitors each CRS's corpus and povs directories, deduplicates by content hash, and shares them to all CRS instances.
 
-**Auto-detection (default)**: When running an ensemble configuration with more than one CRS on the same worker, shared seed directories are automatically created at `build/shared_seed_dir/{configuration}/{project}/{harness_name}/`.
+**Auto-detection (default)**: When running an ensemble configuration with more than one CRS on the same worker, ensemble directories are automatically created at `build/ensemble/{configuration}/{project}/{harness_name}/`.
 
 ```bash
-# Ensemble mode - shared seeds auto-enabled
+# Ensemble mode - auto-enabled when multiple CRS on same worker
 uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer
-# Creates: build/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/atlantis-c-libafl/
-#          build/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/crs-libfuzzer/
+# Creates: build/ensemble/ensemble-c/json-c/json_array_fuzzer/{corpus,povs,crs-data}
 ```
 
-**Explicit path**: Override the base shared seed directory location (harness name is appended automatically).
+**Explicit path**: Override the base ensemble directory location (harness name is appended automatically).
 
 ```bash
 uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
-    --shared-seed-dir /custom/shared/path
-# Creates: /custom/shared/path/json_array_fuzzer/atlantis-c-libafl/
-#          /custom/shared/path/json_array_fuzzer/crs-libfuzzer/
+    --ensemble-dir /custom/ensemble/path
+# Creates: /custom/ensemble/path/json_array_fuzzer/{corpus,povs,crs-data}
 ```
 
-**Disable sharing**: Opt out of automatic shared seed directory creation.
+**Disable ensemble**: Opt out of automatic ensemble directory creation.
 
 ```bash
 uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
-    --disable-shared-seed
+    --disable-ensemble
+```
+
+**Initial corpus**: Provide initial corpus files to pre-populate the ensemble corpus.
+
+```bash
+uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer \
+    --corpus /path/to/initial/corpus
 ```
 
 **Mount structure inside containers**:
-- Each CRS gets read-write access to its own directory: `/seed_share_dir/{crs_name}/`
-- Each CRS gets read-only access to other CRS directories: `/seed_share_dir/{other_crs_name}/`
-
-This enables CRS implementations to periodically sync discovered seeds across the ensemble while preventing write conflicts.
+- Each CRS gets the shared corpus as a read-only mount at `/seed_share_dir/`
+- The ensemble watcher service monitors each CRS's output and deduplicates by content hash
 
 ### Custom project path
 

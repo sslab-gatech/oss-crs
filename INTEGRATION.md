@@ -1,39 +1,55 @@
 # OSS-CRS
 
-OSS-CRS aims to standardize the running interface for bug-finding Cyber Reasoning Systems that target OSS-Fuzz projects. 
+OSS-CRS aims to standardize the running interface for bug-finding Cyber Reasoning Systems that target OSS-Fuzz projects.
 The primary deployment target is running one or more CRSs locally with simple dependencies (docker).
 
 ## Workflow
 
-OSS-CRS supports two phases for the CRS: building and running.
-We want to separate the building phase so that performance can be evaluated solely on the running phase without CRSs needing to optimize or compromise on the building overhead.
-Furthermore for bug-finding CRSs, we believe the building phase is commonly customized for instrumentation or other artifact generation purposes.
+OSS-CRS supports three phases for the CRS: preparing, building, and running.
+The prepare phase builds project-independent CRS artifacts (e.g., base images for dind).
+The build phase compiles project-specific artifacts (e.g., instrumented fuzzers).
+The run phase executes the CRS on a specific harness.
 
 ```sh
-# Operator uses configs to build a particular CRS
+# One-time prepare (builds CRS base images, loads dind-images into docker-data)
+uv run oss-bugfind-crs prepare mock-dind
+
+# Build CRS for a project
 uv run oss-bugfind-crs build example_configs/ensemble-c json-c
 
-# Operator uses configs to run a particular CRS on a harness
+# Run CRS on a harness
 uv run oss-bugfind-crs run example_configs/ensemble-c json-c json_array_fuzzer
+
+# Cleanup build artifacts
+uv run oss-bugfind-crs clean [--crs <name>] [--project <name>]
 ```
 
-Artifacts from the build phase are shared to the run phase thought the `/out` directory inside the containers.
-On the host's filesystem, the directory structure looks like the following:
+Note: The prepare step runs automatically during build if the CRS has a `docker-bake.hcl` and its images are missing locally.
+
+### Directory Structure
 
 ```
-build
-└── out
-    └── ensemble-c
-        └── json-c
-            ├── json_array_fuzzer
-            ├── json_object_fuzzer
-            └── ...
+.oss-bugfind/
+|-- crs/<crs_name>/              # Cloned CRS repositories (from pkg.yaml git refs)
+
+build/
+|-- docker-data/<crs>/
+|   |-- prepared/                # From prepare phase (dind-images only)
+|   |-- build/<project>/         # For build phase (prepared + project image)
+|   |-- run/<project>/           # For run phase (fresh copy from build)
+|-- out/<crs>/<project>/         # Compiled fuzzers (/out in container)
+|-- work/<crs>/<project>/        # Intermediate build files (/work in container)
+|-- artifacts/<crs>/<project>/   # Run artifacts (/artifacts in container)
+|-- oss-fuzz/<project>/          # OSS-Fuzz clone
+|-- crs/<hash>/                  # Generated compose files
+|-- src/<project>/               # Cloned project sources (when using --clone)
+|-- ensemble/<config>/<project>/<harness>/  # Ensemble shared dirs (when ensemble enabled)
 ```
 
 ## Required registry files
 
 Registering a CRS to OSS-CRS is done through a PR to the `crs_registry` directory.
-There are two files that are required, `pkg.yaml` which specifies the CRS repository 
+There are two files that are required, `pkg.yaml` which specifies the CRS repository
 and `config-crs.yaml` which specifies CRS dependencies,
 such as LLM models, features, or resource requirements.
 
@@ -113,7 +129,7 @@ These files should be at the root level of the CRS repository that's referenced 
 
 ### builder.Dockerfile
 
-This container will be run without overriding the default command, 
+This container will be run without overriding the default command,
 so we expect CRS developers to specify their own `CMD`.
 
 `parent_image` is provided as a docker image build argument,
@@ -124,31 +140,35 @@ In this workflow, the builder container has access to the `compile` command
 and the project's original build environment.
 
 The builder container will have the following defined in the docker compose:
-```
+```yaml
 build:
-  context: <path-to-build>/crs/<hash>/crs-libfuzzer
+  context: <crs-path>
   dockerfile: builder.Dockerfile
   additional_contexts:
-    project: <path-to-oss-fuzz>/projects/json-c
+    project: <oss-fuzz-path>/projects/json-c
   args:
     - CRS_TARGET=json-c
-    - PROJECT_PATH=<path-to-oss-fuzz>/projects/json-c
+    - PROJECT_PATH=<oss-fuzz-path>/projects/json-c
     - parent_image=gcr.io/oss-fuzz/json-c
 volumes:
-  - <path-to-build>/out/crs-libfuzzer/json-c:/out
-  - <path-to-build>/work/crs-libfuzzer/json-c:/work
-  - <hash>_keys_data_crs-libfuzzer:/keys:ro
+  - <build-dir>/out/<crs>/json-c:/out
+  - <build-dir>/work/<crs>/json-c:/work
+  - <build-dir>/artifacts/<crs>/json-c:/artifacts
+  - <build-dir>/docker-data/<crs>/build/json-c:/var/lib/docker  # dind only
 environment:
-  - LITELLM_URL=http://crs-litellm-<hash>-litellm-1:4000
+  - SOURCE_WORKDIR=/src/json-c
+  - PARENT_IMAGE=gcr.io/oss-fuzz/json-c          # dind only
   - FUZZING_ENGINE=libfuzzer
   - SANITIZER=address
   - ARCHITECTURE=x86_64
   - PROJECT_NAME=json-c
   - FUZZING_LANGUAGE=c++
   - HELPER=True
-networks:
-  - <hash>_crs_network
+  - CPUSET_CPUS=0,1,2,3
+  - MEMORY_LIMIT=16G
 ```
+
+Note: LiteLLM is NOT started during the build phase. The builder does not have access to LLM services.
 
 If the builder container needs the files from `oss-fuzz/projects/<project/`,
 they can be copied into the image in the Dockerfile by using the `PROJECT_PATH` build argument.
@@ -162,50 +182,51 @@ Thus, CRS developers can assume that source code will always be at `WORKDIR`.
 ### runner.Dockerfile
 
 This container will be run with the fuzzing harness and fuzzer arguments overriding the command.
-We expect CRS developers to specify their own `ENTRYPOINT` 
+We expect CRS developers to specify their own `ENTRYPOINT`
 which parses the fuzzing harness and arguments.
 As a minimal example, running oss-fuzz's default fuzzer would be `ENTRYPOINT ["run_fuzzer"]`.
 
 The runner container will have the following defined in the docker compose:
-```
+```yaml
 crs-libfuzzer_runner:
   image: crs-libfuzzer_runner
   privileged: true
   build:
-    context: <path-to-build>/crs/<hash>/crs-libfuzzer
+    context: <crs-path>
     dockerfile: runner.Dockerfile
-    args:
-      - PROJECT_PATH=<path-to-build>/crs/oss-fuzz/projects/json-c
   volumes:
-    - <path-to-build>/out/crs-libfuzzer/json-c:/out
-    - <hash>_keys_data_crs-libfuzzer:/keys:ro
+    - <build-dir>/out/<crs>/json-c:/out
+    - <build-dir>/artifacts/<crs>/json-c:/artifacts
+    - <build-dir>/docker-data/<crs>/run/json-c:/var/lib/docker  # dind only
+    - <hash>_keys_data_<crs>:/keys:ro
   environment:
     - LITELLM_URL=http://crs-litellm-<hash>-litellm-1:4000
     - FUZZING_ENGINE=libfuzzer
     - SANITIZER=address
     - RUN_FUZZER_MODE=interactive
     - HELPER=True
-    - CPUSET_CPUS=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-    - MEMORY_LIMIT=64G
+    - CPUSET_CPUS=0,1,2,3
+    - MEMORY_LIMIT=16G
     - CRS_TARGET=json-c
     - CRS_NAME=crs-libfuzzer
+    - SOURCE_WORKDIR=/src/json-c
   networks:
-    - 1b81b6ba52665603_crs_network
-  cpuset: 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+    - <hash>_crs_network
+  cpuset: 0,1,2,3
   deploy:
     resources:
       limits:
-        memory: 64G
+        memory: 16G
   command: ["json_array_fuzzer"]
 ```
 
 Resource constraints are defined in the docker compose file,
-and passed as environment to the CRS runner container 
+and passed as environment to the CRS runner container
 so that the CRS may apply own resource handling logic.
 
 ### LiteLLM key
 
-Each CRS will be deployed with a LiteLLM key, 
+Each CRS will be deployed with a LiteLLM key,
 with models specified from `config-crs.yaml`
 and budget calculated from `config-resource.yaml` in the operator-provided configs dir.
 The provisioned key will be stored in a shared volume at `/keys/api_key`.
@@ -214,21 +235,48 @@ The CRS developers should migrate their LLM requests to using the LiteLLM proxy.
 
 ### Multi-Container (DinD)
 
-NOTE: this approach was chosen so that OSS-CRS can still control container resources easily,
-but we have yet to port a real CRS that requires multiple containers.
-As such, this section may be under further development or redesigns if substantial
-obstacles are encountered with porting such a CRS.
+For CRSs that need multiple containers (e.g., separate builder and runner images inside dind),
+OSS-CRS provides a prepare phase that pre-builds and pre-loads images into a docker-data directory,
+which is mounted at `/var/lib/docker` inside the privileged build/run containers.
 
-The current approach to supporting multi-container CRSs is by letting the CRS use DinD
-and provide supplementary resources for the CRS container.
+**CRS developer interface**: Provide a `docker-bake.hcl` at the CRS root directory.
 
-The proposed workflow is for the CRS to build its additional docker images at the build phase, 
-and export the images as tarballs into `/out` for them to be loaded at the run phase.
+```hcl
+group "default" {
+  targets = ["prepare-image", "runner-internal"]
+}
 
-In order to access the project image for building the harnesses, 
-it is provided as `/project-image.tar` inside the build container.
+# Images that should be pre-loaded into dind's /var/lib/docker
+group "dind-images" {
+  targets = ["runner-internal"]
+}
 
-The `mock-dind` CRS is provided as an example of the docker image exporting and loading workflow.
+target "prepare-image" {
+  dockerfile = "prepare.Dockerfile"
+  tags       = ["my-crs-base:latest"]
+}
+
+target "runner-internal" {
+  dockerfile = "runner-internal.Dockerfile"
+  tags       = ["internal-runner:latest"]
+}
+```
+
+**Workflow**:
+1. `oss-bugfind-crs prepare <crs>` builds all targets in `docker-bake.hcl` and loads `dind-images` group into `build/docker-data/<crs>/prepared/`
+2. `oss-bugfind-crs build` copies prepared docker-data, adds the project image, and mounts at `/var/lib/docker`
+3. `oss-bugfind-crs run` copies build docker-data and mounts at `/var/lib/docker`
+
+The project image (e.g., `gcr.io/oss-fuzz/json-c`) is pre-loaded into `/var/lib/docker` by the build phase. CRS builders can access it via the `PARENT_IMAGE` environment variable.
+
+The `mock-dind` CRS (with `dind` dependency) is provided as a reference implementation.
+
+**Configuration** (`config-crs.yaml`):
+```yaml
+mock-dind:
+  dependencies:
+    - dind
+```
 
 ### Host Docker Socket Mode (`host_docker_builder`)
 
@@ -244,11 +292,15 @@ crs-multilang:
 **Behavior**:
 - Mounts `/var/run/docker.sock` into builder and runner containers
 - Provides environment variables for path mapping:
-  - `HOST_WORK_DIR` - Host path for `/work` directory
-  - `HOST_OUT_DIR` - Host path for `/out` directory (build outputs)
-  - `HOST_ARTIFACT_DIR` - Host path for `/artifacts` directory (persistent results)
+  - `HOST_WORK_DIR` - Host path for `/work` directory (builder only)
+  - `HOST_OUT_DIR` - Host path for `/out` directory
+  - `HOST_ARTIFACT_DIR` - Host path for `/artifacts` directory
+  - `HOST_CRS_DIR` - Host path to CRS directory (builder only)
+  - `HOST_POV_DIR` - Host path for per-harness povs directory (runner only)
+  - `HOST_CORPUS_DIR` - Host path for per-harness corpus directory (runner only)
+  - `HOST_CRS_DATA_DIR` - Host path for per-harness crs-data directory (runner only)
 - Creates same-path volume mounts so container paths match host paths
-- Sets `CRS_EXTERNAL_NETWORK` for LiteLLM connectivity
+- Sets `CRS_EXTERNAL_NETWORK` for LiteLLM connectivity (runner only)
 
 **Advantages over DinD**:
 - Instant layer caching (host daemon's cache is immediately available)
@@ -267,7 +319,7 @@ crs-multilang:
 > Only use `host_docker_builder` with trusted CRS implementations. This option is intended for controlled environments where the CRS code is trusted.
 
 **CRS developer requirements**:
-- Use `HOST_WORK_DIR`, `HOST_OUT_DIR`, `HOST_ARTIFACT_DIR` environment variables when constructing Docker volume mounts
+- Use `HOST_*` environment variables when constructing Docker volume mounts for spawned containers
 - Connect spawned containers to `CRS_EXTERNAL_NETWORK` if they need LiteLLM access
 
 **Container cleanup consideration**:
@@ -289,55 +341,34 @@ The CRS may assume the diff has already been applied to the source code.
 
 ### Ensemble mode and shared seeds
 
-When multiple CRS instances run on the same worker (ensemble mode), OSS-CRS automatically enables cross-CRS seed sharing. This allows CRS implementations to share discovered test inputs with each other, improving overall fuzzing coverage.
+When multiple CRS instances run on the same worker (ensemble mode), OSS-CRS automatically enables cross-CRS seed sharing via an ensemble watcher service. The watcher monitors each CRS's corpus and povs directories, deduplicates files by content hash, and copies them to a shared directory accessible to all CRS instances.
 
 **Host directory structure**:
 ```
-build/shared_seed_dir/{configuration}/{project}/{harness_name}/
-├── atlantis-c-libafl/    # CRS 1's seeds
-├── crs-libfuzzer/        # CRS 2's seeds
-└── ...
+build/ensemble/{configuration}/{project}/{harness_name}/
+|-- corpus/     # Shared corpus (deduplicated from all CRSs)
+|-- povs/       # Shared povs (deduplicated from all CRSs)
+|-- crs-data/   # Shared CRS data
 ```
 
-**Container mount structure**:
-```
-/seed_share_dir/
-├── atlantis-c-libafl/    # :rw for atlantis-c-libafl, :ro for others
-├── crs-libfuzzer/        # :rw for crs-libfuzzer, :ro for others
-└── ...
-```
-
-Each CRS container receives:
-- **Read-write access** to its own directory: `/seed_share_dir/{own_crs_name}/`
-- **Read-only access** to other CRS directories: `/seed_share_dir/{other_crs_name}/`
+**Container mount**:
+- Each CRS gets the shared corpus as a read-only mount at `/seed_share_dir/`
 
 **CRS developer contract**:
 
 To participate in seed sharing, CRS implementations should:
-1. **Write seeds to**: `/seed_share_dir/{own_crs_name}/` - Store discovered interesting test inputs here
-2. **Read seeds from**: `/seed_share_dir/*/` - Periodically scan all subdirectories for new seeds from other CRS instances
-3. **Optional**: Create subdirectories like `/seed_share_dir/{own_crs_name}/coverage_shared_dir/` for coverage data if integrating with SARIF
-
-**Example compose configuration** (auto-generated):
-```yaml
-crs-libfuzzer_runner:
-  volumes:
-    - <path-to-build>/out/crs-libfuzzer/json-c:/out
-    - <hash>_keys_data_crs-libfuzzer:/keys:ro
-    # Shared seeds - own directory is rw, others are ro
-    - <path-to-build>/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/crs-libfuzzer:/seed_share_dir/crs-libfuzzer:rw
-    - <path-to-build>/shared_seed_dir/ensemble-c/json-c/json_array_fuzzer/atlantis-c-libafl:/seed_share_dir/atlantis-c-libafl:ro
-```
+1. **Write corpus to**: `/artifacts/corpus/` - The ensemble watcher picks up new files automatically
+2. **Read shared seeds from**: `/seed_share_dir/` - Contains deduplicated corpus from all CRS instances (read-only)
+3. CRS implementations should gracefully handle the case when `/seed_share_dir/` does not exist
 
 **Notes**:
 - The `/seed_share_dir/` mount only exists when ensemble mode is active (>1 CRS on same worker)
-- CRS implementations should gracefully handle the case when `/seed_share_dir/` does not exist
-- Seed sharing is enabled by default for ensemble mode but can be disabled with `--disable-shared-seed`
-- Seeds are organized by harness name on the host to prevent mixing seeds from different fuzzers
+- Ensemble mode is enabled by default and can be disabled with `--disable-ensemble`
+- Initial corpus can be provided with `--corpus` to pre-populate the shared corpus directory
 
 ## Operator configuration files
 
-The operator needs to provide configuration files which specify which CRSs run, 
+The operator needs to provide configuration files which specify which CRSs run,
 what machine the CRSs runs on, compute contraints, and LLM budgets.
 In order to help the operator get started, we provide sample configurations in the
 `example_configs/` directory.
@@ -404,7 +435,7 @@ OSS-CRS provides two output directories with distinct purposes:
 
 # OSS-PATCH
 
-OSS-PATCH aims to standardize the running interface for patching Cyber Reasoning Systems (CRSs) that target OSS-Fuzz projects. 
+OSS-PATCH aims to standardize the running interface for patching Cyber Reasoning Systems (CRSs) that target OSS-Fuzz projects.
 This documentation describes how to integrate one's CRS into OSS-Patch based on the current status.
 
 So far, we have integrated three patching CRSs from ATLANTIS (Team Atlanta), buttercup (Trail-of-Bits), and PatchAgent (Northwestern Univ).
@@ -479,7 +510,7 @@ The main field of this YAML is `models` and `build` (optional). `models` specifi
   build:  # optional, by default `builder.Dockerfile`
     dockerfile: oss-patch/builder.Dockerfile
   modes:  # optional
-    - delta    
+    - delta
 ```
 
 The CRS can also restrict the modes it deploys in (i.e. full or delta). By default if `modes` is not specified, the CRS may be deployed in both full and delta modes.
@@ -499,7 +530,7 @@ Similar to OSS-CRS, we are planning to support `runner.Dockerfile` in the future
 As mentioned earlier, `builder.Dockerfile` is used to build the docker image that runs the corresponding CRS.
 For now, each CRS image will be named as `gcr.io/oss-patch/<crs-name>`.
 
-Since each CRS utilizes the OSS-Fuzz for building each target project, 
+Since each CRS utilizes the OSS-Fuzz for building each target project,
 we require the docker image of each CRS must be in DinD (Docker-in-Docker) environment.
 
 When integrating each CRS using this Dockerfile, the developer must specify their own `CMD` in their Dockerfile like the below example.
@@ -515,9 +546,9 @@ CMD ["sh", "-c", "python3 /app/run_crs.py"]
 ### CRS Runtime Environment
 
 The command that is used to run each CRS is `uv run oss-patch run <...>`.
-When the command is issued, OSS-Patch will invoke the CRS container and run the program registered in `CMD`. 
+When the command is issued, OSS-Patch will invoke the CRS container and run the program registered in `CMD`.
 
-To provide CRS inputs in a standardized way, OSS-Patch uses container's `/work` directory to pass inputs to each CRS. 
+To provide CRS inputs in a standardized way, OSS-Patch uses container's `/work` directory to pass inputs to each CRS.
 To be specific, each CRS will see `/work` directory in container when launched as follows:
 
 ```
@@ -544,7 +575,7 @@ blob: QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU
 pov_id: pov_0
 project_name: aixcc/c/mock-c
 ```
-The `blob` field contains the actual PoV content encoded in base64. 
+The `blob` field contains the actual PoV content encoded in base64.
 Each CRS developer must implement their CRS with using the information provided in `/work` directory.
 
 In addition to the use of `/work` directory, each CRS container will run with the following important environment variables to help the standardization:
@@ -570,9 +601,9 @@ For supporting the benchmarks RFC, the each CRS must construct `/out` directory 
 │   └── pov_2/                  # Patches for pov_2
 │       └── patch.diff
 ├── crs-data/                   # CRS-specific outputs (optional)
-│   ├── pov_0/                  
-│   │   └── additional_outputs, repair.log, test-result.json, etc          
-│   ├── pov_1/                  
+│   ├── pov_0/
+│   │   └── additional_outputs, repair.log, test-result.json, etc
+│   ├── pov_1/
 │   │   └── [...]
     [...omitted...]
 ```
@@ -580,11 +611,11 @@ For supporting the benchmarks RFC, the each CRS must construct `/out` directory 
 
 ### Integration Example: PatchAgent (from Northwestern University)
 
-Here we describe the integration of PatchAgent published in USENIX Security '25. 
+Here we describe the integration of PatchAgent published in USENIX Security '25.
 The CRS is based on the repository in https://github.com/cla7aye15I4nd/PatchAgent.
 
 To make PatchAgent run under OSS-PATCH, `oss-patch/` is created to contain OSS-PATCh-specific files (This is just one of the examples. Implementation may vary).
-i.e., 
+i.e.,
 ```
 PatchAgent/                     # PatchAgent CRS repository
 ├── ...

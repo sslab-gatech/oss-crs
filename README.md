@@ -17,12 +17,20 @@ export OPENAI_API_KEY="sk-fake-key"
 ### 2. Build and run a simple bug-finding or remediation system
 
 ```bash
+# prepare (one-time, pre-builds CRS docker images)
+uv run oss-bugfind-crs prepare crs-libfuzzer
+
 # build
 uv run oss-bugfind-crs build example_configs/crs-libfuzzer json-c
 
 # run
 uv run oss-bugfind-crs run example_configs/crs-libfuzzer json-c json_array_fuzzer
+
+# clean (remove build artifacts)
+uv run oss-bugfind-crs clean
 ```
+
+Note: The prepare step is optional — it runs automatically during build if needed.
 
 ### 3. Build and run an ensemble system (combining multiple systems together)
 
