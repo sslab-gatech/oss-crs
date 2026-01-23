@@ -499,8 +499,9 @@ def build_crs(
                         image_name,
                     )
 
-                # Step 3: Run the build
-                up_cmd = [
+                # Step 3: Run the build (single container per profile)
+                service_name = profile  # profile name matches service name
+                run_cmd = [
                     "docker",
                     "compose",
                     "-p",
@@ -509,11 +510,12 @@ def build_crs(
                     str(compose_file),
                     "--profile",
                     profile,
-                    "up",
-                    "--abort-on-container-exit",
+                    "run",
+                    "--rm",
+                    service_name,
                 ]
                 logger.info("Running build for profile: %s", profile)
-                subprocess.check_call(up_cmd, stdin=subprocess.DEVNULL)
+                subprocess.check_call(run_cmd, stdin=subprocess.DEVNULL)
 
                 completed_profiles.append(profile)
             except subprocess.CalledProcessError:
