@@ -293,7 +293,7 @@ def prepare_crs(
     build_dir: Path,
     clone_dir: Path,
     registry_dir: Path,
-    force_rebuild: bool = False,
+    no_cache: bool = False,
 ) -> bool:
     """Prepare a CRS by pre-building docker images for dind.
 
@@ -330,30 +330,9 @@ def prepare_crs(
     # Check if docker-bake.hcl exists
     bake_file = crs_path / "docker-bake.hcl"
     if bake_file.exists():
-        # Skip rebuild if images already exist (unless --force-rebuild)
-        if not force_rebuild:
-            image_tags = get_all_bake_image_tags(bake_file)
-            missing = check_images_exist(image_tags) if image_tags else []
-            if not missing:
-                logger.info(
-                    "All bake images already exist for CRS '%s', skipping (use --force-rebuild to rebuild)",
-                    crs_name,
-                )
-                # Still need to check dind images and runner
-                dind_images = get_dind_image_tags(bake_file)
-                if dind_images:
-                    docker_data_path = build_dir / "docker-data" / crs_name / "prepared"
-                    if docker_data_path.exists() and any(docker_data_path.iterdir()):
-                        logger.info(
-                            "Docker-data already prepared for CRS '%s', skipping",
-                            crs_name,
-                        )
-                        return build_runner_image(crs_path, crs_name)
-                else:
-                    return build_runner_image(crs_path, crs_name)
-
-        # Build images with docker buildx bake
-        if not build_bake_images(crs_path, no_cache=force_rebuild):
+        # Build images with docker buildx bake (Docker handles layer caching;
+        # --no-cache disables it)
+        if not build_bake_images(crs_path, no_cache=no_cache):
             logger.error("Failed to build images for CRS '%s'", crs_name)
             return False
 

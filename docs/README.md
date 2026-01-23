@@ -54,8 +54,8 @@ Pre-build CRS docker images. This step runs automatically during build if needed
 
 ```bash
 uv run oss-bugfind-crs prepare mock-dind
-# Force rebuild of all images
-uv run oss-bugfind-crs prepare mock-dind --force-rebuild
+# Rebuild without docker layer cache
+uv run oss-bugfind-crs prepare mock-dind --no-cache
 ```
 
 ### 4. Build a CRS
@@ -67,8 +67,8 @@ Choose a configured CRS from `example_configs` and build it:
 uv run oss-bugfind-crs build example_configs/ensemble-c json-c
 # Example 2: Build ensemble-java for the java-example project
 uv run oss-bugfind-crs build example_configs/ensemble-java java-example
-# Force rebuild without docker cache
-uv run oss-bugfind-crs build --force-rebuild example_configs/ensemble-c json-c
+# Rebuild without docker layer cache
+uv run oss-bugfind-crs build --no-cache example_configs/ensemble-c json-c
 ```
 
 Built artifacts will be available under `build/out` and `build/artifacts`.

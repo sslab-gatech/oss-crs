@@ -35,7 +35,7 @@ DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"  # type
 
 def _build_project_image(
     project_name: str, oss_fuzz_dir: Path, architecture: str,
-    force_rebuild: bool = False,
+    no_cache: bool = False,
 ) -> bool:
     build_image_cmd = [
         "python3",
@@ -46,7 +46,7 @@ def _build_project_image(
         architecture,
         project_name,
     ]
-    if not force_rebuild:
+    if not no_cache:
         build_image_cmd.insert(4, "--cache")
     try:
         subprocess.check_call(build_image_cmd, cwd=oss_fuzz_dir, stdin=subprocess.DEVNULL)
@@ -185,7 +185,7 @@ def build_crs(
     source_oss_fuzz_dir: Path | None = None,
     skip_oss_fuzz_clone: bool = False,
     prepare_images: bool = True,
-    force_rebuild: bool = False,
+    no_cache: bool = False,
 ) -> bool:
     """
     Build CRS for a project using docker compose.
@@ -280,7 +280,7 @@ def build_crs(
         logger.info(f"Using cloned source as source_path: {source_path}")
 
     # Build project image
-    _build_project_image(project_name, oss_fuzz_dir, architecture, force_rebuild=force_rebuild)
+    _build_project_image(project_name, oss_fuzz_dir, architecture, no_cache=no_cache)
 
     # Generate compose files using render_compose module
     logger.info("Generating compose-build.yaml")
@@ -392,7 +392,7 @@ def build_crs(
                     profile,
                     "build",
                 ]
-                if force_rebuild:
+                if no_cache:
                     build_cmd.append("--no-cache")
                 logger.info("Building containers for profile: %s", profile)
                 subprocess.check_call(build_cmd, stdin=subprocess.DEVNULL)

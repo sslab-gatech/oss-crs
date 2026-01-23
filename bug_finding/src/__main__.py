@@ -49,9 +49,9 @@ def main() -> int:
         "--registry-dir", type=Path, help="Path to local oss-crs-registry directory"
     )
     prepare_parser.add_argument(
-        "--force-rebuild",
+        "--no-cache",
         action="store_true",
-        help="Force rebuild even if images already exist",
+        help="Disable docker layer caching for image builds",
     )
 
     # clean subcommand
@@ -160,9 +160,9 @@ def main() -> int:
         help="Disable auto-prepare when CRS bake images are missing",
     )
     build_parser.add_argument(
-        "--force-rebuild",
+        "--no-cache",
         action="store_true",
-        help="Force rebuild with --no-cache for docker compose build",
+        help="Disable docker layer caching for image builds",
     )
 
     # run_crs subcommand
@@ -284,7 +284,7 @@ def main() -> int:
             "build_dir": build_dir,
             "clone_dir": clone_dir,
             "registry_dir": args.registry_dir.resolve() if args.registry_dir else DEFAULT_REGISTRY_DIR,
-            "force_rebuild": args.force_rebuild,
+            "no_cache": args.no_cache,
         }
         result = prepare_crs(**prepare_kwargs)
         return 0 if result else 1
@@ -352,7 +352,7 @@ def main() -> int:
             "external_litellm": args.external_litellm,
             "skip_oss_fuzz_clone": args.skip_oss_fuzz_clone,
             "prepare_images": args.prepare_images,
-            "force_rebuild": args.force_rebuild,
+            "no_cache": args.no_cache,
         }
 
         # Only add optional paths if provided
