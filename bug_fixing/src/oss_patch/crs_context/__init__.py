@@ -15,6 +15,7 @@ from bug_fixing.src.oss_patch.functions import (
     copy_git_repo,
     pull_project_source,
     is_git_repository,
+    remove_directory_with_docker
 )
 from bug_fixing.src.oss_patch.project_builder import OSSPatchProjectBuilder
 from bug_fixing.src.oss_patch.globals import (
@@ -63,6 +64,7 @@ def _remove_all_projects_in_oss_fuzz(
 
     shutil.rmtree(oss_fuzz_path / "projects")
 
+
 class OSSPatchCRSContext:
     def __init__(
         self,
@@ -96,14 +98,47 @@ class OSSPatchCRSContext:
         if not self.docker_root_path.exists():
             self.docker_root_path.mkdir()
 
+    def _should_skip(
+        self,
+        oss_fuzz_path: Path,
+        source_path: Path | None,
+    ) -> bool:
+        if not self.run_context_dir.exists():
+            return False
+
+        if not self.oss_fuzz_path.exists():
+            return False
+
+        if not self.proj_src_path.exists():
+            return False
+
+        if get_git_commit_hash(oss_fuzz_path) != get_git_commit_hash(
+            self.oss_fuzz_path
+        ):
+            return False
+
+        if not source_path:
+            return True
+
+        if get_git_commit_hash(source_path) != get_git_commit_hash(
+            self.proj_src_path
+        ):
+            return False
+
+        return True
+
     def _construct_run_context(
         self,
         oss_fuzz_path: Path,
         custom_project_path: Path | None = None,
         custom_source_path: Path | None = None,
     ) -> bool:
-        if self.run_context_dir.exists():
+        
+        if self._should_skip(oss_fuzz_path, custom_source_path):
             return True
+
+        if self.run_context_dir.exists():
+            remove_directory_with_docker(self.run_context_dir)
 
         self.run_context_dir.mkdir()
 
