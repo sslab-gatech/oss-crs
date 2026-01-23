@@ -206,7 +206,7 @@ def run_crs(
             "-d",
         ]
         try:
-            subprocess.check_call(litellm_up_cmd)
+            subprocess.check_call(litellm_up_cmd, stdin=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
             logger.error("Failed to start LiteLLM services")
             return False
@@ -229,7 +229,7 @@ def run_crs(
     def cleanup():
         """Cleanup function for compose files"""
         logger.info("cleanup")
-        subprocess.run(compose_down_cmd)
+        subprocess.run(compose_down_cmd, stdin=subprocess.DEVNULL)
         if not external_litellm:
             litellm_compose_file = crs_build_dir / "compose-litellm.yaml"
             litellm_stop_cmd = [
@@ -241,7 +241,7 @@ def run_crs(
                 str(litellm_compose_file),
                 "stop",
             ]
-            subprocess.run(litellm_stop_cmd)
+            subprocess.run(litellm_stop_cmd, stdin=subprocess.DEVNULL)
         fix_build_dir_permissions(build_dir)
 
     def signal_handler(signum, frame):
@@ -270,7 +270,7 @@ def run_crs(
         "--abort-on-container-exit",
     ]
     try:
-        subprocess.check_call(compose_cmd)
+        subprocess.check_call(compose_cmd, stdin=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         logger.error("Docker compose failed for: %s", compose_file)
         return False
