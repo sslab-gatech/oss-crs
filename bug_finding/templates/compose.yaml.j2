@@ -46,12 +46,10 @@ services:
 {%- for env_var in litellm_env_vars %}
       - {{ env_var }}=${{"{"}}{{ env_var }}{{"}"}}
 {%- endfor %}
-    ports:
-      - "4000:4000"
     volumes:
       - {{ litellm_config_path }}:/app/config.yaml:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:4000/health', headers={'Authorization': 'Bearer {{ litellm_master_key }}'}))"]
+      test: ["CMD-SHELL", "test -f /tmp/healthy || (python -c \"import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:4000/health', headers={'Authorization': 'Bearer {{ litellm_master_key }}'}))\" && touch /tmp/healthy)"]
       interval: 10s
       timeout: 5s
       retries: 12
