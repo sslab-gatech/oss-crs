@@ -21,7 +21,6 @@ class ComposeEnvironment:
     config_dir: Path
     build_dir: Path
     template_path: Path
-    litellm_template_path: Path
     oss_fuzz_path: Path
     config_hash: str
     crs_build_dir: Path
