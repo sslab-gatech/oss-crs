@@ -156,6 +156,7 @@ def build_bake_images(crs_path: Path) -> bool:
         subprocess.check_call(
             ["docker", "buildx", "bake", "-f", str(bake_file)],
             cwd=crs_path,
+            stdin=subprocess.DEVNULL,
         )
         return True
     except subprocess.CalledProcessError as e:
@@ -192,6 +193,7 @@ def build_runner_image(crs_path: Path, crs_name: str) -> bool:
                 ".",
             ],
             cwd=crs_path,
+            stdin=subprocess.DEVNULL,
         )
         return True
     except subprocess.CalledProcessError as e:

@@ -47,7 +47,7 @@ def _build_project_image(
         project_name,
     ]
     try:
-        subprocess.check_call(build_image_cmd, cwd=oss_fuzz_dir)
+        subprocess.check_call(build_image_cmd, cwd=oss_fuzz_dir, stdin=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
         logging.error(f"Failed to build image for {project_name}")
         return False
@@ -390,7 +390,7 @@ def build_crs(
                     "build",
                 ]
                 logger.info("Building containers for profile: %s", profile)
-                subprocess.check_call(build_cmd)
+                subprocess.check_call(build_cmd, stdin=subprocess.DEVNULL)
 
                 # Step 2: If source_path provided, copy source to workdir
                 if source_path:
@@ -427,7 +427,7 @@ def build_crs(
                     logger.info(
                         "Running copy command: %s", get_command_string(copy_cmd)
                     )
-                    subprocess.check_call(copy_cmd)
+                    subprocess.check_call(copy_cmd, stdin=subprocess.DEVNULL)
 
                     # Extract original image metadata (CMD and ENTRYPOINT) to preserve them
                     logger.info(
@@ -484,12 +484,12 @@ def build_crs(
                     logger.info(
                         "Running commit command: %s", get_command_string(commit_cmd)
                     )
-                    subprocess.check_call(commit_cmd)
+                    subprocess.check_call(commit_cmd, stdin=subprocess.DEVNULL)
 
                     # Clean up the container
                     logger.info("Removing container: %s", container_name)
                     cleanup_cmd = ["docker", "rm", container_name]
-                    subprocess.check_call(cleanup_cmd)
+                    subprocess.check_call(cleanup_cmd, stdin=subprocess.DEVNULL)
 
                     logger.info(
                         "Successfully copied source and committed to image: %s",
@@ -510,7 +510,7 @@ def build_crs(
                     "--abort-on-container-exit",
                 ]
                 logger.info("Running build for profile: %s", profile)
-                subprocess.check_call(up_cmd)
+                subprocess.check_call(up_cmd, stdin=subprocess.DEVNULL)
 
                 completed_profiles.append(profile)
             except subprocess.CalledProcessError:
@@ -535,7 +535,7 @@ def build_crs(
             for profile in completed_profiles:
                 down_cmd.extend(["--profile", profile])
             down_cmd.extend(["down", "--remove-orphans"])
-            subprocess.run(down_cmd)
+            subprocess.run(down_cmd, stdin=subprocess.DEVNULL)
         else:
             subprocess.run(
                 [
@@ -547,7 +547,8 @@ def build_crs(
                     str(compose_file),
                     "down",
                     "--remove-orphans",
-                ]
+                ],
+                stdin=subprocess.DEVNULL,
             )
         fix_build_dir_permissions(build_dir)
 
