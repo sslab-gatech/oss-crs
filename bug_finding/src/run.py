@@ -257,27 +257,35 @@ def run_crs(
         "--remove-orphans",
     ]
 
+    cleanup_done = False
+
     def cleanup():
-        """Cleanup function for compose files"""
-        logger.info("cleanup")
+        """Cleanup function for compose files (runs at most once)."""
+        nonlocal cleanup_done
+        if cleanup_done:
+            return
+        cleanup_done = True
+        logger.info("Cleaning up...")
         subprocess.run(compose_down_cmd, stdin=subprocess.DEVNULL)
         if not external_litellm:
             litellm_compose_file = crs_build_dir / "compose-litellm.yaml"
-            litellm_stop_cmd = [
+            litellm_down_cmd = [
                 "docker",
                 "compose",
                 "-p",
                 litellm_project,
                 "-f",
                 str(litellm_compose_file),
-                "stop",
+                "down",
             ]
-            subprocess.run(litellm_stop_cmd, stdin=subprocess.DEVNULL)
+            subprocess.run(litellm_down_cmd, stdin=subprocess.DEVNULL)
         fix_build_dir_permissions(build_dir)
 
     def signal_handler(signum, frame):
-        """Handle termination signals"""
-        logging.warning(f"\nReceived signal {signum}")
+        """Handle termination signals (first signal cleans up, subsequent ignored)."""
+        # Ignore further signals while cleaning up
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
         cleanup()
         sys.exit(0)
 
