@@ -34,18 +34,20 @@ DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"  # type
 
 
 def _build_project_image(
-    project_name: str, oss_fuzz_dir: Path, architecture: str
+    project_name: str, oss_fuzz_dir: Path, architecture: str,
+    force_rebuild: bool = False,
 ) -> bool:
     build_image_cmd = [
         "python3",
         "infra/helper.py",
         "build_image",
         "--no-pull",
-        "--cache",
         "--architecture",
         architecture,
         project_name,
     ]
+    if not force_rebuild:
+        build_image_cmd.insert(4, "--cache")
     try:
         subprocess.check_call(build_image_cmd, cwd=oss_fuzz_dir, stdin=subprocess.DEVNULL)
     except subprocess.CalledProcessError:
@@ -278,7 +280,7 @@ def build_crs(
         logger.info(f"Using cloned source as source_path: {source_path}")
 
     # Build project image
-    _build_project_image(project_name, oss_fuzz_dir, architecture)
+    _build_project_image(project_name, oss_fuzz_dir, architecture, force_rebuild=force_rebuild)
 
     # Generate compose files using render_compose module
     logger.info("Generating compose-build.yaml")
