@@ -183,6 +183,7 @@ def build_crs(
     source_oss_fuzz_dir: Path | None = None,
     skip_oss_fuzz_clone: bool = False,
     prepare_images: bool = True,
+    force_rebuild: bool = False,
 ) -> bool:
     """
     Build CRS for a project using docker compose.
@@ -389,6 +390,8 @@ def build_crs(
                     profile,
                     "build",
                 ]
+                if force_rebuild:
+                    build_cmd.append("--no-cache")
                 logger.info("Building containers for profile: %s", profile)
                 subprocess.check_call(build_cmd, stdin=subprocess.DEVNULL)
 
