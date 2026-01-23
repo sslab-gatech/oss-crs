@@ -9,15 +9,7 @@
 {%- if external_litellm %}
       - LITELLM_URL=${LITELLM_URL}
 {%- else %}
-      - LITELLM_URL=http://crs-litellm-{{ config_hash }}-litellm-1:4000
-{%- endif %}
-{%- endmacro %}
-
-{# Macro to generate CRS network configuration #}
-{%- macro crs_network() %}
-{%- if not external_litellm %}
-    networks:
-      - {{ config_hash }}_crs_network
+      - LITELLM_URL=http://litellm:4000
 {%- endif %}
 {%- endmacro %}
 
@@ -27,6 +19,46 @@
 {%- endmacro %}
 
 services:
+{%- if mode == 'run' and not external_litellm %}
+  # PostgreSQL database for LiteLLM (ephemeral - no volume mount)
+  postgres:
+    image: postgres:16-alpine
+    attach: false
+    environment:
+      - POSTGRES_USER=crs
+      - POSTGRES_PASSWORD={{ postgres_password }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crs -h localhost -p 5432"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # LiteLLM proxy server
+  litellm:
+    image: ghcr.io/berriai/litellm-database:main-stable
+    attach: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - LITELLM_MASTER_KEY={{ litellm_master_key }}
+      - DATABASE_URL=postgresql://crs:{{ postgres_password }}@postgres:5432/crs
+{%- for env_var in litellm_env_vars %}
+      - {{ env_var }}=${{"{"}}{{ env_var }}{{"}"}}
+{%- endfor %}
+    ports:
+      - "4000:4000"
+    volumes:
+      - {{ litellm_config_path }}:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://localhost:4000/health', headers={'Authorization': 'Bearer {{ litellm_master_key }}'}))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    command: --config /app/config.yaml
+{%- endif %}
+
 {%- for crs in crs_list %}
 
 {%- if mode == 'build' %}
@@ -106,10 +138,12 @@ services:
     build:
       context: {{ key_provisioner_path }}
       dockerfile: Dockerfile
+    depends_on:
+      litellm:
+        condition: service_healthy
     environment:
 {{ litellm_url_env() }}
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-{{ crs_network() }}
+      - LITELLM_MASTER_KEY={{ litellm_master_key }}
     volumes:
       - {{ volume_name('keys_data', crs.name) }}:/keys/{{ crs.name }}
       - {{ config_dir }}:/config:ro
@@ -159,11 +193,7 @@ services:
       - HOST_CORPUS_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus
       - HOST_CRS_DATA_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/crs-data
 {%- endif %}
-{%- if not external_litellm %}
-      - CRS_EXTERNAL_NETWORK={{ config_hash }}_crs_network
 {%- endif %}
-{%- endif %}
-{{ crs_network() }}
     build:
       context: {{ crs.path }}
       dockerfile: runner.Dockerfile
@@ -241,14 +271,7 @@ services:
       - /ensemble/povs
 {%- endif %}
 
-{%- if not external_litellm %}
-networks:
-  {{ config_hash }}_crs_network:
-    external: true
-    name: {{ config_hash }}_crs_network
-
-{%- endif %}
-{%- if not external_litellm %}
+{%- if mode == 'run' and not external_litellm %}
 volumes:
 {%- for crs in crs_list %}
   {{ volume_name('keys_data', crs.name) }}:

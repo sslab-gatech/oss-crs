@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import re
 import shutil
 from importlib.resources import files
 from pathlib import Path
@@ -9,6 +10,75 @@ from typing import Any
 
 import yaml
 from jinja2 import Template
+
+
+def generate_secret() -> str:
+    """
+    Generate a random secret.
+
+    Returns:
+        A 32-character hex string suitable for use as a password/key
+    """
+    import secrets
+    return secrets.token_hex(16)
+
+
+def extract_env_vars_from_litellm_config(config_path: Path) -> list[str]:
+    """
+    Parse config-litellm.yaml and extract environment variable names.
+
+    Looks for patterns like 'os.environ/VAR_NAME' in model_list[].litellm_params.api_key
+    and model_list[].litellm_params.api_base fields.
+
+    Args:
+        config_path: Path to the config-litellm.yaml file
+
+    Returns:
+        Sorted list of unique environment variable names
+    """
+    if not config_path.exists():
+        return []
+
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+    except yaml.YAMLError:
+        return []
+
+    env_vars: set[str] = set()
+    pattern = re.compile(r"os\.environ/(\w+)")
+
+    model_list = config.get("model_list", [])
+    for model in model_list:
+        litellm_params = model.get("litellm_params", {})
+        # Check api_key and api_base fields
+        for field in ["api_key", "api_base"]:
+            value = litellm_params.get(field, "")
+            if isinstance(value, str):
+                match = pattern.search(value)
+                if match:
+                    env_vars.add(match.group(1))
+
+    return sorted(env_vars)
+
+
+def get_litellm_config_path(config_dir: Path) -> Path:
+    """
+    Get the path to config-litellm.yaml, using default if not provided.
+
+    Args:
+        config_dir: User's config directory
+
+    Returns:
+        Path to config-litellm.yaml (user's or default template)
+    """
+    user_config = config_dir / "config-litellm.yaml"
+    if user_config.exists():
+        return user_config
+
+    # Use default template
+    default_config = Path(str(TEMPLATE_DIR)) / "config-litellm.yaml"
+    return default_config
 
 from bug_finding.src.render_compose.config import (
     ComposeEnvironment,
@@ -58,7 +128,6 @@ def _setup_compose_environment(
         ComposeEnvironment dataclass containing all environment setup data
     """
     template_path = Path(str(TEMPLATE_DIR)) / "compose.yaml.j2"
-    litellm_template_path = Path(str(TEMPLATE_DIR)) / "compose-litellm.yaml.j2"
 
     # Compute config_hash from config-resource.yaml
     config_resource_path = config_dir / "config-resource.yaml"
@@ -174,7 +243,6 @@ def _setup_compose_environment(
         config_dir=config_dir,
         build_dir=build_dir,
         template_path=template_path,
-        litellm_template_path=litellm_template_path,
         oss_fuzz_path=oss_fuzz_path,
         config_hash=config_hash,
         crs_build_dir=crs_build_dir,
@@ -185,26 +253,6 @@ def _setup_compose_environment(
         crs_paths=crs_paths,
         crs_pkg_data=crs_pkg_data,
     )
-
-
-def render_litellm_compose(
-    template_path: Path,
-    config_dir: Path,
-    config_hash: str,
-    crs_list: list[dict[str, Any]],
-) -> str:
-    """Render the compose-litellm.yaml template."""
-    if not template_path.exists():
-        raise FileNotFoundError(f"Template file not found: {template_path}")
-
-    template_content = template_path.read_text()
-    template = Template(template_content)
-
-    rendered = template.render(
-        config_hash=config_hash, config_dir=str(config_dir), crs_list=crs_list
-    )
-
-    return rendered
 
 
 def render_compose_for_worker(
@@ -229,6 +277,11 @@ def render_compose_for_worker(
     ensemble_dir: Path | None = None,
     harness_name: str | None = None,
     coverage_build_dir: str | None = None,
+    # LiteLLM-related parameters (for run mode with internal LiteLLM)
+    postgres_password: str | None = None,
+    litellm_master_key: str | None = None,
+    litellm_config_path: Path | None = None,
+    litellm_env_vars: list[str] | None = None,
 ) -> str:
     """Render the compose template for a specific worker."""
     if not template_path.exists():
@@ -292,6 +345,11 @@ def render_compose_for_worker(
         external_litellm=external_litellm,
         ensemble_dir=str(ensemble_dir) if ensemble_dir else None,
         coverage_build_dir=coverage_build_dir,
+        # LiteLLM-related variables (for run mode with internal LiteLLM)
+        postgres_password=postgres_password,
+        litellm_master_key=litellm_master_key,
+        litellm_config_path=str(litellm_config_path) if litellm_config_path else None,
+        litellm_env_vars=litellm_env_vars or [],
     )
 
     return rendered
@@ -326,7 +384,6 @@ def render_build_compose(
     config_dir = env.config_dir
     build_dir = env.build_dir
     template_path = env.template_path
-    litellm_template_path = env.litellm_template_path
     oss_fuzz_path = env.oss_fuzz_path
     config_hash = env.config_hash
     crs_build_dir = env.crs_build_dir
@@ -352,18 +409,7 @@ def render_build_compose(
             all_crs_list.extend(crs_list)
             all_build_services.extend([f"{crs['name']}_builder" for crs in crs_list])
 
-    # Render compose-litellm.yaml (unless using external LiteLLM)
-    if not external_litellm:
-        litellm_rendered = render_litellm_compose(
-            template_path=litellm_template_path,
-            config_dir=config_dir,
-            config_hash=config_hash,
-            crs_list=all_crs_list,
-        )
-        litellm_output_file = output_dir / "compose-litellm.yaml"
-        litellm_output_file.write_text(litellm_rendered)
-
-    # Render compose-build.yaml
+    # Render compose-build.yaml (no secrets needed for build phase)
     rendered = render_compose_for_worker(
         worker_name=None,
         crs_list=all_crs_list,
@@ -426,7 +472,6 @@ def render_run_compose(
     config_dir = env.config_dir
     build_dir = env.build_dir
     template_path = env.template_path
-    litellm_template_path = env.litellm_template_path
     oss_fuzz_path = env.oss_fuzz_path
     config_hash = env.config_hash
     crs_build_dir = env.crs_build_dir
@@ -456,21 +501,24 @@ def render_run_compose(
                 f"Please run 'oss-crs build' first to build the CRS."
             )
 
-    # Render compose-litellm.yaml (unless using external LiteLLM)
+    # Generate random secrets and get LiteLLM config (for internal LiteLLM mode)
+    postgres_password = None
+    litellm_master_key = None
+    litellm_config_path = None
+    litellm_env_vars = None
+
     if not external_litellm:
-        litellm_rendered = render_litellm_compose(
-            template_path=litellm_template_path,
-            config_dir=config_dir,
-            config_hash=config_hash,
-            crs_list=crs_list,
-        )
-        litellm_output_file = output_dir / "compose-litellm.yaml"
-        litellm_output_file.write_text(litellm_rendered)
+        postgres_password = generate_secret()
+        litellm_master_key = generate_secret()
+        litellm_config_path = get_litellm_config_path(config_dir)
+        litellm_env_vars = extract_env_vars_from_litellm_config(litellm_config_path)
+        logger.info(f"Using LiteLLM config: {litellm_config_path}")
+        logger.info(f"Required env vars for LiteLLM: {litellm_env_vars}")
 
     # Extract harness_name from fuzzer_command (first element is the fuzzer/harness name)
     harness_name = fuzzer_command[0] if fuzzer_command else None
 
-    # Render compose file
+    # Render compose file (includes LiteLLM services for internal mode)
     rendered = render_compose_for_worker(
         worker_name=worker,
         crs_list=crs_list,
@@ -492,6 +540,10 @@ def render_run_compose(
         ensemble_dir=ensemble_dir,
         harness_name=harness_name,
         coverage_build_dir=str(coverage_build_dir) if coverage_build_dir else None,
+        postgres_password=postgres_password,
+        litellm_master_key=litellm_master_key,
+        litellm_config_path=litellm_config_path,
+        litellm_env_vars=litellm_env_vars,
     )
 
     output_file = output_dir / f"compose-{worker}.yaml"

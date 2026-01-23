@@ -183,45 +183,17 @@ def run_crs(
     ):
         return False
 
-    # Look for compose files
+    # Look for compose file
     compose_file = crs_build_dir / f"compose-{worker}.yaml"
 
     if not compose_file.exists():
         logger.error("compose-%s.yaml was not generated", worker)
         return False
 
-    # Project names for separate compose projects
-    litellm_project = f"crs-litellm-{config_hash}"
     run_project = f"crs-run-{config_hash}-{worker}"
 
-    # Start LiteLLM services in detached mode as separate project (unless using external)
-    if not external_litellm:
-        litellm_compose_file = crs_build_dir / "compose-litellm.yaml"
-        if not litellm_compose_file.exists():
-            logger.error("compose-litellm.yaml was not generated")
-            return False
-
-        logger.info("Starting LiteLLM services (project: %s)", litellm_project)
-        litellm_up_cmd = [
-            "docker",
-            "compose",
-            "-p",
-            litellm_project,
-            "-f",
-            str(litellm_compose_file),
-            "up",
-            "-d",
-        ]
-        try:
-            subprocess.check_call(litellm_up_cmd, stdin=subprocess.DEVNULL)
-        except subprocess.CalledProcessError:
-            logger.error("Failed to start LiteLLM services")
-            return False
-    elif not skip_litellm:
-        logger.info("Using external LiteLLM instance")
-
-    logger.info("Starting runner services from: %s", compose_file)
-    # Commands for cleanup - only affect run project
+    logger.info("Starting services from: %s", compose_file)
+    # Commands for cleanup
     compose_down_cmd = [
         "docker",
         "compose",
@@ -243,18 +215,6 @@ def run_crs(
         cleanup_done = True
         logger.info("Cleaning up...")
         subprocess.run(compose_down_cmd, stdin=subprocess.DEVNULL)
-        if not external_litellm:
-            litellm_compose_file = crs_build_dir / "compose-litellm.yaml"
-            litellm_down_cmd = [
-                "docker",
-                "compose",
-                "-p",
-                litellm_project,
-                "-f",
-                str(litellm_compose_file),
-                "down",
-            ]
-            subprocess.run(litellm_down_cmd, stdin=subprocess.DEVNULL)
         fix_build_dir_permissions(build_dir)
 
     def signal_handler(signum, frame):
@@ -271,7 +231,6 @@ def run_crs(
     # Register cleanup on normal exit
     atexit.register(cleanup)
 
-    # Only pass the run compose file (litellm is in separate project)
     # --build ensures image is rebuilt if source files (run.sh, docker-compose.yml) changed
     compose_cmd = [
         "docker",
