@@ -8,3 +8,6 @@ oss-fuzz
 .vscode
 .oss-patch
 .oss-patch-work
+.claude
+tags
+.planning
