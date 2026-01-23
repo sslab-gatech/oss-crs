@@ -301,10 +301,22 @@ def run_crs(
         "--abort-on-container-exit",
     ]
     try:
-        subprocess.check_call(compose_cmd, stdin=subprocess.DEVNULL)
-    except subprocess.CalledProcessError:
-        logger.error("Docker compose failed for: %s", compose_file)
-        return False
+        proc = subprocess.Popen(
+            compose_cmd,
+            stdin=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        # Filter alarming-but-expected docker compose messages from stderr
+        for line in iter(proc.stderr.readline, b""):
+            text = line.decode("utf-8", errors="replace")
+            if "exited with code 0" in text or "Aborting on container exit" in text:
+                continue
+            sys.stderr.buffer.write(line)
+            sys.stderr.buffer.flush()
+        proc.wait()
+        if proc.returncode != 0:
+            logger.error("Docker compose failed for: %s", compose_file)
+            return False
     finally:
         cleanup()
 
