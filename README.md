@@ -16,11 +16,13 @@ export OPENAI_API_KEY="sk-fake-key"
 
 ### 2. Build and run a simple bug-finding or remediation system
 
+Any [OSS-Fuzz](https://github.com/google/oss-fuzz) project can be used as a target (e.g., `json-c`, `libxml2`, `openssl`).
+
 ```bash
 # prepare (one-time, pre-builds CRS docker images)
 uv run oss-bugfind-crs prepare crs-libfuzzer
 
-# build
+# build (using json-c as an example OSS-Fuzz project)
 uv run oss-bugfind-crs build example_configs/crs-libfuzzer json-c
 
 # run
