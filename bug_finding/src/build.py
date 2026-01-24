@@ -186,6 +186,7 @@ def build_crs(
     skip_oss_fuzz_clone: bool = False,
     prepare_images: bool = True,
     no_cache: bool = False,
+    run_id: str | None = None,
 ) -> bool:
     """
     Build CRS for a project using docker compose.
@@ -210,6 +211,7 @@ def build_crs(
         source_oss_fuzz_dir: Optional source OSS-Fuzz directory to copy from (Path, already resolved)
         skip_oss_fuzz_clone: Skip cloning oss-fuzz (default: False)
         prepare_images: Auto-prepare CRS if bake images are missing (default: True)
+        run_id: Custom run ID for Docker Compose project naming (default: random)
 
     Returns:
         bool: True if successful, False otherwise
@@ -367,8 +369,9 @@ def build_crs(
         logger.error("compose-build.yaml was not generated at: %s", compose_file)
         return False
 
-    # Project name for build compose (random ID to avoid collisions)
-    build_project = f"crs-build-{generate_run_id()}"
+    # Project name for build compose (use provided run_id or generate random)
+    build_run_id = run_id if run_id else generate_run_id()
+    build_project = f"crs-build-{build_run_id}"
 
     # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services
     # LiteLLM is only started during run phase

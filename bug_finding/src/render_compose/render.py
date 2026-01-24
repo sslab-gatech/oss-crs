@@ -464,12 +464,14 @@ def render_run_compose(
     external_litellm: bool = False,
     ensemble_dir: Path | None = None,
     coverage_build_dir: Path | None = None,
+    run_id: str | None = None,
 ) -> tuple[str, Path, list[dict]]:
     """
     Programmatic interface for run mode.
 
     Args:
         ensemble_dir: Optional base directory for shared seeds between CRS instances
+        run_id: Custom run ID for Docker Compose project naming (default: random)
 
     Returns:
       Tuple of (run_id, crs_build_dir, crs_list)
@@ -489,8 +491,8 @@ def render_run_compose(
     crs_paths = env.crs_paths
     crs_pkg_data = env.crs_pkg_data
 
-    # Generate random run_id for this run session
-    run_id = generate_run_id()
+    # Use provided run_id or generate random one for this run session
+    actual_run_id = run_id if run_id else generate_run_id()
 
     # Validate worker exists
     workers = resource_config.get("workers", {})
@@ -565,4 +567,4 @@ def render_run_compose(
     output_file = output_dir / f"compose-{worker}.yaml"
     output_file.write_text(rendered)
 
-    return run_id, crs_build_dir, crs_list
+    return actual_run_id, crs_build_dir, crs_list

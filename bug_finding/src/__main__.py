@@ -164,6 +164,12 @@ def main() -> int:
         action="store_true",
         help="Disable docker layer caching for image builds",
     )
+    build_parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Custom run ID for Docker Compose project naming (default: random)",
+    )
 
     # run_crs subcommand
     run_parser = subparsers.add_parser("run", help="Run CRS")
@@ -257,6 +263,12 @@ def main() -> int:
         type=Path,
         default=None,
         help="Directory containing coverage-instrumented binaries to mount at /coverage-out",
+    )
+    run_parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Custom run ID for Docker Compose project naming (default: random)",
     )
 
     args = parser.parse_args()
@@ -358,6 +370,7 @@ def main() -> int:
             "skip_oss_fuzz_clone": args.skip_oss_fuzz_clone,
             "prepare_images": args.prepare_images,
             "no_cache": args.no_cache,
+            "run_id": args.run_id,
         }
 
         # Only add optional paths if provided
@@ -403,6 +416,7 @@ def main() -> int:
             "external_litellm": args.external_litellm,
             "skip_litellm": args.skip_litellm,
             "skip_oss_fuzz_clone": args.skip_oss_fuzz_clone,
+            "run_id": args.run_id,
         }
 
         # Only add optional paths if provided

@@ -52,6 +52,7 @@ def run_crs(
     corpus_dir: Path | None = None,
     skip_oss_fuzz_clone: bool = False,
     coverage_build_dir: Path | None = None,
+    run_id: str | None = None,
 ) -> bool:
     """
     Run CRS using docker compose.
@@ -80,6 +81,8 @@ def run_crs(
         disable_ensemble: Disable automatic ensemble directory for multi-CRS mode
         corpus_dir: Optional directory containing initial corpus files to copy to ensemble corpus
         skip_oss_fuzz_clone: Skip cloning oss-fuzz (default: False)
+        coverage_build_dir: Optional directory containing coverage-instrumented binaries
+        run_id: Custom run ID for Docker Compose project naming (default: random)
 
     Returns:
         bool: True if successful, False otherwise
@@ -152,7 +155,7 @@ def run_crs(
     logger.info("Generating compose-%s.yaml", worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
     try:
-        run_id, crs_build_dir, crs_list = render_compose.render_run_compose(
+        actual_run_id, crs_build_dir, crs_list = render_compose.render_run_compose(
             config_dir=config_dir,
             build_dir=build_dir,
             clone_dir=clone_dir,
@@ -169,6 +172,7 @@ def run_crs(
             external_litellm=external_litellm,
             ensemble_dir=final_ensemble_dir,
             coverage_build_dir=coverage_build_dir,
+            run_id=run_id,
         )
     except Exception as e:
         logger.error("Failed to generate compose file: %s", e)
@@ -190,7 +194,7 @@ def run_crs(
         logger.error("compose-%s.yaml was not generated", worker)
         return False
 
-    run_project = f"crs-run-{run_id}-{worker}"
+    run_project = f"crs-run-{actual_run_id}-{worker}"
 
     logger.info("Starting services from: %s", compose_file)
     # Commands for cleanup
