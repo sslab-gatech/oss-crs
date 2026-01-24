@@ -285,7 +285,7 @@ def build_crs(
     # Generate compose files using render_compose module
     logger.info("Generating compose-build.yaml")
     try:
-        build_profiles, config_hash, crs_build_dir, crs_list = (
+        build_services, config_hash, crs_build_dir, crs_list = (
             render_compose.render_build_compose(
                 config_dir=config_dir,
                 build_dir=build_dir,
@@ -352,12 +352,12 @@ def build_crs(
     ):
         return False
 
-    if not build_profiles:
-        logger.error("No build profiles found")
+    if not build_services:
+        logger.error("No build services found")
         return False
 
     logger.info(
-        "Found %d build profiles: %s", len(build_profiles), ", ".join(build_profiles)
+        "Found %d build services: %s", len(build_services), ", ".join(build_services)
     )
 
     # Look for compose files in the hash directory
@@ -373,11 +373,10 @@ def build_crs(
     # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services
     # LiteLLM is only started during run phase
 
-    # Run docker compose up for each build profile
-    completed_profiles = []
+    # Run docker compose run for each build service
     try:
-        for profile in build_profiles:
-            logger.info("Building profile: %s", profile)
+        for service in build_services:
+            logger.info("Building service: %s", service)
 
             try:
                 # Step 1: Build the containers
@@ -388,20 +387,17 @@ def build_crs(
                     build_project,
                     "-f",
                     str(compose_file),
-                    "--profile",
-                    profile,
                     "build",
+                    service,
                 ]
                 if no_cache:
                     build_cmd.append("--no-cache")
-                logger.info("Building containers for profile: %s", profile)
                 subprocess.check_call(build_cmd, stdin=subprocess.DEVNULL)
 
                 # Step 2: If source_path provided, copy source to workdir
                 if source_path:
-                    # Extract CRS name from profile (format: {crs_name}_builder)
-                    crs_name = profile.replace("_builder", "")
-                    service_name = f"{crs_name}_builder"
+                    # Extract CRS name from service (format: {crs_name}_builder)
+                    crs_name = service.replace("_builder", "")
 
                     # Generate unique container name for docker commit
                     container_name = f"crs-source-copy-{uuid.uuid4().hex}"
@@ -409,7 +405,7 @@ def build_crs(
 
                     logger.info(
                         "Copying source from /local-source-mount to workdir for: %s",
-                        service_name,
+                        service,
                     )
                     copy_cmd = [
                         "docker",
@@ -418,13 +414,11 @@ def build_crs(
                         build_project,
                         "-f",
                         str(compose_file),
-                        "--profile",
-                        profile,
                         "run",
                         "--no-deps",
                         "--name",
                         container_name,
-                        service_name,
+                        service,
                         "/bin/bash",
                         "-c",
                         'workdir=$(pwd) && cd / && rm -rf "$workdir" && cp -r /local-source-mount "$workdir"',
@@ -501,8 +495,7 @@ def build_crs(
                         image_name,
                     )
 
-                # Step 3: Run the build (single container per profile)
-                service_name = profile  # profile name matches service name
+                # Step 3: Run the build
                 run_cmd = [
                     "docker",
                     "compose",
@@ -510,53 +503,35 @@ def build_crs(
                     build_project,
                     "-f",
                     str(compose_file),
-                    "--profile",
-                    profile,
                     "run",
                     "--rm",
-                    service_name,
+                    service,
                 ]
-                logger.info("Running build for profile: %s", profile)
+                logger.info("Running build for service: %s", service)
                 subprocess.check_call(run_cmd, stdin=subprocess.DEVNULL)
-
-                completed_profiles.append(profile)
             except subprocess.CalledProcessError:
-                logger.error("Docker compose operation failed for profile: %s", profile)
+                logger.error("Docker compose operation failed for service: %s", service)
                 return False
 
-            logger.info("Successfully built profile: %s", profile)
+            logger.info("Successfully built service: %s", service)
 
         logger.info("All CRS builds completed successfully")
     finally:
-        # Clean up: remove all containers from completed profiles
+        # Clean up: remove all containers
         logger.info("Cleaning up build services")
-        if completed_profiles:
-            down_cmd = [
+        subprocess.run(
+            [
                 "docker",
                 "compose",
                 "-p",
                 build_project,
                 "-f",
                 str(compose_file),
-            ]
-            for profile in completed_profiles:
-                down_cmd.extend(["--profile", profile])
-            down_cmd.extend(["down", "--remove-orphans"])
-            subprocess.run(down_cmd, stdin=subprocess.DEVNULL)
-        else:
-            subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "-p",
-                    build_project,
-                    "-f",
-                    str(compose_file),
-                    "down",
-                    "--remove-orphans",
-                ],
-                stdin=subprocess.DEVNULL,
-            )
+                "down",
+                "--remove-orphans",
+            ],
+            stdin=subprocess.DEVNULL,
+        )
         fix_build_dir_permissions(build_dir)
 
     return True
