@@ -239,6 +239,7 @@ services:
 {%- if mode == 'run' and ensemble_dir and harness_name %}
   # Ensemble Watcher - monitors corpus and povs directories, deduplicates by content hash
   ensemble_watcher:
+    image: crs-ensemble-watcher:latest
     build:
       context: {{ seed_watcher_path }}
       dockerfile: Dockerfile
