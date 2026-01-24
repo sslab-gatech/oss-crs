@@ -287,7 +287,7 @@ def build_crs(
     # Generate compose files using render_compose module
     logger.info("Generating compose-build.yaml")
     try:
-        build_services, config_hash, crs_build_dir, crs_list = (
+        build_services, crs_build_dir, crs_list = (
             render_compose.render_build_compose(
                 config_dir=config_dir,
                 build_dir=build_dir,

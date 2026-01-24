@@ -380,12 +380,12 @@ def render_build_compose(
     env_file: Path | None = None,
     project_image_prefix: str = "gcr.io/oss-fuzz",
     external_litellm: bool = False,
-) -> tuple[list[str], str, Path, list[dict[str, Any]]]:
+) -> tuple[list[str], Path, list[dict[str, Any]]]:
     """
     Programmatic interface for build mode.
 
     Returns:
-      Tuple of (build_service_names, config_name, crs_build_dir, crs_list)
+      Tuple of (build_service_names, crs_build_dir, crs_list)
     """
     # Common setup
     env = _setup_compose_environment(
@@ -396,7 +396,6 @@ def render_build_compose(
     build_dir = env.build_dir
     template_path = env.template_path
     oss_fuzz_path = env.oss_fuzz_path
-    config_name = env.config_name
     crs_build_dir = env.crs_build_dir
     output_dir = env.output_dir
     resource_config = env.resource_config
@@ -442,7 +441,7 @@ def render_build_compose(
     output_file = output_dir / "compose-build.yaml"
     output_file.write_text(rendered)
 
-    return all_build_services, config_name, crs_build_dir, all_crs_list
+    return all_build_services, crs_build_dir, all_crs_list
 
 
 def render_run_compose(
