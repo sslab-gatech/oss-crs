@@ -106,7 +106,7 @@ services:
       - CPUSET_CPUS={{ crs.cpuset }}
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
 {%- if crs.host_docker_builder %}
-      - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}
+      - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
       - HOST_ARTIFACT_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}
       - HOST_CRS_DIR={{ crs.path }}
@@ -122,7 +122,7 @@ services:
         - parent_image={{ parent_image_prefix }}/{{ project }}
     volumes:
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/out
-      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}:/work
+      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/work
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/artifacts
 {%- if crs.dind and not crs.host_docker_builder %}
       - {{ build_dir }}/docker-data/{{ crs.name }}/build/{{ project }}/{{ sanitizer }}:/var/lib/docker
@@ -131,7 +131,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same-path mounts for host docker socket mode - paths match on host and container
       - {{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}:{{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
-      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}:{{ build_dir }}/work/{{ crs.name }}/{{ project }}
+      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}:{{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}:{{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}
 {%- endif %}
 {%- for vol in crs.volumes %}
