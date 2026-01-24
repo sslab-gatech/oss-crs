@@ -184,12 +184,12 @@ def copy_docker_data(
 
         dest_path = build_dir / "docker-data" / crs_name / dest_subdir / project_name
 
-        # Check source exists
+        # Check source exists - skip if not (some dind CRS pull at runtime)
         if not source_path.exists():
-            logger.error(
-                f"{phase_name}: Source docker-data not found for CRS '{crs_name}': {source_path}"
+            logger.debug(
+                f"{phase_name}: No {source_subdir} docker-data for CRS '{crs_name}', skipping copy"
             )
-            return False
+            continue
 
         # Wipe existing destination
         if dest_path.exists():
