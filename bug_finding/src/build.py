@@ -24,7 +24,7 @@ from bug_finding.src.prepare import (
     load_images_to_docker_data,
     prepare_crs,
 )
-from bug_finding.src.utils import copy_docker_data, run_git
+from bug_finding.src.utils import copy_docker_data, generate_run_id, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -367,8 +367,8 @@ def build_crs(
         logger.error("compose-build.yaml was not generated at: %s", compose_file)
         return False
 
-    # Project name for build compose
-    build_project = f"crs-build-{config_hash}"
+    # Project name for build compose (random ID to avoid collisions)
+    build_project = f"crs-build-{generate_run_id()}"
 
     # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services
     # LiteLLM is only started during run phase

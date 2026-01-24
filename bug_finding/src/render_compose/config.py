@@ -22,7 +22,7 @@ class ComposeEnvironment:
     build_dir: Path
     template_path: Path
     oss_fuzz_path: Path
-    config_hash: str
+    config_name: str  # Name of the config directory (e.g., "ensemble-c")
     crs_build_dir: Path
     output_dir: Path
     oss_crs_registry_path: Path

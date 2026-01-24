@@ -1,6 +1,5 @@
 """Main compose rendering functions."""
 
-import hashlib
 import logging
 import re
 import shutil
@@ -10,6 +9,8 @@ from typing import Any
 
 import yaml
 from jinja2 import Template
+
+from bug_finding.src.utils import generate_run_id
 
 
 def generate_secret() -> str:
@@ -140,21 +141,20 @@ def _setup_compose_environment(
     """
     template_path = Path(str(TEMPLATE_DIR)) / "compose.yaml.j2"
 
-    # Compute config_hash from config-resource.yaml
+    # Use config directory name for build directory deduplication
+    config_name = config_dir.name
+
+    # Verify config-resource.yaml exists
     config_resource_path = config_dir / "config-resource.yaml"
     if not config_resource_path.exists():
         raise FileNotFoundError(
             f"config-resource.yaml not found in config-dir: {config_dir}"
         )
 
-    with open(config_resource_path, "rb") as f:
-        config_content = f.read()
-    config_hash = hashlib.sha256(config_content).hexdigest()[:16]
-
     # Create crs_build_dir (used for compose files and other outputs)
     # Note: For run mode, build validation is done via Docker image existence check
     # in render_run_compose() after we have the project/CRS information
-    crs_build_dir = build_dir / "crs" / config_hash
+    crs_build_dir = build_dir / "crs" / config_name
     crs_build_dir.mkdir(parents=True, exist_ok=True)
     if mode == "build":
         logging.info(f"Using CRS build directory: {crs_build_dir}")
@@ -255,7 +255,7 @@ def _setup_compose_environment(
         build_dir=build_dir,
         template_path=template_path,
         oss_fuzz_path=oss_fuzz_path,
-        config_hash=config_hash,
+        config_name=config_name,
         crs_build_dir=crs_build_dir,
         output_dir=output_dir,
         oss_crs_registry_path=oss_crs_registry_path,
@@ -278,7 +278,6 @@ def render_compose_for_worker(
     sanitizer: str,
     architecture: str,
     mode: str,
-    config_hash: str,
     fuzzer_command: list[str] | None = None,
     source_path: Path | None = None,
     harness_source: str | None = None,
@@ -347,7 +346,6 @@ def render_compose_for_worker(
         config_resource_path=str(config_resource_path),
         config_dir=str(config_dir),
         mode=mode,
-        config_hash=config_hash,
         source_path=str(source_path) if source_path else None,
         source_workdir=source_workdir,
         harness_source=harness_source,
@@ -387,7 +385,7 @@ def render_build_compose(
     Programmatic interface for build mode.
 
     Returns:
-      Tuple of (build_service_names, config_hash, crs_build_dir, crs_list)
+      Tuple of (build_service_names, config_name, crs_build_dir, crs_list)
     """
     # Common setup
     env = _setup_compose_environment(
@@ -398,7 +396,7 @@ def render_build_compose(
     build_dir = env.build_dir
     template_path = env.template_path
     oss_fuzz_path = env.oss_fuzz_path
-    config_hash = env.config_hash
+    config_name = env.config_name
     crs_build_dir = env.crs_build_dir
     output_dir = env.output_dir
     resource_config = env.resource_config
@@ -435,7 +433,6 @@ def render_build_compose(
         sanitizer=sanitizer,
         architecture=architecture,
         mode="build",
-        config_hash=config_hash,
         fuzzer_command=None,
         source_path=source_path,
         project_image_prefix=project_image_prefix,
@@ -445,7 +442,7 @@ def render_build_compose(
     output_file = output_dir / "compose-build.yaml"
     output_file.write_text(rendered)
 
-    return all_build_services, config_hash, crs_build_dir, all_crs_list
+    return all_build_services, config_name, crs_build_dir, all_crs_list
 
 
 def render_run_compose(
@@ -475,7 +472,7 @@ def render_run_compose(
         ensemble_dir: Optional base directory for shared seeds between CRS instances
 
     Returns:
-      Tuple of (config_hash, crs_build_dir, crs_list)
+      Tuple of (run_id, crs_build_dir, crs_list)
     """
     # Common setup
     env = _setup_compose_environment(
@@ -486,12 +483,14 @@ def render_run_compose(
     build_dir = env.build_dir
     template_path = env.template_path
     oss_fuzz_path = env.oss_fuzz_path
-    config_hash = env.config_hash
     crs_build_dir = env.crs_build_dir
     output_dir = env.output_dir
     resource_config = env.resource_config
     crs_paths = env.crs_paths
     crs_pkg_data = env.crs_pkg_data
+
+    # Generate random run_id for this run session
+    run_id = generate_run_id()
 
     # Validate worker exists
     workers = resource_config.get("workers", {})
@@ -548,7 +547,6 @@ def render_run_compose(
         sanitizer=sanitizer,
         architecture=architecture,
         mode="run",
-        config_hash=config_hash,
         fuzzer_command=fuzzer_command,
         source_path=source_path,
         harness_source=harness_source,
@@ -567,4 +565,4 @@ def render_run_compose(
     output_file = output_dir / f"compose-{worker}.yaml"
     output_file.write_text(rendered)
 
-    return config_hash, crs_build_dir, crs_list
+    return run_id, crs_build_dir, crs_list
