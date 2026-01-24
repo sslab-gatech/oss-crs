@@ -13,10 +13,6 @@
 {%- endif %}
 {%- endmacro %}
 
-{# Macro to generate volume name #}
-{%- macro volume_name(volume_type, crs_name) -%}
-{{ config_hash }}_{{ volume_type }}_{{ crs_name }}
-{%- endmacro %}
 
 services:
 {%- if mode == 'run' and not external_litellm %}

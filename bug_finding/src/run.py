@@ -152,7 +152,7 @@ def run_crs(
     logger.info("Generating compose-%s.yaml", worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
     try:
-        config_hash, crs_build_dir, crs_list = render_compose.render_run_compose(
+        run_id, crs_build_dir, crs_list = render_compose.render_run_compose(
             config_dir=config_dir,
             build_dir=build_dir,
             clone_dir=clone_dir,
@@ -190,7 +190,7 @@ def run_crs(
         logger.error("compose-%s.yaml was not generated", worker)
         return False
 
-    run_project = f"crs-run-{config_hash}-{worker}"
+    run_project = f"crs-run-{run_id}-{worker}"
 
     logger.info("Starting services from: %s", compose_file)
     # Commands for cleanup

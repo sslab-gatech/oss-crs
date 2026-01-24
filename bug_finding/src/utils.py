@@ -1,6 +1,7 @@
 """Utility functions for bug_finding package."""
 
 import logging
+import secrets
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,6 +16,15 @@ def set_gitcache(enabled: bool):
     """Set global gitcache mode."""
     global USE_GITCACHE
     USE_GITCACHE = enabled
+
+
+def generate_run_id() -> str:
+    """Generate a random run ID for Docker Compose project naming.
+
+    Returns:
+        A 16-character hex string.
+    """
+    return secrets.token_hex(8)
 
 
 def run_git(args: list[str], **kwargs) -> subprocess.CompletedProcess:
