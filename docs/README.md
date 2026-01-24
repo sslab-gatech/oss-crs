@@ -265,6 +265,14 @@ uv run oss-bugfind-crs build --external-litellm example_configs/atlantis-c-libaf
 uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-c-libafl json-c json_array_fuzzer
 ```
 
+### Skip LiteLLM (`--skip-litellm`)
+
+Skip LiteLLM/Postgres deployment entirely for CRSs that don't use LLM services.
+
+```bash
+uv run oss-bugfind-crs run --skip-litellm example_configs/crs-libfuzzer json-c json_array_fuzzer
+```
+
 ### Ensemble Directory (`--ensemble-dir`, `--disable-ensemble`)
 
 Enable cross-CRS seed sharing for ensemble mode. When multiple CRS instances run on the same worker, an ensemble watcher service monitors each CRS's corpus and povs directories, deduplicates by content hash, and shares them to all CRS instances.

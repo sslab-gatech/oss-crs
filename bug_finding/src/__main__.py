@@ -223,6 +223,11 @@ def main() -> int:
         help="Use external LiteLLM instance (requires LITELLM_URL and LITELLM_KEY env vars)",
     )
     run_parser.add_argument(
+        "--skip-litellm",
+        action="store_true",
+        help="Skip LiteLLM/Postgres deployment (for CRSs that don't use LLM)",
+    )
+    run_parser.add_argument(
         "--gitcache", action="store_true", help="Use gitcache for git clone operations"
     )
     run_parser.add_argument(
@@ -396,6 +401,7 @@ def main() -> int:
             "sanitizer": args.sanitizer,
             "architecture": args.architecture,
             "external_litellm": args.external_litellm,
+            "skip_litellm": args.skip_litellm,
             "skip_oss_fuzz_clone": args.skip_oss_fuzz_clone,
         }
 

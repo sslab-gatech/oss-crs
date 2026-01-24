@@ -10,8 +10,6 @@ from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
 
-import yaml
-
 from bug_finding.src.render_compose import render as render_compose
 from bug_finding.src.crs_utils import (
     clone_oss_fuzz_if_needed,
@@ -27,26 +25,6 @@ logger = logging.getLogger(__name__)
 # Default registry path
 # __package__ is guaranteed to be set when running as a module
 DEFAULT_REGISTRY_DIR = files(__package__).parent.parent / "crs_registry"  # type: ignore[arg-type]
-
-
-def _needs_litellm(config_dir: Path) -> bool:
-    """Check if LiteLLM is needed based on config-litellm.yaml.
-
-    Returns False if model_list is empty/None (CRS doesn't use LLM).
-    """
-    litellm_config = config_dir / "config-litellm.yaml"
-    if not litellm_config.exists():
-        return False
-    try:
-        with open(litellm_config) as f:
-            config = yaml.safe_load(f)
-        if config is None:
-            return False
-        model_list = config.get("model_list")
-        # Empty list or None means no models configured
-        return bool(model_list)
-    except (yaml.YAMLError, AttributeError, TypeError):
-        return False
 
 
 def run_crs(
@@ -67,6 +45,7 @@ def run_crs(
     harness_source: Path | None = None,
     diff_path: Path | None = None,
     external_litellm: bool = False,
+    skip_litellm: bool = False,
     source_oss_fuzz_dir: Path | None = None,
     ensemble_dir: Path | None = None,
     disable_ensemble: bool = False,
@@ -95,6 +74,7 @@ def run_crs(
         harness_source: Optional path to harness source file (Path, already resolved)
         diff_path: Optional path to diff file (Path, already resolved)
         external_litellm: Use external LiteLLM instance (default: False)
+        skip_litellm: Skip LiteLLM/Postgres deployment entirely (default: False)
         source_oss_fuzz_dir: Optional source OSS-Fuzz directory to copy from (Path, already resolved)
         ensemble_dir: Optional base directory for ensemble sharing (Path, already resolved)
         disable_ensemble: Disable automatic ensemble directory for multi-CRS mode
@@ -108,13 +88,9 @@ def run_crs(
     if check_project_fn and not check_project_fn():
         return False
 
-    # Auto-detect if LiteLLM is needed (model_list empty means no LLM required)
-    skip_litellm = False
-    if not external_litellm and not _needs_litellm(config_dir):
-        logger.info(
-            "No models configured in config-litellm.yaml, skipping LiteLLM/Postgres"
-        )
-        skip_litellm = True
+    # Skip LiteLLM entirely if requested
+    if skip_litellm:
+        logger.info("Skipping LiteLLM/Postgres deployment (--skip-litellm)")
         external_litellm = True  # Tell render to skip litellm compose/network/volumes
 
     # Check if litellm keys are provided (only when user explicitly set --external-litellm)
