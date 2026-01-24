@@ -188,9 +188,9 @@ services:
       - HOST_ARTIFACT_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}
 {%- if harness_name %}
       # Per-harness HOST paths for nested containers (host_docker_builder mode)
-      - HOST_POV_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/povs
-      - HOST_CORPUS_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus
-      - HOST_CRS_DATA_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/crs-data
+      - HOST_POV_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/povs
+      - HOST_CORPUS_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/corpus
+      - HOST_CRS_DATA_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/crs-data
 {%- endif %}
 {%- endif %}
     build:
@@ -203,10 +203,10 @@ services:
 {%- endif %}
       - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}:/artifacts
 {%- if harness_name %}
-      # Per-harness artifact overlays (povs, corpus, crs-data are per-harness)
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/povs:/artifacts/povs
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus:/artifacts/corpus
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/crs-data:/artifacts/crs-data
+      # Per-run writable overlays (povs, corpus, crs-data isolated per run)
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/povs:/artifacts/povs
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/corpus:/artifacts/corpus
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/crs-data:/artifacts/crs-data
 {%- endif %}
 {%- if crs.host_docker_builder %}
       - /var/run/docker.sock:/var/run/docker.sock
@@ -249,11 +249,11 @@ services:
       - {{ ensemble_dir }}/povs:/ensemble/povs:rw
       # Mount each CRS corpus directory as read-only
 {%- for crs in crs_list %}
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/corpus:/watch/corpus/{{ crs.name }}:ro
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/corpus:/watch/corpus/{{ crs.name }}:ro
 {%- endfor %}
       # Mount each CRS povs directory as read-only
 {%- for crs in crs_list %}
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/run/{{ harness_name }}/povs:/watch/povs/{{ crs.name }}:ro
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ harness_name }}/{{ run_id }}/povs:/watch/povs/{{ crs.name }}:ro
 {%- endfor %}
     command:
       - python3
