@@ -60,7 +60,7 @@ uv run oss-bugfind-crs prepare mock-dind --no-cache
 
 ### 4. Build a CRS
 
-Choose a configured CRS from `example_configs` and build it:
+Any [OSS-Fuzz](https://github.com/google/oss-fuzz) project can be used as a target — just pass the project name. The tool automatically clones the project definition from OSS-Fuzz and builds it. Examples below use `json-c` as a reference project.
 
 ```bash
 # Example 1: Build ensemble-c for the json-c project
