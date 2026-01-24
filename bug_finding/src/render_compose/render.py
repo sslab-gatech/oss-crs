@@ -316,7 +316,7 @@ def render_build_compose(
     Programmatic interface for build mode.
 
     Returns:
-      Tuple of (build_profile_names, config_hash, crs_build_dir, crs_list)
+      Tuple of (build_service_names, config_hash, crs_build_dir, crs_list)
     """
     # Common setup
     env = _setup_compose_environment(
@@ -342,7 +342,7 @@ def render_build_compose(
 
     # Collect all CRS instances across all workers
     all_crs_list = []
-    all_build_profiles = []
+    all_build_services = []
 
     for worker_name in workers.keys():
         crs_list = get_crs_for_worker(
@@ -350,7 +350,7 @@ def render_build_compose(
         )
         if crs_list:
             all_crs_list.extend(crs_list)
-            all_build_profiles.extend([f"{crs['name']}_builder" for crs in crs_list])
+            all_build_services.extend([f"{crs['name']}_builder" for crs in crs_list])
 
     # Render compose-litellm.yaml (unless using external LiteLLM)
     if not external_litellm:
@@ -386,7 +386,7 @@ def render_build_compose(
     output_file = output_dir / "compose-build.yaml"
     output_file.write_text(rendered)
 
-    return all_build_profiles, config_hash, crs_build_dir, all_crs_list
+    return all_build_services, config_hash, crs_build_dir, all_crs_list
 
 
 def render_run_compose(
