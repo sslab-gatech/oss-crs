@@ -133,6 +133,7 @@ def copy_docker_data(
     source_subdir: str,
     dest_subdir: str,
     phase_name: str,
+    sanitizer: str = "address",
 ) -> bool:
     """Copy docker-data between phases using rsync with hardlinks.
 
@@ -151,9 +152,9 @@ def copy_docker_data(
 
     Directory structure:
         build/docker-data/<crs-name>/
-        ├── prepared/           # From prepare phase (dind-images only)
-        ├── build/<project>/    # For build phase (dind + project image)
-        └── run/<project>/      # For run phase (fresh copy from build)
+        ├── prepared/                       # From prepare phase (dind-images only)
+        ├── build/<project>/<sanitizer>/    # For build phase (dind + project image)
+        └── run/<project>/<sanitizer>/      # For run phase (fresh copy from build)
 
     Args:
         crs_list: List of CRS configurations with 'name' and 'dind' keys
@@ -162,6 +163,7 @@ def copy_docker_data(
         source_subdir: Source subdirectory ("prepared" or "build")
         dest_subdir: Destination subdirectory ("build" or "run")
         phase_name: Human-readable phase name for error messages
+        sanitizer: Sanitizer name (default: "address")
 
     Returns:
         bool: True if successful, False otherwise
@@ -176,13 +178,13 @@ def copy_docker_data(
         crs_name = crs["name"]
 
         # Build source and dest paths
-        # Source: prepared/ doesn't have project_name, build/ and run/ do
+        # Source: prepared/ doesn't have project_name/sanitizer, build/ and run/ do
         if source_subdir == "prepared":
             source_path = build_dir / "docker-data" / crs_name / "prepared"
         else:
-            source_path = build_dir / "docker-data" / crs_name / source_subdir / project_name
+            source_path = build_dir / "docker-data" / crs_name / source_subdir / project_name / sanitizer
 
-        dest_path = build_dir / "docker-data" / crs_name / dest_subdir / project_name
+        dest_path = build_dir / "docker-data" / crs_name / dest_subdir / project_name / sanitizer
 
         # Check source exists - skip if not (some dind CRS pull at runtime)
         if not source_path.exists():

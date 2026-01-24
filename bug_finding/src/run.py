@@ -184,6 +184,7 @@ def run_crs(
         source_subdir="build",
         dest_subdir="run",
         phase_name="Run",
+        sanitizer=sanitizer,
     ):
         return False
 

@@ -61,6 +61,7 @@ def _setup_build_docker_data(
     project_name: str,
     build_dir: Path,
     project_image_prefix: str,
+    sanitizer: str = "address",
 ) -> bool:
     """
     Set up docker-data for build phase with prepared images + project image.
@@ -84,6 +85,7 @@ def _setup_build_docker_data(
         source_subdir="prepared",
         dest_subdir="build",
         phase_name="Build",
+        sanitizer=sanitizer,
     ):
         return False
 
@@ -96,7 +98,7 @@ def _setup_build_docker_data(
 
     for crs in dind_crs:
         crs_name = crs["name"]
-        build_docker_data = build_dir / "docker-data" / crs_name / "build" / project_name
+        build_docker_data = build_dir / "docker-data" / crs_name / "build" / project_name / sanitizer
 
         logger.info(
             f"Loading project image '{project_image}' into build docker-data for CRS '{crs_name}'"
@@ -350,7 +352,7 @@ def build_crs(
 
     # Set up docker-data for build phase (prepared + project image)
     if not _setup_build_docker_data(
-        crs_list, project_name, build_dir, project_image_prefix
+        crs_list, project_name, build_dir, project_image_prefix, sanitizer
     ):
         return False
 
