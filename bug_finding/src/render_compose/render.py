@@ -287,6 +287,7 @@ def render_compose_for_worker(
     ensemble_dir: Path | None = None,
     harness_name: str | None = None,
     coverage_build_dir: str | None = None,
+    run_id: str | None = None,
     # LiteLLM-related parameters (for run mode with internal LiteLLM)
     postgres_password: str | None = None,
     litellm_master_key: str | None = None,
@@ -355,6 +356,7 @@ def render_compose_for_worker(
         external_litellm=external_litellm,
         ensemble_dir=str(ensemble_dir) if ensemble_dir else None,
         coverage_build_dir=coverage_build_dir,
+        run_id=run_id,
         # LiteLLM-related variables (for run mode with internal LiteLLM)
         postgres_password=postgres_password,
         litellm_master_key=litellm_master_key,
@@ -556,6 +558,7 @@ def render_run_compose(
         ensemble_dir=ensemble_dir,
         harness_name=harness_name,
         coverage_build_dir=str(coverage_build_dir) if coverage_build_dir else None,
+        run_id=actual_run_id,
         postgres_password=postgres_password,
         litellm_master_key=litellm_master_key,
         litellm_keys=litellm_keys,
