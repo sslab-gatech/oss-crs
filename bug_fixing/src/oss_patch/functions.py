@@ -158,6 +158,66 @@ def extract_tarball_to_dir(tarball_path: Path, dst_path: Path) -> bool:
     return True
 
 
+def extract_tarball_to_source(tarball_path: Path, dst_path: Path) -> bool:
+    """Extract a tarball and initialize as git repository for CRS use.
+
+    This is for direct tarball usage with oss-bugfix-crs build/run commands.
+    The tarball should NOT contain .aixcc directory (ground truth).
+
+    Args:
+        tarball_path: Path to .tar.gz file
+        dst_path: Destination directory for extracted source
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not tarball_path.exists():
+        logger.error(f"Tarball not found: {tarball_path}")
+        return False
+
+    if not extract_tarball_to_dir(tarball_path, dst_path):
+        return False
+
+    # Verify .aixcc directory does not exist
+    aixcc_path = dst_path / ".aixcc"
+    if aixcc_path.exists():
+        logger.error(
+            f"CRITICAL: .aixcc directory found in extracted source at {aixcc_path}. "
+            f"Tarballs for CRS should NOT contain .aixcc directory."
+        )
+        return False
+
+    # Initialize as git repository if not already
+    git_dir = dst_path / ".git"
+    if not git_dir.exists():
+        logger.info("Initializing git repository for extracted source")
+        try:
+            subprocess.check_call(
+                ["git", "init"],
+                cwd=dst_path,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.check_call(
+                ["git", "add", "-A"],
+                cwd=dst_path,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.check_call(
+                ["git", "commit", "--no-gpg-sign", "-m", "Initial commit"],
+                cwd=dst_path,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to initialize git repository: {e}")
+            return False
+
+    logger.info(f"Successfully extracted tarball to {dst_path}")
+    return True
+
+
 def find_ref_diff(benchmarks_dir: Path, project_name: str) -> Path | None:
     """Find ref.diff in benchmarks directory.
 

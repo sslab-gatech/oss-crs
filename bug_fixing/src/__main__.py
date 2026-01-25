@@ -2,10 +2,11 @@ import argparse
 import logging
 import os
 import sys
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from .oss_patch import OSSPatch
-from .oss_patch.functions import change_ownership_with_docker
+from .oss_patch.functions import change_ownership_with_docker, extract_tarball_to_source
 from .oss_patch.globals import DEFAULT_OSS_FUZZ_PATH
 
 logger = logging.getLogger(__name__)
@@ -66,10 +67,25 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
     if args.command == "build":
         work_dir = Path(args.work_dir) if args.work_dir else None
         oss_patch = OSSPatch(args.project, crs_name=args.crs, work_dir=work_dir)
+
+        # Handle source tarball extraction
+        source_path = _get_path_or_none(args.source_path)
+        tarball_tmp_dir = None
+        if args.source_tarball:
+            if source_path:
+                logger.error("Cannot use both --source-path and --source-tarball")
+                return 1
+            tarball_tmp_dir = tempfile.mkdtemp(prefix="oss-crs-source-")
+            source_path = Path(tarball_tmp_dir)
+            if not extract_tarball_to_source(Path(args.source_tarball), source_path):
+                logger.error(f"Failed to extract tarball: {args.source_tarball}")
+                return 1
+            logger.info(f"Extracted source tarball to: {source_path}")
+
         result = oss_patch.build(
             Path(args.oss_fuzz),
             custom_project_path=_get_path_or_none(args.project_path),
-            custom_source_path=_get_path_or_none(args.source_path),
+            custom_source_path=source_path,
             local_crs=_get_path_or_none(args.local_crs),
             registry_path=_get_path_or_none(args.registry),
             use_gitcache=args.gitcache,
@@ -197,6 +213,13 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         help="Path to pre-cloned source code directory "
         "(alternative to cloning from project.yaml main_repo). "
         "Requires --project-path",
+        default=None,
+    )
+    build_crs_parser.add_argument(
+        "--source-tarball",
+        help="Path to source tarball (.tar.gz) to extract and use "
+        "(alternative to cloning from project.yaml main_repo). "
+        "Tarball should NOT contain .aixcc directory.",
         default=None,
     )
     build_crs_parser.add_argument(
