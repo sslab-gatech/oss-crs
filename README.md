@@ -7,41 +7,34 @@ OSS-CRS (Cyber Reasoning System) is a unified orchestration framework for LLM-ba
 ### 1. Set up the environment
 
 ```bash
-# Clone the OSS-Fuzz repository (e.g., Team Atlanta's fork)
-git clone https://github.com/Team-Atlanta/oss-fuzz-post-aixcc
-
-# Configure API key (OPENAI_API_KEY is required)
+# Prereqs: install `uv` and ensure Docker works on your machine.
+# Configure API key (OPENAI_API_KEY is required for direct OpenAI usage)
 export OPENAI_API_KEY="sk-fake-key"
 ```
 
-### 2. Build and run a simple bug-finding or remediation system
-
-Any [OSS-Fuzz](https://github.com/google/oss-fuzz) project can be used as a target (e.g., `json-c`, `libxml2`, `openssl`).
+### 2. Build and run a simple bug-finding or bug-fixing system
 
 ```bash
-# prepare (one-time, pre-builds CRS docker images)
-uv run oss-bugfind-crs prepare crs-libfuzzer
-
-# build (using json-c as an example OSS-Fuzz project)
+# Build and run a bug-finding CRS
+# See more options: uv run oss-bugfind-crs build/run --help
 uv run oss-bugfind-crs build example_configs/crs-libfuzzer json-c
-
-# run
 uv run oss-bugfind-crs run example_configs/crs-libfuzzer json-c json_array_fuzzer
 
-# clean (remove build artifacts)
-uv run oss-bugfind-crs clean
+# Build and run a bug-fixing CRS
+# `atlantis-multi-retrieval` is a bundled CRS config in `crs_registry/atlantis-multi-retrieval/`.
+# Provide OSS-Fuzz by copying it to `./.oss-fuzz/` or passing `--oss-fuzz /path/to/oss-fuzz`.
+# See more options: uv run oss-bugfix-crs build/run --help
+uv run oss-bugfix-crs build atlantis-multi-retrieval json-c
+uv run oss-bugfix-crs run atlantis-multi-retrieval json-c --povs /path/to/povs --harness json_array_fuzzer \
+    --litellm-base $URL --litellm-key $KEY --out /tmp/out-test
 ```
-
-Note: The prepare step is optional — it runs automatically during build if needed.
 
 ### 3. Build and run an ensemble system (combining multiple systems together)
 
 ```bash
 # Choose configured CRS from `example_configs` and build it:
-
 # Example: Build ensemble-java for the json-example project
 uv run oss-bugfind-crs build example_configs/ensemble-java java-example
-
 # Run the built systems
 uv run oss-bugfind-crs run example_configs/ensemble-java java-example ExampleFuzzer
 ```
