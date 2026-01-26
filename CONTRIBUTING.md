@@ -8,7 +8,7 @@ We are also currently discussing architectural changes, and you are more than we
 
 ## Reporting Issues
 
-We use the (Github issue tracker)[https://github.com/sslab-gatech/oss-crs/issues] for tracking our tasks and bugs.
+We use the [Github issue tracker](https://github.com/sslab-gatech/oss-crs/issues) for tracking our tasks and bugs.
 When reporting, please include:
 
 ### Observed and Expected Behavior
