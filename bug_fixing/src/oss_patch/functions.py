@@ -218,91 +218,6 @@ def extract_tarball_to_source(tarball_path: Path, dst_path: Path) -> bool:
     return True
 
 
-def find_ref_diff(benchmarks_dir: Path, project_name: str) -> Path | None:
-    """Find ref.diff in benchmarks directory.
-
-    For delta benchmarks, ref.diff contains the patch from base to ref version.
-    Located at: benchmarks/{benchmark_name}/.aixcc/ref.diff
-
-    Args:
-        benchmarks_dir: Directory containing benchmarks
-        project_name: OSS-Fuzz project name (e.g., "afc-curl-delta-01")
-
-    Returns:
-        Path to ref.diff if found, None otherwise
-    """
-    benchmark_name = project_name.split("/")[-1]
-    ref_diff_path = benchmarks_dir / benchmark_name / ".aixcc" / "ref.diff"
-
-    if ref_diff_path.exists():
-        logger.info(f"Found ref.diff: {ref_diff_path}")
-        return ref_diff_path
-
-    logger.info(f"No ref.diff found at {ref_diff_path} (not a delta benchmark)")
-    return None
-
-
-def apply_ref_diff_and_commit(source_path: Path, ref_diff_path: Path) -> bool:
-    """Apply ref.diff to source and create 'Apply ref.diff' commit.
-
-    This transforms the base (vulnerable) version to the ref (fixed) version
-    by applying the diff and committing the changes.
-
-    Uses the same commit message as crsbench (loader.py) for consistency.
-
-    Args:
-        source_path: Path to extracted source (must be a git repo)
-        ref_diff_path: Path to ref.diff file
-
-    Returns:
-        True if successful, False otherwise
-    """
-    logger.info(f"Applying ref.diff to {source_path}")
-
-    # Convert to absolute path to avoid issues when running git apply with cwd
-    ref_diff_abs = ref_diff_path.resolve()
-
-    # Apply the diff
-    try:
-        subprocess.check_call(
-            ["git", "apply", "--whitespace=nowarn", str(ref_diff_abs)],
-            cwd=source_path,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to apply ref.diff: {e}")
-        logger.error(f"stderr: {e.stderr.decode() if e.stderr else 'N/A'}")
-        return False
-
-    # Stage all changes
-    try:
-        subprocess.check_call(
-            ["git", "add", "-A"],
-            cwd=source_path,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to stage changes: {e}")
-        return False
-
-    # Create commit with same message as crsbench for consistency
-    try:
-        subprocess.check_call(
-            ["git", "commit", "--no-gpg-sign", "-m", "Apply ref.diff"],
-            cwd=source_path,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to create commit: {e}")
-        return False
-
-    logger.info("Successfully applied ref.diff and created 'Apply ref.diff' commit")
-    return True
-
-
 def pull_project_source_from_tarball(
     benchmarks_dir: Path, project_name: str, dst_path: Path
 ) -> bool:
@@ -338,39 +253,6 @@ def pull_project_source_from_tarball(
         f"Bundled tarballs should NOT contain .aixcc directory. "
         f"Please regenerate tarball using 'crsbench benchmark bundle'."
     )
-
-    return True
-
-
-def pull_project_source_from_tarball_with_ref(
-    benchmarks_dir: Path, project_name: str, dst_path: Path
-) -> bool:
-    """Pull project source from tarball and apply ref.diff if available.
-
-    For delta benchmarks, this applies ref.diff to transform the base (vulnerable)
-    version to the ref (fixed) version and creates a 'Delta' commit.
-
-    This is used for incremental snapshot creation where we need the fixed version.
-
-    Args:
-        benchmarks_dir: Directory containing benchmarks with pkgs/ tarballs
-        project_name: OSS-Fuzz project name (e.g., "afc-curl-delta-01")
-        dst_path: Destination path for extracted source
-
-    Returns:
-        True if successful, False otherwise
-    """
-    # First extract the base tarball
-    if not pull_project_source_from_tarball(benchmarks_dir, project_name, dst_path):
-        return False
-
-    # Check if ref.diff exists (delta benchmark)
-    ref_diff_path = find_ref_diff(benchmarks_dir, project_name)
-    if ref_diff_path:
-        # Apply ref.diff and create Delta commit
-        if not apply_ref_diff_and_commit(dst_path, ref_diff_path):
-            logger.error("Failed to apply ref.diff")
-            return False
 
     return True
 
