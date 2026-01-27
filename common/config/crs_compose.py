@@ -2,7 +2,7 @@ import re
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator, HttpUrl
-import yaml as yaml_lib
+import yaml
 
 
 class CRSSource(BaseModel):
@@ -82,7 +82,7 @@ class CRSComposeConfig(BaseModel):
     @classmethod
     def from_yaml(cls, yaml_content: str) -> "CRSComposeConfig":
         """Parse CRS Compose config from YAML string."""
-        data = yaml_lib.safe_load(yaml_content)
+        data = yaml.safe_load(yaml_content)
         return cls.from_dict(data)
 
     @classmethod
