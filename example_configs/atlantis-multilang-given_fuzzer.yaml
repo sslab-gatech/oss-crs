@@ -1,0 +1,17 @@
+type: local
+
+# `oss-crs-infra` must be required
+oss_crs_infra: 
+  cpuset: "0-3" 
+  memory:  "8G"
+
+# Add CRS information and how much resources you will put.
+bugfinding-A:
+  source:
+    url: https://github.com/Team-Atlanta/atlantis-multilang-given_fuzzer
+    ref: main
+    # if you want to pass local file system, add
+    # local_path: <crs directory abs path>
+  cpuset: "4-8" 
+  memory:  "16G"
+  llm_budget: 100 # 100 dollars
