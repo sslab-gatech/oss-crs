@@ -166,9 +166,9 @@ class CRSConfig(BaseModel):
         return cls.from_dict(data)
 
     @classmethod
-    def from_yaml_file(cls, filepath: Path | str) -> "CRSConfig":
+    def from_yaml_file(cls, filepath: Path) -> "CRSConfig":
         """Parse CRS config from YAML file."""
-        with open(filepath, "r") as f:
+        with open(filepath.resolve(), "r") as f:
             return cls.from_yaml(f.read())
 
     @classmethod

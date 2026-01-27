@@ -5,14 +5,16 @@ from .crs import CRS
 
 class CRSCompose:
     @classmethod
-    def from_yaml_file(cls, compose_file: Path) -> "CRSCompose":
+    def from_yaml_file(cls, compose_file: Path, work_dir: Path) -> "CRSCompose":
         config = CRSComposeConfig.from_yaml_file(compose_file)
-        return cls(config)
+        return cls(config, work_dir)
 
-    def __init__(self, config: CRSComposeConfig):
+    def __init__(self, config: CRSComposeConfig, work_dir: Path):
         self.config = config
+        self.work_dir = work_dir
         self.crs_list = [
-            CRS(name, crs_cfg) for name, crs_cfg in self.config.crs_entries.items()
+            CRS.from_crs_compose_entry(name, crs_cfg, work_dir)
+            for name, crs_cfg in self.config.crs_entries.items()
         ]
 
     def __prepare_oss_crs_infra(

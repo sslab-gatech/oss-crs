@@ -4,12 +4,21 @@ from pathlib import Path
 from ..crs_compose import CRSCompose
 
 
+DEFAULT_WORK_DIR = (Path(__file__) / "../../../../.oss-crs-workdir").resolve()
+
+
 def add_common_arguments(parser):
     parser.add_argument(
         "--compose-file",
         type=Path,
         required=True,
         help="Path to the CRS Compose file",
+    )
+    parser.add_argument(
+        "--work-dir",
+        type=Path,
+        default=DEFAULT_WORK_DIR,
+        help="Working directory for CRS Compose operations",
     )
 
 
@@ -52,7 +61,7 @@ def main() -> bool:
 
     args = parser.parse_args()
 
-    crs_compose = CRSCompose.from_yaml_file(args.compose_file)
+    crs_compose = CRSCompose.from_yaml_file(args.compose_file, args.work_dir)
 
     if args.command == "prepare":
         if not crs_compose.prepare(publish=args.publish):
