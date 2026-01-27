@@ -11,6 +11,7 @@ class CRSSource(BaseModel):
     url: Optional[HttpUrl] = None
     ref: Optional[str] = None
     local_path: Optional[str] = None
+    conf_path: str
 
     @model_validator(mode="after")
     def validate_source(self):

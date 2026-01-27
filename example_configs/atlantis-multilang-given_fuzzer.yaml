@@ -12,6 +12,7 @@ bugfinding-A:
     ref: main
     # if you want to pass local file system, add
     # local_path: <crs directory abs path>
+    conf_path: oss-crs/crs.yaml
   cpuset: "4-8" 
   memory:  "16G"
   llm_budget: 100 # 100 dollars
