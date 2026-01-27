@@ -24,7 +24,8 @@ dependencies = [
 ]
 
 [project.scripts]
-crs = "crs.src.__main__:main"
+crs-compose = "crs.src.cli.crs_compose:main"
+crs = "crs.src.cli.crs:main"
 oss-bugfind-crs = "bug_finding.src.__main__:main"
 oss-bugfix-crs = "bug_fixing.src.__main__:main"
 
