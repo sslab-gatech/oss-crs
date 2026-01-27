@@ -26,7 +26,6 @@ oss_crs_infra:
     url: <git-url>           # Either url+ref OR local_path required
     ref: <git-ref>
     local_path: <path>       # Cannot be combined with url/ref
-    conf_path: <config-path>
 ```
 
 ## Configuration Fields
@@ -88,7 +87,6 @@ The `source` field specifies where to find the CRS configuration. You must provi
 | `url`        | string | No*      | Git repository URL (HTTP URL format)                  |
 | `ref`        | string | No*      | Git reference (branch, tag, or commit SHA). Required when `url` is provided |
 | `local_path` | string | No*      | Local filesystem path to the CRS. Cannot be combined with `url` or `ref` |
-| `conf_path`  | string | Yes      | Path to the CRS configuration file (relative to the source root) |
 
 \* Either `url` + `ref` OR `local_path` must be provided.
 
@@ -101,8 +99,7 @@ my-crs:
   source:
     url: https://github.com/example/my-crs.git
     ref: main
-    conf_path: oss-crs/crs.yaml
-    # This will load @my-crs/oss-crs/crs.yaml
+    # This will load a CRS defined at @my-crs/oss-crs/crs.yaml
 ```
 
 **Example with Local Path:**
@@ -112,8 +109,7 @@ my-local-crs:
   memory: "8GB"
   source:
     local_path: /home/user/my-crs
-    conf_path: oss-crs/crs.yaml
-    # This will load /home/user/my-crs/oss-crs/crs.yaml
+    # This will load a CRS defined at /home/user/my-crs/oss-crs/crs.yaml
 ```
 
 ---
@@ -162,14 +158,12 @@ atlantis-crs:
   source:
     url: https://github.com/example/atlantis-crs.git
     ref: v1.2.0
-    conf_path: oss-crs/crs.yaml
 
 local-path-crs:
   cpuset: "6-7"
   memory: "8GB"
   source:
     local_path: /home/my-crs/my-crs
-    conf_path: oss-crs/crs.yaml
 ```
 
 ---

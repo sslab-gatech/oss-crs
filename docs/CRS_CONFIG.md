@@ -1,6 +1,7 @@
 # CRS Configuration File Reference
 
-This document describes the configuration file format for CRS (Cyber Reasoning System) used in the OSS-CRS project. Configuration files are written in YAML format and must be placed CRS repositories, not oss-crs repository.
+This document describes the configuration file format for CRS (Cyber Reasoning System) used in the OSS-CRS project.
+Configuration files are written in YAML format and must be placed `oss-crs/crs.yaml` in CRS repositories, not oss-crs repository.
 
 ## Table of Contents
 
