@@ -46,7 +46,7 @@ target_build_phase:
   build-step-1:
     dockerfile: oss-crs/Build.Dockerfile
     outputs:
-      - $OUT/fuzzer
+      - $BUILD_OUT_DIR/fuzzer
 crs_run_phase:
   docker_compose: oss-crs/docker-compose.yaml
   additional_env:
@@ -97,7 +97,7 @@ The target build phase is a dictionary where each key is a build step name and e
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `dockerfile` | `string` | Yes | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`) |
-| `outputs` | `list[string]` | Yes | List of output paths (each must start with `$OUT/`) |
+| `outputs` | `list[string]` | Yes | List of output paths (each must start with `$BUILD_OUT_DIR/`) |
 
 ### Example
 
@@ -106,11 +106,11 @@ target_build_phase:
   asan:
     dockerfile: oss-crs/asan-builder.Dockerfile
     outputs:
-      - $OUT/asan.tar.gz
+      - $BUILD_OUT_DIR/asan.tar.gz
   cov-builder:
     dockerfile: oss-crs/cov-builder.Dockerfile
     outputs:
-      - $OUT/cov-builder.tar.gz
+      - $BUILD_OUT_DIR/cov-builder.tar.gz
 ```
 
 ---

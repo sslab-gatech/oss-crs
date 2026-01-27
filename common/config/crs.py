@@ -36,8 +36,8 @@ class BuildConfig(BaseModel):
     @classmethod
     def validate_outputs(cls, v: list[str]) -> list[str]:
         for output in v:
-            if not output.startswith("$OUT/"):
-                raise ValueError("outputs must start with '$OUT/'")
+            if not output.startswith("$BUILD_OUT_DIR/"):
+                raise ValueError("outputs must start with '$BUILD_OUT_DIR/'")
         return v
 
 
