@@ -67,7 +67,7 @@ class CRSEntry(ResourceConfig):
     source: CRSSource
 
 
-class CRSComposeType(Enum):
+class RunEnv(Enum):
     LOCAL = "local"
     AZURE = "azure"
 
@@ -75,7 +75,7 @@ class CRSComposeType(Enum):
 class CRSComposeConfig(BaseModel):
     """Root configuration for CRS Compose."""
 
-    type: CRSComposeType
+    run_env: RunEnv
     oss_crs_infra: ResourceConfig
     crs_entries: dict[str, CRSEntry] = Field(default_factory=dict)
 
@@ -94,18 +94,18 @@ class CRSComposeConfig(BaseModel):
     @classmethod
     def from_dict(cls, data: dict) -> "CRSComposeConfig":
         """Parse CRS Compose config from dictionary."""
-        TYPE = "type"
+        RUN_ENV = "run_env"
         OSS_CRS_INFRA = "oss_crs_infra"
-        config_type = data.get(TYPE)
+        run_env = data.get(RUN_ENV)
         oss_crs_infra = data.get(OSS_CRS_INFRA)
 
-        reserved_keys = {TYPE, OSS_CRS_INFRA}
+        reserved_keys = {RUN_ENV, OSS_CRS_INFRA}
         crs_entries = {
             key: value for key, value in data.items() if key not in reserved_keys
         }
 
         return cls(
-            type=config_type,  # Pydantic will convert string to enum automatically
+            run_env=run_env,  # Pydantic will convert string to enum automatically
             oss_crs_infra=oss_crs_infra,
             crs_entries=crs_entries,
         )

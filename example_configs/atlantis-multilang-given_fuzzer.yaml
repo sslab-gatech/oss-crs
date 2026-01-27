@@ -1,4 +1,4 @@
-type: local
+run_env: local
 
 # `oss-crs-infra` must be required
 oss_crs_infra: 
