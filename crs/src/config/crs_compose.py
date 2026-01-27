@@ -75,8 +75,15 @@ class CRSComposeConfig(BaseModel):
     """Root configuration for CRS Compose."""
 
     run_env: RunEnv
+    docker_registry: str
     oss_crs_infra: ResourceConfig
     crs_entries: dict[str, CRSEntry] = Field(default_factory=dict)
+
+    @field_validator("docker_registry")
+    @classmethod
+    def validate_docker_registry(cls, v: str) -> str:
+        # TODO: Add more robust validation for docker registry URL if needed
+        return v
 
     @classmethod
     def from_yaml(cls, yaml_content: str) -> "CRSComposeConfig":
@@ -94,17 +101,20 @@ class CRSComposeConfig(BaseModel):
     def from_dict(cls, data: dict) -> "CRSComposeConfig":
         """Parse CRS Compose config from dictionary."""
         RUN_ENV = "run_env"
+        DOCKER_REGISTRY = "docker_registry"
         OSS_CRS_INFRA = "oss_crs_infra"
         run_env = data.get(RUN_ENV)
+        docker_registry = data.get(DOCKER_REGISTRY)
         oss_crs_infra = data.get(OSS_CRS_INFRA)
 
-        reserved_keys = {RUN_ENV, OSS_CRS_INFRA}
+        reserved_keys = {RUN_ENV, DOCKER_REGISTRY, OSS_CRS_INFRA}
         crs_entries = {
             key: value for key, value in data.items() if key not in reserved_keys
         }
 
         return cls(
             run_env=run_env,  # Pydantic will convert string to enum automatically
+            docker_registry=docker_registry,
             oss_crs_infra=oss_crs_infra,
             crs_entries=crs_entries,
         )

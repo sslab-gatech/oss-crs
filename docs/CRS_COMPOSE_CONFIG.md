@@ -14,6 +14,7 @@ The configuration file is written in YAML format and consists of three main sect
 
 ```yaml
 run_env: <local|azure>
+docker_registry: <registry-url>
 oss_crs_infra:
   cpuset: <cpu-set>
   memory: <memory-limit>
@@ -42,6 +43,21 @@ Specifies the runtime environment for the CRS Compose setup.
 **Example:**
 ```yaml
 run_env: local
+```
+
+---
+
+### `docker_registry` (required)
+
+Specifies the Docker registry URL to pull/push CRS images.
+
+| Type   | Description                                      |
+|--------|--------------------------------------------------|
+| string | URL of the Docker registry (e.g., container registry endpoint) |
+
+**Example:**
+```yaml
+docker_registry: ghcr.io/my-org
 ```
 
 ---
@@ -146,6 +162,7 @@ Decimal values are also supported (e.g., `"1.5G"`).
 
 ```yaml
 run_env: local
+docker_registry: ghcr.io/my-org
 
 oss_crs_infra:
   cpuset: "0-1"
