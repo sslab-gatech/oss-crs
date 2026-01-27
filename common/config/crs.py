@@ -124,6 +124,7 @@ class CRSConfig(BaseModel):
     name: str
     type: Set[CRSType]
     version: str
+    docker_registry: str
     prepare_phase: PreparePhase
     target_build_phase: TargetBuildPhase
 
@@ -139,6 +140,15 @@ class CRSConfig(BaseModel):
         v = v.strip()  # Remove leading/trailing whitespace
         if not v:
             raise ValueError("version cannot be empty")
+        return v
+
+    @field_validator("docker_registry")
+    @classmethod
+    def validate_docker_registry(cls, v: str) -> str:
+        # TODO: Improve docker_registry validation if needed
+        v = v.strip()  # Remove leading/trailing whitespace
+        if not v:
+            raise ValueError("docker_registry cannot be empty")
         return v
 
     @field_validator("allowed_llms")

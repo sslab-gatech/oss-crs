@@ -28,6 +28,7 @@ The root `CRSConfig` object contains the following fields:
 | `name` | `string` | Yes | The name of the CRS |
 | `type` | `Set[CRSType]` | Yes | The type(s) of CRS (see [CRSType](#crstype)) |
 | `version` | `string` | Yes | Version string for the CRS (cannot be empty) |
+| `docker_registry` | `string` | Yes | Docker registry URL for CRS images (cannot be empty) |
 | `prepare_phase` | `PreparePhase` | Yes | Configuration for the prepare phase |
 | `target_build_phase` | `TargetBuildPhase` | Yes | Configuration for the target build phase |
 | `crs_run_phase` | `CRSRunPhase` | Yes | Configuration for the CRS run phase |
@@ -41,6 +42,7 @@ name: my-crs
 type:
   - bug-finding
 version: "1.0.0"
+docker_registry: "ghcr.io/my-org/my-crs"
 prepare_phase:
   hcl: oss-crs/build.hcl
 target_build_phase:
