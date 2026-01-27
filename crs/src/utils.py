@@ -1,45 +1,236 @@
 import subprocess
+from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
+
+
+class TaskStatus(Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class MultiTaskProgress:
+    """
+    A progress tracker for multiple tasks with live updates.
+    Shows a table of all tasks with their current status.
+    """
+
+    def __init__(
+        self,
+        task_names: list[str],
+        title: str = "Task Progress",
+        console: Optional[Console] = None,
+    ):
+        self.task_names = task_names
+        self.title = title
+        self.console = console or Console()
+        self.statuses: dict[str, TaskStatus] = {
+            name: TaskStatus.PENDING for name in task_names
+        }
+        self.task_info: dict[str, str] = {}  # Info text for each task
+        self.cmd_info: dict[str, tuple[str, str]] = {}  # (cmd, cwd) for each task
+        self.error_info: dict[str, str] = {}  # Error message for failed tasks
+        self.current_output_lines: list[str] = []
+        self.max_output_lines = 10
+        self._live: Optional[Live] = None
+
+    def _get_status_icon(self, status: TaskStatus) -> str:
+        icons = {
+            TaskStatus.PENDING: "[dim]○[/dim]",
+            TaskStatus.IN_PROGRESS: "[yellow]●[/yellow]",
+            TaskStatus.SUCCESS: "[green]✓[/green]",
+            TaskStatus.FAILED: "[red]✗[/red]",
+        }
+        return icons[status]
+
+    def _get_status_text(self, status: TaskStatus) -> str:
+        texts = {
+            TaskStatus.PENDING: "[dim]Pending[/dim]",
+            TaskStatus.IN_PROGRESS: "[yellow]In Progress[/yellow]",
+            TaskStatus.SUCCESS: "[green]Success[/green]",
+            TaskStatus.FAILED: "[red]Failed[/red]",
+        }
+        return texts[status]
+
+    def _build_display(self) -> Panel:
+        """Build the display panel with task table and current output."""
+        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
+        table.add_column("", width=3)
+        table.add_column("Task", style="bold")
+        table.add_column("Status")
+
+        current_task = None
+        for name in self.task_names:
+            status = self.statuses[name]
+            if status == TaskStatus.IN_PROGRESS:
+                current_task = name
+            table.add_row(
+                self._get_status_icon(status),
+                name,
+                self._get_status_text(status),
+            )
+
+        content_parts = [table]
+
+        # Add task info if there's an in-progress task with info
+        if current_task and current_task in self.task_info:
+            info_panel = Panel(
+                f"[dim]{self.task_info[current_task]}[/dim]",
+                title=f"[bold]{current_task}[/bold]",
+                border_style="yellow",
+            )
+            content_parts.append(info_panel)
+
+        # Add command progress panel if there's an in-progress task
+        if current_task and current_task in self.cmd_info:
+            cmd, cwd = self.cmd_info[current_task]
+            cmd_header = Text()
+            cmd_header.append("Command: ", style="bold")
+            cmd_header.append(f"{cmd}\n", style="dim")
+            cmd_header.append("CWD: ", style="bold")
+            cmd_header.append(f"{cwd}", style="dim")
+
+            if self.current_output_lines:
+                output_text = Text()
+                output_text.append("\n\n")
+                for line in self.current_output_lines[-self.max_output_lines :]:
+                    output_text.append(f"{line}\n", style="dim")
+                cmd_content = Group(cmd_header, output_text)
+            else:
+                cmd_content = cmd_header
+
+            cmd_panel = Panel(
+                cmd_content,
+                title="[bold yellow]Command Progress[/bold yellow]",
+                border_style="yellow",
+            )
+            content_parts.append(cmd_panel)
+
+        # Add error panel if there's a failed task with error info
+        for name in self.task_names:
+            if self.statuses[name] == TaskStatus.FAILED and name in self.error_info:
+                error_panel = Panel(
+                    f"[red]{self.error_info[name]}[/red]",
+                    title=f"[bold red]Error: {name}[/bold red]",
+                    border_style="red",
+                )
+                content_parts.append(error_panel)
+                break  # Only show the first error
+
+        return Panel(
+            Group(*content_parts),
+            title=f"[bold]{self.title}[/bold]",
+            border_style="blue",
+        )
+
+    def set_status(self, task_name: str, status: TaskStatus) -> None:
+        """Update the status of a task."""
+        self.statuses[task_name] = status
+        if status != TaskStatus.IN_PROGRESS:
+            self.current_output_lines = []
+        if self._live:
+            self._live.update(self._build_display())
+
+    def set_task_info(self, task_name: str, info: str) -> None:
+        """Set info text for a task (shown when task is in progress)."""
+        self.task_info[task_name] = info
+        if self._live:
+            self._live.update(self._build_display())
+
+    def set_cmd_info(self, task_name: str, cmd: str, cwd: str) -> None:
+        """Set command info for a task (shown in command progress panel)."""
+        self.cmd_info[task_name] = (cmd, cwd)
+        if self._live:
+            self._live.update(self._build_display())
+
+    def set_error_info(self, task_name: str, error: str) -> None:
+        """Set error message for a failed task."""
+        self.error_info[task_name] = error
+        if self._live:
+            self._live.update(self._build_display())
+
+    def add_output_line(self, line: str) -> None:
+        """Add an output line for the current in-progress task."""
+        self.current_output_lines.append(line)
+        if self._live:
+            self._live.update(self._build_display())
+
+    def __enter__(self) -> "MultiTaskProgress":
+        self._live = Live(
+            self._build_display(),
+            console=self.console,
+            refresh_per_second=10,
+        )
+        self._live.__enter__()
+        return self
+
+    def __exit__(self, *args) -> None:
+        if self._live:
+            self._live.__exit__(*args)
+            self._live = None
+
+    def run_task(
+        self,
+        task_name: str,
+        task_func: Callable[[], bool],
+    ) -> bool:
+        """
+        Run a task and update its status.
+
+        Args:
+            task_name: Name of the task to run.
+            task_func: Function that returns True on success, False on failure.
+
+        Returns:
+            True if task succeeded, False otherwise.
+        """
+        self.set_status(task_name, TaskStatus.IN_PROGRESS)
+        try:
+            result = task_func()
+            self.set_status(
+                task_name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+            )
+            return result
+        except Exception:
+            self.set_status(task_name, TaskStatus.FAILED)
+            return False
 
 
 def run_command_with_streaming_output(
     cmd: list[str],
     cwd: Optional[Path] = None,
     env: Optional[dict] = None,
-    max_display_lines: int = 20,
-    progress_message: str = "Progressing..",
-    panel_title: str = "Output",
-    success_message: str = "Completed successfully!",
-    error_title: str = "Error",
-    console: Optional[Console] = None,
+    multi_task_progress: Optional[MultiTaskProgress] = None,
+    task_name: Optional[str] = None,
 ) -> bool:
     """
-    Run a subprocess command with streaming output displayed in a rich panel.
+    Run a subprocess command with streaming output displayed via MultiTaskProgress.
 
     Args:
         cmd: Command and arguments to execute.
         cwd: Working directory for the command.
         env: Environment variables for the command.
-        max_display_lines: Maximum number of output lines to display.
-        progress_message: Message to show while building.
-        panel_title: Title for the output panel.
-        success_message: Message to show on success.
-        error_title: Title for the error panel.
-        console: Rich console instance (creates one if not provided).
+        multi_task_progress: MultiTaskProgress instance for live output display.
+        task_name: Task name for error reporting.
 
     Returns:
         True if command succeeded, False otherwise.
     """
-    if console is None:
-        console = Console()
-
     output_lines = []
+
+    def process_output(line: str) -> None:
+        """Process a line of output."""
+        output_lines.append(line)
+        if multi_task_progress:
+            multi_task_progress.add_output_line(line)
 
     try:
         process = subprocess.Popen(
@@ -52,57 +243,34 @@ def run_command_with_streaming_output(
             bufsize=1,
         )
 
-        with Live(console=console, refresh_per_second=10) as live:
-            for line in iter(process.stdout.readline, ""):
-                line = line.rstrip()
-                if line:
-                    output_lines.append(line)
-                    # Keep only the last N lines for display
-                    display_lines = output_lines[-max_display_lines:]
-
-                    # Build display content
-                    content = Text()
-                    content.append("● ", style="green")
-                    content.append(f"{progress_message}\n\n", style="bold")
-                    for display_line in display_lines:
-                        content.append(f"{display_line}\n", style="dim")
-
-                    live.update(
-                        Panel(
-                            content,
-                            title=f"[bold yellow]{panel_title}[/bold yellow]",
-                            border_style="yellow",
-                        )
-                    )
-
-            process.wait()
+        for line in iter(process.stdout.readline, ""):
+            line = line.rstrip()
+            if line:
+                process_output(line)
+        process.wait()
 
         if process.returncode == 0:
-            console.print(
-                Panel(
-                    f"[bold green]✓ {success_message}[/bold green]",
-                    border_style="green",
-                )
-            )
             return True
         else:
-            console.print(
-                Panel(
-                    f"[bold red]✗ Command failed with exit code {process.returncode}[/bold red]\n\n"
-                    + "\n".join(output_lines[-10:]),
-                    title=f"[bold red]{error_title}[/bold red]",
-                    border_style="red",
-                )
-            )
+            # Set error info with last output lines
+            if multi_task_progress and task_name:
+                error_msg = f"Command failed with exit code {process.returncode}:\n{' '.join(cmd)}\n\n"
+                error_msg += "\n".join(output_lines[-10:])
+                multi_task_progress.set_error_info(task_name, error_msg)
             return False
 
     except FileNotFoundError:
         cmd_name = cmd[0] if cmd else "command"
-        console.print(
-            f"[bold red]Error:[/bold red] {cmd_name} not found. "
-            "Please ensure it is installed and in PATH."
-        )
+        error_msg = f"{cmd_name} not found. Please ensure it is installed and in PATH."
+        if multi_task_progress and task_name:
+            multi_task_progress.set_error_info(task_name, error_msg)
+        else:
+            Console().print(f"[bold red]Error:[/bold red] {error_msg}")
         return False
     except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {e}")
+        error_msg = str(e)
+        if multi_task_progress and task_name:
+            multi_task_progress.set_error_info(task_name, error_msg)
+        else:
+            Console().print(f"[bold red]Error:[/bold red] {error_msg}")
         return False

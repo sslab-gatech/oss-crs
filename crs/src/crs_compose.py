@@ -1,6 +1,7 @@
 from pathlib import Path
 from .config.crs_compose import CRSComposeConfig
 from .crs import CRS
+from .utils import MultiTaskProgress, TaskStatus
 
 
 class CRSCompose:
@@ -27,6 +28,31 @@ class CRSCompose:
         self.__prepare_oss_crs_infra(
             publish=publish, docker_registry=self.config.docker_registry
         )
-        for crs in self.crs_list:
-            crs.prepare(publish=publish, docker_registry=self.config.docker_registry)
-        return True
+
+        # Collect task names (infra + all CRS)
+        task_names = ["oss-crs-infra"] + [crs.name for crs in self.crs_list]
+
+        all_success = True
+        with MultiTaskProgress(
+            task_names=task_names,
+            title="CRS Compose Prepare",
+        ) as progress:
+            # Mark infra as done (TODO: actually implement infra preparation)
+            progress.set_status("oss-crs-infra", TaskStatus.SUCCESS)
+
+            # Prepare each CRS
+            for crs in self.crs_list:
+                progress.set_status(crs.name, TaskStatus.IN_PROGRESS)
+                result = crs.prepare(
+                    publish=publish,
+                    docker_registry=self.config.docker_registry,
+                    multi_task_progress=progress,
+                )
+                progress.set_status(
+                    crs.name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+                )
+                if not result:
+                    all_success = False
+                    break  # Stop on first failure
+
+        return all_success

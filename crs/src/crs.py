@@ -1,12 +1,13 @@
 from pathlib import Path
+from typing import Optional
 import os
 
 from rich.console import Console
-from rich.panel import Panel
 
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry
-from .utils import run_command_with_streaming_output
+from .utils import run_command_with_streaming_output, MultiTaskProgress, TaskStatus
+from .target_repo import TargetRepo
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
@@ -31,18 +32,30 @@ class CRS:
         self.config = CRSConfig.from_yaml_file(self.crs_path / CRS_YAML_PATH)
         self.work_dir = work_dir
 
-    def prepare(self, publish: bool = False, docker_registry: str = None) -> bool:
+    def prepare(
+        self,
+        publish: bool = False,
+        docker_registry: Optional[str] = None,
+        multi_task_progress: Optional[MultiTaskProgress] = None,
+    ) -> bool:
         """
         Run docker buildx bake to prepare CRS images.
 
         Args:
             publish: If True, push baked images to the docker registry.
             docker_registry: Override registry for push/cache. If set, overrides config.
+            multi_task_progress: Optional progress tracker. If not provided, creates one.
 
         Returns:
             True if bake succeeded, False otherwise.
         """
-        console = Console()
+        # Create a single-task progress if not provided
+        standalone = multi_task_progress is None
+        if standalone:
+            multi_task_progress = MultiTaskProgress(
+                task_names=[self.name],
+                title=f"Preparing CRS: {self.name}",
+            )
 
         # Determine the registry to use (parameter overrides config)
         registry = docker_registry if docker_registry else self.config.docker_registry
@@ -68,7 +81,7 @@ class CRS:
         # Add push and cache-to options if publishing
         if publish:
             if not registry:
-                console.print(
+                Console().print(
                     "[bold red]Error:[/bold red] Cannot publish without a docker registry. "
                     "Provide docker_registry parameter or set it in config."
                 )
@@ -89,26 +102,43 @@ class CRS:
         env["VERSION"] = version
 
         # Display command info
-        console.print(
-            Panel(
-                f"[bold blue]Docker Buildx Bake[/bold blue]\n"
-                f"[dim]HCL:[/dim] {hcl_path}\n"
-                f"[dim]Version:[/dim] {version}\n"
-                f"[dim]Registry:[/dim] {registry or 'N/A'}\n"
-                f"[dim]Publish:[/dim] {publish}",
-                title=f"[bold]Preparing CRS: {self.name}[/bold]",
-                border_style="blue",
-            )
+        info_text = (
+            f"HCL: {hcl_path}\n"
+            f"Version: {version}\n"
+            f"Registry: {registry or 'N/A'}\n"
+            f"Publish: {publish}"
         )
 
+        multi_task_progress.set_task_info(self.name, info_text)
+        multi_task_progress.set_cmd_info(self.name, " ".join(cmd), str(self.crs_path))
+
         # Run the bake command with streaming output
-        return run_command_with_streaming_output(
-            cmd=cmd,
-            cwd=self.crs_path,
-            env=env,
-            progress_message="Baking CRS Docker images...",
-            panel_title="Baking Output",
-            success_message="Baking completed successfully!",
-            error_title="Baking Error",
-            console=console,
-        )
+        def run_prepare() -> bool:
+            multi_task_progress.set_status(self.name, TaskStatus.IN_PROGRESS)
+            result = run_command_with_streaming_output(
+                cmd=cmd,
+                cwd=self.crs_path,
+                env=env,
+                multi_task_progress=multi_task_progress,
+                task_name=self.name,
+            )
+            multi_task_progress.set_status(
+                self.name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+            )
+            return result
+
+        if standalone:
+            with multi_task_progress:
+                return run_prepare()
+        else:
+            return run_command_with_streaming_output(
+                cmd=cmd,
+                cwd=self.crs_path,
+                env=env,
+                multi_task_progress=multi_task_progress,
+                task_name=self.name,
+            )
+
+    def build_target(self, target: TargetRepo) -> bool:
+        # TODO
+        return True
