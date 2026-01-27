@@ -1,4 +1,5 @@
 run_env: local
+docker_registry: ghcr.io/team-atlanta/test
 
 # `oss-crs-infra` must be required
 oss_crs_infra: 
