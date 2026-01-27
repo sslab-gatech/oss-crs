@@ -24,6 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
+crs = "crs.src.__main__:main"
 oss-bugfind-crs = "bug_finding.src.__main__:main"
 oss-bugfix-crs = "bug_fixing.src.__main__:main"
 
@@ -36,6 +37,7 @@ dev = [
 
 [tool.setuptools]
 packages = [
+    "crs", "crs.src",
     "bug_finding", "bug_finding.src", "bug_finding.src.render_compose",
     "bug_fixing", "bug_fixing.src",
     "bug_fixing.src.oss_patch",
