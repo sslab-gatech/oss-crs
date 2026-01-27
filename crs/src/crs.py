@@ -1,14 +1,12 @@
 from pathlib import Path
-import subprocess
 import os
 
 from rich.console import Console
-from rich.live import Live
 from rich.panel import Panel
-from rich.text import Text
 
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry
+from .utils import run_command_with_streaming_output
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
@@ -104,70 +102,13 @@ class CRS:
         )
 
         # Run the bake command with streaming output
-        output_lines = []
-        max_display_lines = 20
-
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=self.crs_path,
-                env=env,
-                bufsize=1,
-            )
-
-            with Live(console=console, refresh_per_second=10) as live:
-                for line in iter(process.stdout.readline, ""):
-                    line = line.rstrip()
-                    if line:
-                        output_lines.append(line)
-                        # Keep only the last N lines for display
-                        display_lines = output_lines[-max_display_lines:]
-
-                        # Build display content
-                        content = Text()
-                        content.append("● ", style="green")
-                        content.append("Building...\n\n", style="bold")
-                        for display_line in display_lines:
-                            content.append(f"{display_line}\n", style="dim")
-
-                        live.update(
-                            Panel(
-                                content,
-                                title="[bold yellow]Build Output[/bold yellow]",
-                                border_style="yellow",
-                            )
-                        )
-
-                process.wait()
-
-            if process.returncode == 0:
-                console.print(
-                    Panel(
-                        "[bold green]✓ Build completed successfully![/bold green]",
-                        border_style="green",
-                    )
-                )
-                return True
-            else:
-                console.print(
-                    Panel(
-                        f"[bold red]✗ Build failed with exit code {process.returncode}[/bold red]\n\n"
-                        + "\n".join(output_lines[-10:]),
-                        title="[bold red]Error[/bold red]",
-                        border_style="red",
-                    )
-                )
-                return False
-
-        except FileNotFoundError:
-            console.print(
-                "[bold red]Error:[/bold red] docker command not found. "
-                "Please ensure Docker is installed and in PATH."
-            )
-            return False
-        except Exception as e:
-            console.print(f"[bold red]Error:[/bold red] {e}")
-            return False
+        return run_command_with_streaming_output(
+            cmd=cmd,
+            cwd=self.crs_path,
+            env=env,
+            progress_message="Baking CRS Docker images...",
+            panel_title="Baking Output",
+            success_message="Baking completed successfully!",
+            error_title="Baking Error",
+            console=console,
+        )
