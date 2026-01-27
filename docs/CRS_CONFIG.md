@@ -1,0 +1,229 @@
+# CRS Configuration File Reference
+
+This document describes the configuration file format for CRS (Cyber Reasoning System) used in the OSS-CRS project. Configuration files are written in YAML format and must be placed CRS repositories, not oss-crs repository.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Root Configuration](#root-configuration)
+- [Prepare Phase](#prepare-phase)
+- [Target Build Phase](#target-build-phase)
+- [CRS Run Phase](#crs-run-phase)
+- [Supported Target](#supported-target)
+- [Enumerations Reference](#enumerations-reference)
+
+---
+
+## Overview
+
+A CRS configuration file defines how a Cyber Reasoning System is prepared, built, and run. The configuration is validated using Pydantic models and can be loaded from YAML files.
+
+## Root Configuration
+
+The root `CRSConfig` object contains the following fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | Yes | The name of the CRS |
+| `type` | `Set[CRSType]` | Yes | The type(s) of CRS (see [CRSType](#crstype)) |
+| `version` | `string` | Yes | Version string for the CRS (cannot be empty) |
+| `prepare_phase` | `PreparePhase` | Yes | Configuration for the prepare phase |
+| `target_build_phase` | `TargetBuildPhase` | Yes | Configuration for the target build phase |
+| `crs_run_phase` | `CRSRunPhase` | Yes | Configuration for the CRS run phase |
+| `supported_target` | `SupportedTarget` | Yes | Defines what targets this CRS supports |
+| `allowed_llms` | `list[string]` | No | List of allowed LLM names (duplicates are automatically removed) |
+
+### Example
+
+```yaml
+name: my-crs
+type:
+  - bug-finding
+version: "1.0.0"
+prepare_phase:
+  hcl: oss-crs/build.hcl
+target_build_phase:
+  build-step-1:
+    dockerfile: oss-crs/Build.Dockerfile
+    outputs:
+      - $OUT/fuzzer
+crs_run_phase:
+  docker_compose: oss-crs/docker-compose.yaml
+  additional_env:
+    CUSTOM_VAR: "value"
+supported_target:
+  mode:
+    - full
+  language:
+    - c
+    - c++
+  sanitizer:
+    - address
+  architecture:
+    - x86_64
+allowed_llms:
+  - gpt-5
+```
+
+---
+
+## Prepare Phase
+
+The `prepare_phase` configures the preparation step of the CRS.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hcl` | `string` | Yes | Path to the HCL file (must have `.hcl` extension) |
+
+### Example
+
+```yaml
+prepare_phase:
+  hcl: oss-crs/build.hcl
+```
+
+---
+
+## Target Build Phase
+
+The `target_build_phase` defines one or more build steps for the target.
+
+### Structure
+
+The target build phase is a dictionary where each key is a build step name and each value is a `BuildConfig` object.
+
+### BuildConfig
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dockerfile` | `string` | Yes | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`) |
+| `outputs` | `list[string]` | Yes | List of output paths (each must start with `$OUT/`) |
+
+### Example
+
+```yaml
+target_build_phase:
+  asan:
+    dockerfile: oss-crs/asan-builder.Dockerfile
+    outputs:
+      - $OUT/asan.tar.gz
+  cov-builder:
+    dockerfile: oss-crs/cov-builder.Dockerfile
+    outputs:
+      - $OUT/cov-builder.tar.gz
+```
+
+---
+
+## CRS Run Phase
+
+The `crs_run_phase` configures how the CRS is executed.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `docker_compose` | `string` | Yes | - | Path to the Docker Compose file (must end with `.yaml` or `.yml`) |
+| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass to the CRS |
+
+### Example
+
+```yaml
+crs_run_phase:
+  docker_compose: oss-crs/crs-docker-compose.yaml
+  additional_env:
+    CUSTOM_ENV: "CUSTOM_ENV"
+```
+
+---
+
+## Supported Target
+
+The `supported_target` section defines what types of targets the CRS can work with.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mode` | `Set[TargetMode]` | Yes | Supported target modes (see [TargetMode](#targetmode)) |
+| `language` | `Set[TargetLanguage]` | Yes | Supported programming languages (see [TargetLanguage](#targetlanguage)) |
+| `sanitizer` | `Set[TargetSanitizer]` | Yes | Supported sanitizers (see [TargetSanitizer](#targetsanitizer)) |
+| `architecture` | `Set[TargetArch]` | Yes | Supported CPU architectures (see [TargetArch](#targetarch)) |
+
+### Example
+
+```yaml
+supported_target:
+  mode:
+    - full
+    - delta
+  language:
+    - c
+    - c++
+    - rust
+  sanitizer:
+    - address
+    - undefined
+  architecture:
+    - x86_64
+```
+
+---
+
+## Enumerations Reference
+
+### CRSType
+
+Defines the type of CRS:
+
+| Value | Description |
+|-------|-------------|
+| `bug-finding` | CRS designed for finding bugs |
+| `bug-fixing` | CRS designed for fixing bugs |
+
+### TargetMode
+
+Defines the operating mode for targets:
+
+| Value | Description |
+|-------|-------------|
+| `full` | Full mode |
+| `delta` | Delta mode |
+
+### TargetLanguage
+
+Supported programming languages (based on [OSS-Fuzz language support](https://google.github.io/oss-fuzz/getting-started/new-project-guide/#language)):
+
+| Value | Description |
+|-------|-------------|
+| `c` | C language |
+| `c++` | C++ language |
+| `go` | Go language |
+| `rust` | Rust language |
+| `python` | Python language |
+| `jvm` | JVM-based languages (Java, Kotlin, Scala, etc.) |
+| `swift` | Swift language |
+| `javascript` | JavaScript language |
+| `lua` | Lua language |
+
+### TargetSanitizer
+
+Supported sanitizers (based on [OSS-Fuzz sanitizer support](https://google.github.io/oss-fuzz/getting-started/new-project-guide/#sanitizers)):
+
+| Value | Description |
+|-------|-------------|
+| `address` | AddressSanitizer (ASAN) - detects memory errors |
+| `memory` | MemorySanitizer (MSAN) - detects uninitialized memory reads |
+| `undefined` | UndefinedBehaviorSanitizer (UBSAN) - detects undefined behavior |
+
+### TargetArch
+
+Supported CPU architectures (based on [OSS-Fuzz architecture support](https://google.github.io/oss-fuzz/getting-started/new-project-guide/#architectures)):
+
+| Value | Description |
+|-------|-------------|
+| `x86_64` | 64-bit x86 architecture |
+| `i386` | 32-bit x86 architecture |
+
+---
+
+## Validate via CMD
+```bash
+uv run common/config/crs.py </path/to/crs.yaml>
+```
