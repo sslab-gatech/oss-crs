@@ -170,6 +170,11 @@ def main() -> int:
         default=None,
         help="Custom run ID for Docker Compose project naming (default: random)",
     )
+    build_parser.add_argument(
+        "--cgroup-parent",
+        action="store_true",
+        help="Use cgroup-parent for resource management (experimental, requires cgroup v2)",
+    )
 
     # run_crs subcommand
     run_parser = subparsers.add_parser("run", help="Run CRS")
@@ -269,6 +274,11 @@ def main() -> int:
         type=str,
         default=None,
         help="Custom run ID for Docker Compose project naming (default: random)",
+    )
+    run_parser.add_argument(
+        "--cgroup-parent",
+        action="store_true",
+        help="Use cgroup-parent for resource management (experimental, requires cgroup v2)",
     )
 
     args = parser.parse_args()
@@ -371,6 +381,7 @@ def main() -> int:
             "prepare_images": args.prepare_images,
             "no_cache": args.no_cache,
             "run_id": args.run_id,
+            "cgroup_parent": args.cgroup_parent,
         }
 
         # Only add optional paths if provided
@@ -417,6 +428,7 @@ def main() -> int:
             "skip_litellm": args.skip_litellm,
             "skip_oss_fuzz_clone": args.skip_oss_fuzz_clone,
             "run_id": args.run_id,
+            "cgroup_parent": args.cgroup_parent,
         }
 
         # Only add optional paths if provided

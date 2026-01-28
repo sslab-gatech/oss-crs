@@ -287,6 +287,7 @@ def render_compose_for_worker(
     ensemble_dir: Path | None = None,
     harness_name: str | None = None,
     coverage_build_dir: str | None = None,
+    cgroup_parent_path: str | None = None,
     run_id: str | None = None,
     # LiteLLM-related parameters (for run mode with internal LiteLLM)
     postgres_password: str | None = None,
@@ -357,6 +358,7 @@ def render_compose_for_worker(
         ensemble_dir=str(ensemble_dir) if ensemble_dir else None,
         coverage_build_dir=coverage_build_dir,
         run_id=run_id,
+        cgroup_parent=cgroup_parent_path,
         # LiteLLM-related variables (for run mode with internal LiteLLM)
         postgres_password=postgres_password,
         litellm_master_key=litellm_master_key,
@@ -382,6 +384,7 @@ def render_build_compose(
     env_file: Path | None = None,
     project_image_prefix: str = "gcr.io/oss-fuzz",
     external_litellm: bool = False,
+    cgroup_parent_path: str | None = None,
 ) -> tuple[list[str], Path, list[dict[str, Any]]]:
     """
     Programmatic interface for build mode.
@@ -438,6 +441,7 @@ def render_build_compose(
         source_path=source_path,
         project_image_prefix=project_image_prefix,
         external_litellm=external_litellm,
+        cgroup_parent_path=cgroup_parent_path,
     )
 
     output_file = output_dir / "compose-build.yaml"
@@ -466,6 +470,7 @@ def render_run_compose(
     ensemble_dir: Path | None = None,
     coverage_build_dir: Path | None = None,
     run_id: str | None = None,
+    cgroup_parent_path: str | None = None,
 ) -> tuple[str, Path, list[dict]]:
     """
     Programmatic interface for run mode.
@@ -558,6 +563,7 @@ def render_run_compose(
         ensemble_dir=ensemble_dir,
         harness_name=harness_name,
         coverage_build_dir=str(coverage_build_dir) if coverage_build_dir else None,
+        cgroup_parent_path=cgroup_parent_path,
         run_id=actual_run_id,
         postgres_password=postgres_password,
         litellm_master_key=litellm_master_key,

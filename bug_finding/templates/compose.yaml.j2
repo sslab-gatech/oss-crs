@@ -140,6 +140,9 @@ services:
 {%- if source_path %}
       - {{ source_path }}:/local-source-mount
 {%- endif %}
+{%- if cgroup_parent %}
+    cgroup_parent: {{ cgroup_parent }}
+{%- else %}
 {%- if crs.cpuset %}
     cpuset: {{ crs.cpuset }}
 {%- endif %}
@@ -148,6 +151,7 @@ services:
       resources:
         limits:
           memory: {{ crs.memory_limit }}
+{%- endif %}
 {%- endif %}
 {%- endif %}
 
@@ -227,11 +231,15 @@ services:
       # Ensemble shared corpus - read-only mount populated by seed_watcher service
       - {{ ensemble_dir }}/corpus:/seed_share_dir:ro
 {%- endif %}
+{%- if cgroup_parent %}
+    cgroup_parent: {{ cgroup_parent }}
+{%- else %}
     cpuset: {{ crs.cpuset }}
     deploy:
       resources:
         limits:
           memory: {{ crs.memory_limit }}
+{%- endif %}
     command: {{ fuzzer_command | tojson }}
 {%- endif %}
 {%- endfor %}

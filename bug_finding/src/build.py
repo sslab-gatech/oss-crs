@@ -12,6 +12,14 @@ from typing import Any
 
 import yaml
 
+from bug_finding.src.cgroup import (
+    check_cgroup_delegation,
+    cleanup_cgroup,
+    create_cgroup,
+    format_setup_instructions,
+    generate_cgroup_name,
+    get_user_cgroup_base,
+)
 from bug_finding.src.render_compose import render as render_compose
 from bug_finding.src.crs_utils import (
     clone_oss_fuzz_if_needed,
@@ -189,6 +197,8 @@ def build_crs(
     prepare_images: bool = True,
     no_cache: bool = False,
     run_id: str | None = None,
+    *,
+    cgroup_parent: bool = False,
 ) -> bool:
     """
     Build CRS for a project using docker compose.
@@ -214,6 +224,7 @@ def build_crs(
         skip_oss_fuzz_clone: Skip cloning oss-fuzz (default: False)
         prepare_images: Auto-prepare CRS if bake images are missing (default: True)
         run_id: Custom run ID for Docker Compose project naming (default: random)
+        cgroup_parent: Use cgroup-parent for resource management (default: False)
 
     Returns:
         bool: True if successful, False otherwise
@@ -286,6 +297,35 @@ def build_crs(
     # Build project image
     _build_project_image(project_name, oss_fuzz_dir, architecture, no_cache=no_cache)
 
+    # Set up cgroup if enabled
+    cgroup_path = None
+    if cgroup_parent:
+        base_path = get_user_cgroup_base()
+
+        # Validate cgroup delegation
+        is_valid, missing = check_cgroup_delegation(base_path)
+        if not is_valid:
+            logger.error("Cgroup v2 base path not found or controllers not delegated")
+            logger.error("Missing controllers: %s", ", ".join(missing))
+            logger.error(format_setup_instructions(base_path))
+            return False
+
+        # Generate unique cgroup name
+        build_run_id_for_cgroup = run_id if run_id else generate_run_id()
+        cgroup_name = generate_cgroup_name(build_run_id_for_cgroup, "build", "local")
+
+        # TODO: Get cpuset and memory from config
+        # For now, use placeholder values
+        cpuset = "0-15"
+        memory_bytes = 16 * 1024 * 1024 * 1024  # 16GB
+
+        try:
+            cgroup_path = create_cgroup(base_path, cgroup_name, cpuset, memory_bytes)
+            logger.info(f"Created cgroup: {cgroup_path}")
+        except OSError as e:
+            logger.error(f"Failed to create cgroup: {e}")
+            return False
+
     # Generate compose files using render_compose module
     logger.info("Generating compose-build.yaml")
     try:
@@ -303,6 +343,7 @@ def build_crs(
                 source_path=source_path,
                 project_image_prefix=project_image_prefix,
                 external_litellm=external_litellm,
+                cgroup_parent_path=str(cgroup_path) if cgroup_path else None,
             )
         )
     except Exception as e:
@@ -538,5 +579,10 @@ def build_crs(
             stdin=subprocess.DEVNULL,
         )
         fix_build_dir_permissions(build_dir)
+
+        # Clean up cgroup if created
+        if cgroup_path:
+            logger.info("Cleaning up cgroup: %s", cgroup_path)
+            cleanup_cgroup(cgroup_path)
 
     return True

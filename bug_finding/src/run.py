@@ -10,6 +10,14 @@ from collections.abc import Callable
 from importlib.resources import files
 from pathlib import Path
 
+from bug_finding.src.cgroup import (
+    check_cgroup_delegation,
+    cleanup_cgroup,
+    create_cgroup,
+    format_setup_instructions,
+    generate_cgroup_name,
+    get_user_cgroup_base,
+)
 from bug_finding.src.render_compose import render as render_compose
 from bug_finding.src.crs_utils import (
     clone_oss_fuzz_if_needed,
@@ -18,7 +26,7 @@ from bug_finding.src.crs_utils import (
     validate_crs_modes,
     verify_external_litellm,
 )
-from bug_finding.src.utils import copy_docker_data
+from bug_finding.src.utils import copy_docker_data, generate_run_id
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +61,8 @@ def run_crs(
     skip_oss_fuzz_clone: bool = False,
     coverage_build_dir: Path | None = None,
     run_id: str | None = None,
+    *,
+    cgroup_parent: bool = False,
 ) -> bool:
     """
     Run CRS using docker compose.
@@ -151,6 +161,35 @@ def run_crs(
         else:
             logger.warning(f"No new corpus files copied from {corpus_dir}")
 
+    # Set up cgroup if enabled
+    cgroup_path = None
+    if cgroup_parent:
+        base_path = get_user_cgroup_base()
+
+        # Validate cgroup delegation
+        is_valid, missing = check_cgroup_delegation(base_path)
+        if not is_valid:
+            logger.error("Cgroup v2 base path not found or controllers not delegated")
+            logger.error("Missing controllers: %s", ", ".join(missing))
+            logger.error(format_setup_instructions(base_path))
+            return False
+
+        # Generate unique cgroup name
+        run_run_id_for_cgroup = run_id if run_id else generate_run_id()
+        cgroup_name = generate_cgroup_name(run_run_id_for_cgroup, "run", worker)
+
+        # TODO: Get cpuset and memory from config
+        # For now, use placeholder values
+        cpuset = "0-15"
+        memory_bytes = 16 * 1024 * 1024 * 1024  # 16GB
+
+        try:
+            cgroup_path = create_cgroup(base_path, cgroup_name, cpuset, memory_bytes)
+            logger.info(f"Created cgroup: {cgroup_path}")
+        except OSError as e:
+            logger.error(f"Failed to create cgroup: {e}")
+            return False
+
     # Generate compose files using render_compose module
     logger.info("Generating compose-%s.yaml", worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
@@ -173,6 +212,7 @@ def run_crs(
             ensemble_dir=final_ensemble_dir,
             coverage_build_dir=coverage_build_dir,
             run_id=run_id,
+            cgroup_parent_path=str(cgroup_path) if cgroup_path else None,
         )
     except Exception as e:
         logger.error("Failed to generate compose file: %s", e)
@@ -221,6 +261,11 @@ def run_crs(
         logger.info("Cleaning up...")
         subprocess.run(compose_down_cmd, stdin=subprocess.DEVNULL)
         fix_build_dir_permissions(build_dir)
+
+        # Clean up cgroup if created
+        if cgroup_path:
+            logger.info("Cleaning up cgroup: %s", cgroup_path)
+            cleanup_cgroup(cgroup_path)
 
     def signal_handler(signum, frame):
         """Handle termination signals (first signal cleans up, subsequent ignored)."""
