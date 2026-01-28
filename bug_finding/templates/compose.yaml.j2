@@ -13,6 +13,71 @@
 {%- endif %}
 {%- endmacro %}
 
+{# Macro to generate common runner environment variables #}
+{%- macro runner_env_vars(crs, cpuset, memory_limit) %}
+{{ litellm_url_env() }}
+{%- if external_litellm %}
+      - LITELLM_KEY=${LITELLM_KEY}
+{%- else %}
+      - LITELLM_KEY={{ litellm_keys[crs.name] }}
+{%- endif %}
+      - FUZZING_ENGINE={{ engine }}
+      - SANITIZER={{ sanitizer }}
+      - RUN_FUZZER_MODE=interactive
+      - HELPER=True
+      - CPUSET_CPUS={{ cpuset }}
+      - MEMORY_LIMIT={{ memory_limit }}
+      - CRS_TARGET={{ project }}
+      - CRS_NAME={{ crs.name }}
+      - SOURCE_WORKDIR={{ source_workdir }}
+{%- for key, value in crs.run_env.items() %}
+      - {{ key }}={{ value }}
+{%- endfor %}
+{%- if crs.host_docker_builder %}
+      - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+      - HOST_ARTIFACT_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+{%- if harness_name %}
+      # Per-harness HOST paths for nested containers (host_docker_builder mode)
+      - HOST_POV_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/povs
+      - HOST_CORPUS_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/corpus
+      - HOST_CRS_DATA_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/crs-data
+{%- endif %}
+{%- endif %}
+{%- endmacro %}
+
+{# Macro to generate common runner volume mounts #}
+{%- macro runner_volumes(crs) %}
+      - {{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/out
+{%- if coverage_build_dir %}
+      - {{ coverage_build_dir }}:/coverage-out:ro
+{%- endif %}
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/artifacts
+{%- if harness_name %}
+      # Per-run writable overlays (povs, corpus, crs-data isolated per run)
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/povs:/artifacts/povs
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/corpus:/artifacts/corpus
+      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/crs-data:/artifacts/crs-data
+{%- endif %}
+{%- if crs.host_docker_builder %}
+      - /var/run/docker.sock:/var/run/docker.sock
+{%- endif %}
+{%- if crs.dind and not crs.host_docker_builder %}
+      - {{ build_dir }}/docker-data/{{ crs.name }}/run/{{ project }}/{{ sanitizer }}:/var/lib/docker
+{%- endif %}
+{%- if harness_source %}
+      - {{ harness_source }}:/harness-source:ro
+{%- endif %}
+{%- if diff_path %}
+      - {{ diff_path }}:/ref.diff:ro
+{%- endif %}
+{%- for vol in crs.volumes %}
+      - {{ vol }}
+{%- endfor %}
+{%- if ensemble_dir %}
+      # Ensemble shared corpus - read-only mount populated by seed_watcher service
+      - {{ ensemble_dir }}/corpus:/seed_share_dir:ro
+{%- endif %}
+{%- endmacro %}
 
 services:
 {%- if mode == 'run' and not external_litellm %}
@@ -152,6 +217,88 @@ services:
 {%- endif %}
 
 {%- if mode == 'run' %}
+{%- if crs.compose_services %}
+  # CRS {{ loop.index }} - {{ crs.name }} (imported from docker-compose)
+{%- for svc in crs.compose_services %}
+  {{ crs.name }}_{{ svc.name }}:
+{%- if svc.config.image %}
+    image: {{ svc.config.image }}
+{%- endif %}
+{%- if svc.config.build %}
+    build:
+{%- if svc.config.build is string %}
+      context: {{ crs.path }}/{{ svc.config.build }}
+{%- else %}
+      context: {{ crs.path }}/{{ svc.config.build.context | default('.') }}
+{%- if svc.config.build.dockerfile %}
+      dockerfile: {{ svc.config.build.dockerfile }}
+{%- endif %}
+{%- if svc.config.build.args %}
+      args:
+{%- for arg_key, arg_val in svc.config.build.args.items() %}
+        - {{ arg_key }}={{ arg_val }}
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{%- if svc.config.privileged is defined %}
+    privileged: {{ svc.config.privileged | lower }}
+{%- elif not crs.host_docker_builder %}
+    privileged: true
+{%- endif %}
+{%- if svc.config.shm_size %}
+    shm_size: {{ svc.config.shm_size }}
+{%- else %}
+    shm_size: 2g
+{%- endif %}
+{%- if svc.config.depends_on %}
+    depends_on:
+{%- for dep in svc.config.depends_on %}
+{%- if dep is string %}
+      - {{ crs.name }}_{{ dep }}
+{%- else %}
+{%- for dep_name, dep_config in dep.items() %}
+      {{ crs.name }}_{{ dep_name }}:
+{%- for dep_key, dep_val in dep_config.items() %}
+        {{ dep_key }}: {{ dep_val }}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- if not external_litellm %}
+{%- if not svc.config.depends_on %}
+    depends_on:
+{%- endif %}
+      key_provisioner:
+        condition: service_healthy
+{%- endif %}
+    environment:
+{{ runner_env_vars(crs, svc.cpuset, svc.memory_limit) }}
+{%- if svc.config.environment %}
+{%- for env_item in svc.config.environment %}
+      - {{ env_item }}
+{%- endfor %}
+{%- endif %}
+    volumes:
+{{ runner_volumes(crs) }}
+{%- if svc.config.volumes %}
+{%- for vol in svc.config.volumes %}
+      - {{ vol }}
+{%- endfor %}
+{%- endif %}
+    cpuset: {{ svc.cpuset }}
+    deploy:
+      resources:
+        limits:
+          memory: {{ svc.memory_limit }}
+{%- if svc.config.command %}
+    command: {{ svc.config.command | tojson }}
+{%- else %}
+    command: {{ fuzzer_command | tojson }}
+{%- endif %}
+{%- endfor %}
+{%- else %}
   # CRS Runner {{ loop.index }} - {{ crs.name }}
   {{ crs.name }}_runner:
     image: {{ crs.name }}_runner
@@ -165,74 +312,19 @@ services:
         condition: service_healthy
 {%- endif %}
     environment:
-{{ litellm_url_env() }}
-{%- if external_litellm %}
-      - LITELLM_KEY=${LITELLM_KEY}
-{%- else %}
-      - LITELLM_KEY={{ litellm_keys[crs.name] }}
-{%- endif %}
-      - FUZZING_ENGINE={{ engine }}
-      - SANITIZER={{ sanitizer }}
-      - RUN_FUZZER_MODE=interactive
-      - HELPER=True
-      - CPUSET_CPUS={{ crs.cpuset }}
-      - MEMORY_LIMIT={{ crs.memory_limit | string }}
-      - CRS_TARGET={{ project }}
-      - CRS_NAME={{ crs.name }}
-      - SOURCE_WORKDIR={{ source_workdir }}
-{%- for key, value in crs.run_env.items() %}
-      - {{ key }}={{ value }}
-{%- endfor %}
-{%- if crs.host_docker_builder %}
-      - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
-      - HOST_ARTIFACT_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}
-{%- if harness_name %}
-      # Per-harness HOST paths for nested containers (host_docker_builder mode)
-      - HOST_POV_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/povs
-      - HOST_CORPUS_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/corpus
-      - HOST_CRS_DATA_DIR={{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/crs-data
-{%- endif %}
-{%- endif %}
+{{ runner_env_vars(crs, crs.cpuset, crs.memory_limit) }}
     build:
       context: {{ crs.path }}
       dockerfile: runner.Dockerfile
     volumes:
-      - {{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/out
-{%- if coverage_build_dir %}
-      - {{ coverage_build_dir }}:/coverage-out:ro
-{%- endif %}
-      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/artifacts
-{%- if harness_name %}
-      # Per-run writable overlays (povs, corpus, crs-data isolated per run)
-      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/povs:/artifacts/povs
-      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/corpus:/artifacts/corpus
-      - {{ build_dir }}/run/{{ crs.name }}/{{ project }}/{{ sanitizer }}/{{ harness_name }}/{{ run_id }}/crs-data:/artifacts/crs-data
-{%- endif %}
-{%- if crs.host_docker_builder %}
-      - /var/run/docker.sock:/var/run/docker.sock
-{%- endif %}
-{%- if crs.dind and not crs.host_docker_builder %}
-      - {{ build_dir }}/docker-data/{{ crs.name }}/run/{{ project }}/{{ sanitizer }}:/var/lib/docker
-{%- endif %}
-{%- if harness_source %}
-      - {{ harness_source }}:/harness-source:ro
-{%- endif %}
-{%- if diff_path %}
-      - {{ diff_path }}:/ref.diff:ro
-{%- endif %}
-{%- for vol in crs.volumes %}
-      - {{ vol }}
-{%- endfor %}
-{%- if ensemble_dir %}
-      # Ensemble shared corpus - read-only mount populated by seed_watcher service
-      - {{ ensemble_dir }}/corpus:/seed_share_dir:ro
-{%- endif %}
+{{ runner_volumes(crs) }}
     cpuset: {{ crs.cpuset }}
     deploy:
       resources:
         limits:
           memory: {{ crs.memory_limit }}
     command: {{ fuzzer_command | tojson }}
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 

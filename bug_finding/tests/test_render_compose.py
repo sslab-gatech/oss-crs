@@ -342,3 +342,115 @@ class TestExpandVolumeVars:
         volumes = ['/host/path:/container/path:ro']
         result = expand_volume_vars(volumes, {'VAR': 'value'})
         assert result == ['/host/path:/container/path:ro']
+
+
+class TestLoadCrsComposeServices:
+    """Test load_crs_compose_services function."""
+
+    def test_loads_services_from_compose_file(self):
+        """Test loading services from a valid compose file."""
+        from bug_finding.src.render_compose.render import load_crs_compose_services
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            compose_content = """
+services:
+  helper:
+    image: alpine:latest
+    command: ["sleep", "infinity"]
+  fuzzer:
+    build:
+      context: .
+      dockerfile: runner.Dockerfile
+    privileged: true
+"""
+            compose_path = Path(tmpdir) / "docker-compose.yaml"
+            compose_path.write_text(compose_content)
+
+            result = load_crs_compose_services(
+                crs_path=Path(tmpdir),
+                compose_path="docker-compose.yaml",
+                crs_memory_limit="4G",
+                crs_cpuset="0,1,2,3",
+            )
+
+            assert len(result) == 2
+            # Check that helper service is loaded correctly
+            helper_svc = next(s for s in result if s["name"] == "helper")
+            assert helper_svc["config"]["image"] == "alpine:latest"
+            assert helper_svc["cpuset"] == "0,1,2,3"  # Same CPU set
+            assert helper_svc["memory_limit"] == "2G"  # Half of 4G
+
+            # Check that fuzzer service is loaded correctly
+            fuzzer_svc = next(s for s in result if s["name"] == "fuzzer")
+            assert fuzzer_svc["config"]["privileged"] is True
+            assert fuzzer_svc["cpuset"] == "0,1,2,3"  # Same CPU set
+            assert fuzzer_svc["memory_limit"] == "2G"  # Half of 4G
+
+    def test_memory_split_evenly(self):
+        """Test that memory is split evenly across services."""
+        from bug_finding.src.render_compose.render import load_crs_compose_services
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            compose_content = """
+services:
+  service1:
+    image: alpine:latest
+  service2:
+    image: alpine:latest
+  service3:
+    image: alpine:latest
+"""
+            compose_path = Path(tmpdir) / "docker-compose.yaml"
+            compose_path.write_text(compose_content)
+
+            result = load_crs_compose_services(
+                crs_path=Path(tmpdir),
+                compose_path="docker-compose.yaml",
+                crs_memory_limit="3G",
+                crs_cpuset="0-7",
+            )
+
+            assert len(result) == 3
+            # Each service should get 1G (3G / 3 services)
+            for svc in result:
+                assert svc["memory_limit"] == "1G"
+                assert svc["cpuset"] == "0-7"
+
+    def test_returns_empty_list_for_missing_file(self, caplog):
+        """Test that missing compose file returns empty list."""
+        from bug_finding.src.render_compose.render import load_crs_compose_services
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with caplog.at_level(logging.WARNING):
+                result = load_crs_compose_services(
+                    crs_path=Path(tmpdir),
+                    compose_path="nonexistent.yaml",
+                    crs_memory_limit="4G",
+                    crs_cpuset="0-3",
+                )
+
+            assert result == []
+            assert "not found" in caplog.text
+
+    def test_returns_empty_list_for_empty_services(self, caplog):
+        """Test that compose file with no services returns empty list."""
+        from bug_finding.src.render_compose.render import load_crs_compose_services
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            compose_content = """
+# Empty compose file
+version: "3"
+"""
+            compose_path = Path(tmpdir) / "docker-compose.yaml"
+            compose_path.write_text(compose_content)
+
+            with caplog.at_level(logging.WARNING):
+                result = load_crs_compose_services(
+                    crs_path=Path(tmpdir),
+                    compose_path="docker-compose.yaml",
+                    crs_memory_limit="4G",
+                    crs_cpuset="0-3",
+                )
+
+            assert result == []
+            assert "No services found" in caplog.text
