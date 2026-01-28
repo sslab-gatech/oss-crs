@@ -102,7 +102,6 @@ from bug_finding.src.render_compose.config import (
     parse_memory_mb,
 )
 from bug_finding.src.render_compose.helpers import (
-    check_image_exists,
     expand_volume_vars,
     get_dockerfile_workdir,
     get_dot_env_vars,
@@ -593,16 +592,6 @@ def render_run_compose(
 
     if not crs_list:
         raise ValueError(f"No CRS instances configured for worker '{worker}'")
-
-    # Validate that CRS builder images exist (validates build was run)
-    for crs in crs_list:
-        crs_name = crs["name"]
-        builder_image = f"{project}_{crs_name}_builder"
-        if not check_image_exists(builder_image):
-            raise FileNotFoundError(
-                f"CRS builder image not found: {builder_image}. "
-                f"Please run 'oss-crs build' first to build the CRS."
-            )
 
     # Generate random secrets and get LiteLLM config (for internal LiteLLM mode)
     postgres_password = None
