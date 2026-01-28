@@ -138,6 +138,8 @@ When `build.dockerfiles` is specified:
 - Each builder shares the same `/out`, `/work`, `/artifacts` volumes
 - Falls back to single `builder.Dockerfile` if `build.dockerfiles` not specified
 
+**Important:** Builder Dockerfiles should NOT run the build during `docker build`. Instead, they should set CMD to run the build script at `docker run` time. This is because environment variables like `FUZZING_LANGUAGE` are only available at runtime.
+
 ## Artifact Organization
 
 Builders should organize artifacts by build type:
@@ -176,26 +178,75 @@ exec python3 /run.py "$@"
 
 ### builder.Dockerfile.default
 ```dockerfile
-FROM gcr.io/oss-fuzz-base/base-builder
-# Build with default sanitizer (ASan)
-# Export to /artifacts/default/
+ARG parent_image
+FROM $parent_image
+
+COPY builder-default.sh /builder-default.sh
+RUN chmod +x /builder-default.sh
+
+# Run build at container start (not image build time)
+CMD ["/builder-default.sh"]
+```
+
+### builder-default.sh
+```bash
+#!/bin/sh
+set -eu
+rm -rf /out/* /work/*
+cd /src && compile
+mkdir -p /artifacts/default
+cp -r /out/* /artifacts/default/
 ```
 
 ### builder.Dockerfile.coverage
 ```dockerfile
-FROM gcr.io/oss-fuzz-base/base-builder
-ENV SANITIZER=coverage
-# Build with coverage instrumentation
-# Export to /artifacts/coverage/
+ARG parent_image
+FROM $parent_image
+
+COPY builder-coverage.sh /builder-coverage.sh
+RUN chmod +x /builder-coverage.sh
+
+CMD ["/builder-coverage.sh"]
 ```
 
-## Implementation Notes
+### builder-coverage.sh
+```bash
+#!/bin/sh
+set -eu
+export SANITIZER=coverage
+rm -rf /out/* /work/*
+cd /src && compile
+mkdir -p /artifacts/coverage
+cp -r /out/* /artifacts/coverage/
+```
 
-### Build phase changes (`compose.yaml.j2`)
-- Loop through `build.dockerfiles` list
-- Run each builder sequentially (not parallel)
-- All builders share same volume mounts
+---
 
-### Template changes
-- Add `crs.build_dockerfiles` field to CRS config
-- Render multiple builder services or run them sequentially
+# Builder Refactoring (Implemented)
+
+## Overview
+
+When a CRS specifies `build.dockerfiles` in config-crs.yaml, the build phase uses `docker run` directly instead of Docker Compose. This simplifies the build process and avoids compose project naming conflicts.
+
+## Implementation
+
+The `build_crs_with_docker_run()` function in `build.py` handles multi-builder execution:
+
+1. For each Dockerfile in `build.dockerfiles`:
+   - Build the image with `docker build`
+   - Run the container with `docker run`
+   - All builders share the same `/out`, `/work`, `/artifacts` volumes
+
+2. The `build_crs()` function:
+   - Separates CRS into docker_run_crs (those with `build_dockerfiles`) and compose_crs
+   - Builds docker_run_crs first using `build_crs_with_docker_run()`
+   - Then builds compose_crs using the existing compose-based approach
+
+## Features Supported
+
+- **Sequential execution**: Builders run in order specified in `build.dockerfiles`
+- **Resource limits**: `--cpuset-cpus`, `--memory`, `--shm-size 2g`
+- **dind mode**: `--privileged` flag, docker-data volume mount
+- **host_docker_builder mode**: Docker socket mount, same-path volume mounts
+- **Environment variables**: SANITIZER, FUZZING_ENGINE, ARCHITECTURE, PROJECT_NAME, FUZZING_LANGUAGE, HELPER, CPUSET_CPUS, MEMORY_LIMIT, BUILDER_INDEX, BUILDER_DOCKERFILE, PARENT_IMAGE
+- **Source mounting**: Optional local source mounted at `/local-source-mount`
