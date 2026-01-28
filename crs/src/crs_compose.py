@@ -1,7 +1,7 @@
 from pathlib import Path
 from .config.crs_compose import CRSComposeConfig
 from .crs import CRS
-from .utils import MultiTaskProgress, TaskStatus
+from .ui import MultiTaskProgress
 from .target import Target
 
 
@@ -51,11 +51,27 @@ class CRSCompose:
             tasks=tasks,
             title="CRS Compose Prepare",
         ) as progress:
-            result = progress.run_all_tasks()
-            if not result:
-                return False  # Stop on first failure
+            return progress.run_all_tasks()
 
         return True
 
-    def build_target(self, target: Target) -> bool:
-        return False  # TODO
+    def build_target(self, target: Target, checkout: bool) -> bool:
+        target_base_image = target.build_docker_image(checkout)
+        if target_base_image is None:
+            return False
+
+        tasks = []
+        for crs in self.crs_list:
+            tasks.append(
+                (
+                    crs.name,
+                    lambda progress: crs.build_target(target_base_image, progress),
+                )
+            )
+        with MultiTaskProgress(
+            tasks=tasks,
+            title="CRS Compose Build Target",
+        ) as progress:
+            return progress.run_all_tasks()
+
+        return True

@@ -5,6 +5,8 @@ from typing import Optional, Set
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .target import TargetLangauge, TargetSanitizer, TargetArch
+
 
 class PreparePhase(BaseModel):
     """Configuration for the prepare phase."""
@@ -76,32 +78,6 @@ class CRSRunPhase(BaseModel):
 class TargetMode(Enum):
     FULL = "full"
     DELTA = "delta"
-
-
-# See https://google.github.io/oss-fuzz/getting-started/new-project-guide/#language
-class TargetLangauge(Enum):
-    C = "c"
-    CPP = "c++"
-    GO = "go"
-    RUST = "rust"
-    PYTHON = "python"
-    JVM = "jvm"  # Java, Kotlin, Scala and other JVM-based languages
-    SWIFT = "swift"
-    JAVASCRIPT = "javascript"
-    LUA = "lua"
-
-
-# See https://google.github.io/oss-fuzz/getting-started/new-project-guide/#sanitizers
-class TargetSanitizer(Enum):
-    ASAN = "address"
-    MSAN = "memory"
-    UBSAN = "undefined"
-
-
-# See https://google.github.io/oss-fuzz/getting-started/new-project-guide/#architectures
-class TargetArch(Enum):
-    X86_64 = "x86_64"
-    I386 = "i386"
 
 
 class SupportedTarget(BaseModel):

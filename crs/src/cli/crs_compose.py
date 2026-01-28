@@ -2,6 +2,7 @@ import sys
 import argparse
 from pathlib import Path
 from ..crs_compose import CRSCompose
+from ..target import Target
 
 
 DEFAULT_WORK_DIR = (Path(__file__) / "../../../../.oss-crs-workdir").resolve()
@@ -36,7 +37,31 @@ def add_prepare_command(subparsers):
 
 
 def add_build_target_command(subparsers):
-    pass
+    build_target = subparsers.add_parser(
+        "build-target", help="Build target repository defined in CRS Compose file"
+    )
+    add_common_arguments(build_target)
+    build_target.add_argument(
+        "--target-proj-path",
+        type=Path,
+        required=True,
+        help="""
+        Target Project Path where includes oss-fuzz compatible files (e.g., Dockerfile, project.yaml, ...)
+        # TODO: this accepts only local paths for now. But, we will support remote paths later.
+        """,
+    )
+    build_target.add_argument(
+        "--target-repo-path",
+        type=Path,
+        required=False,
+        help="Local path to the target repository to build with the target project configuration.",
+    )
+    build_target.add_argument(
+        "--no-checkout",
+        type=bool,
+        default=False,
+        help="Whether to checkout the target repository before building.",
+    )
 
 
 def add_run_command(subparsers):
@@ -67,7 +92,9 @@ def main() -> bool:
         if not crs_compose.prepare(publish=args.publish):
             return False
     elif args.command == "build-target":
-        pass
+        target = Target(args.work_dir, args.target_proj_path, args.target_repo_path)
+        if not crs_compose.build_target(target, args.no_checkout):
+            return False
     elif args.command == "run":
         pass
     elif args.command == "check":

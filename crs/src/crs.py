@@ -6,7 +6,7 @@ from rich.console import Console
 
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry
-from .utils import MultiTaskProgress, TaskStatus
+from .ui import MultiTaskProgress
 from .target import Target
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
@@ -112,5 +112,6 @@ class CRS:
                 cmd=cmd, cwd=self.crs_path, env=env, info_text=info_text
             )
 
-    def build_target(self, target: Target) -> bool:
-        pass
+    def build_target(self, target_base_image: str, progress: MultiTaskProgress) -> bool:
+        # TODO
+        return True

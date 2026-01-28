@@ -26,6 +26,7 @@ class MultiTaskProgress:
         tasks: A list of (task_name, task_function) tuples.
                Each function takes (progress: MultiTaskProgress) and returns bool.
         title: Title for the progress panel.
+        head: Optional header for the progress panel.
         console: Optional Rich console instance.
     """
 
@@ -49,6 +50,7 @@ class MultiTaskProgress:
         self.max_output_lines = 10
         self._live: Optional[Live] = None
         self._current_task: Optional[str] = None
+        self._head = []
 
     def _get_status_icon(self, status: TaskStatus) -> str:
         icons = {
@@ -70,6 +72,12 @@ class MultiTaskProgress:
 
     def _build_display(self) -> Panel:
         """Build the display panel with task table and current output."""
+        content_parts = []
+
+        # Add header if present
+        for h in self._head:
+            content_parts.append(h)
+
         table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
         table.add_column("", width=3)
         table.add_column("Task", style="bold")
@@ -86,7 +94,7 @@ class MultiTaskProgress:
                 self._get_status_text(status),
             )
 
-        content_parts = [table]
+        content_parts.append(table)
 
         # Add task info if there's an in-progress task with info
         if current_task and current_task in self.task_info:
@@ -313,3 +321,18 @@ class MultiTaskProgress:
             else:
                 Console().print(f"[bold red]Error:[/bold red] {error_msg}")
             return False
+
+    def add_items_to_head(self, items) -> None:
+        self._head += items
+
+
+def bold(text: str) -> Text:
+    return Text(text, style="bold")
+
+
+def yellow(text: str, bold=False) -> Text:
+    return Text(text, style="bold yellow" if bold else "yellow")
+
+
+def green(text: str, bold=False) -> Text:
+    return Text(text, style="bold green" if bold else "green")
