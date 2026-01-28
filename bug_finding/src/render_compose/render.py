@@ -276,6 +276,10 @@ def _setup_compose_environment(
                 run_config = crs_config_data.get("run", {})
                 crs_data["run_docker_compose"] = run_config.get("docker_compose")
 
+                # Extract build.dockerfiles list if specified
+                build_config = crs_config_data.get("build", {})
+                crs_data["build_dockerfiles"] = build_config.get("dockerfiles", [])
+
                 # Extract CRS-specific config (dependencies, volumes, etc.)
                 if crs_name in crs_config_data:
                     crs_specific = crs_config_data[crs_name]
@@ -301,6 +305,7 @@ def _setup_compose_environment(
                     "dependencies": [],
                     "volumes": [],
                     "run_docker_compose": None,
+                    "build_dockerfiles": [],
                 }
         else:
             logging.warning(
@@ -312,6 +317,7 @@ def _setup_compose_environment(
                 "dependencies": [],
                 "volumes": [],
                 "run_docker_compose": None,
+                "build_dockerfiles": [],
             }
 
     # Check for .env file in config-dir if no explicit env-file was provided

@@ -150,6 +150,86 @@ services:
 {%- for crs in crs_list %}
 
 {%- if mode == 'build' %}
+{%- if crs.build_dockerfiles %}
+  # CRS Builders {{ loop.index }} - {{ crs.name }} (multiple sequential builders)
+{%- for dockerfile in crs.build_dockerfiles %}
+{%- set builder_index = loop.index %}
+{%- set builder_name = dockerfile | replace('.', '_') | replace('/', '_') %}
+  {{ crs.name }}_builder_{{ builder_index }}:
+    image: {{ project }}_{{ crs.name }}_builder_{{ builder_index }}
+{%- if crs.dind and not crs.host_docker_builder %}
+    privileged: true
+{%- endif %}
+    shm_size: 2g
+{%- if builder_index > 1 %}
+    depends_on:
+      {{ crs.name }}_builder_{{ builder_index - 1 }}:
+        condition: service_completed_successfully
+{%- endif %}
+    environment:
+      - SOURCE_WORKDIR={{ source_workdir }}
+{%- if crs.dind %}
+      - PARENT_IMAGE={{ parent_image_prefix }}/{{ project }}
+{%- endif %}
+      - FUZZING_ENGINE={{ engine }}
+      - SANITIZER={{ sanitizer }}
+      - ARCHITECTURE={{ architecture }}
+      - PROJECT_NAME={{ project }}
+      - FUZZING_LANGUAGE={{ project_language }}
+      - HELPER=True
+      - BUILDER_INDEX={{ builder_index }}
+      - BUILDER_DOCKERFILE={{ dockerfile }}
+{%- for key, value in crs.build_env.items() %}
+      - {{ key }}={{ value }}
+{%- endfor %}
+      - CPUSET_CPUS={{ crs.cpuset }}
+      - MEMORY_LIMIT={{ crs.memory_limit | string }}
+{%- if crs.host_docker_builder %}
+      - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+      - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+      - HOST_ARTIFACT_DIR={{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+      - HOST_CRS_DIR={{ crs.path }}
+{%- endif %}
+    build:
+      context: {{ crs.path }}
+      dockerfile: {{ dockerfile }}
+      additional_contexts:
+        project: {{ oss_fuzz_path }}/projects/{{ project }}
+      args:
+        - CRS_TARGET={{ project }}
+        - PROJECT_PATH={{ oss_fuzz_path }}/projects/{{ project }}
+        - parent_image={{ parent_image_prefix }}/{{ project }}
+    volumes:
+      - {{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/out
+      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/work
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}:/artifacts
+{%- if crs.dind and not crs.host_docker_builder %}
+      - {{ build_dir }}/docker-data/{{ crs.name }}/build/{{ project }}/{{ sanitizer }}:/var/lib/docker
+{%- endif %}
+{%- if crs.host_docker_builder %}
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same-path mounts for host docker socket mode - paths match on host and container
+      - {{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}:{{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+      - {{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}:{{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+      - {{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}:{{ build_dir }}/artifacts/{{ crs.name }}/{{ project }}/{{ sanitizer }}
+{%- endif %}
+{%- for vol in crs.volumes %}
+      - {{ vol }}
+{%- endfor %}
+{%- if source_path %}
+      - {{ source_path }}:/local-source-mount
+{%- endif %}
+{%- if crs.cpuset %}
+    cpuset: {{ crs.cpuset }}
+{%- endif %}
+{%- if crs.memory_limit %}
+    deploy:
+      resources:
+        limits:
+          memory: {{ crs.memory_limit }}
+{%- endif %}
+{%- endfor %}
+{%- else %}
   # CRS Builder {{ loop.index }} - {{ crs.name }}
   {{ crs.name }}_builder:
     image: {{ project }}_{{ crs.name }}_builder
@@ -216,6 +296,7 @@ services:
       resources:
         limits:
           memory: {{ crs.memory_limit }}
+{%- endif %}
 {%- endif %}
 {%- endif %}
 
