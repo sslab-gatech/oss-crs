@@ -23,6 +23,61 @@ def get_user_cgroup_base() -> Path:
     return Path(f"/sys/fs/cgroup/user.slice/user-{uid}.slice/user@{uid}.service/oss-crs")
 
 
+def ensure_controllers_enabled(cgroup_path: Path, controllers: list[str]) -> None:
+    """Enable controllers in cgroup.subtree_control if not already enabled.
+
+    Args:
+        cgroup_path: Path to cgroup directory
+        controllers: List of controller names (e.g., ["cpuset", "memory"])
+
+    Raises:
+        OSError: If unable to write to subtree_control
+    """
+    subtree_control = cgroup_path / "cgroup.subtree_control"
+
+    # Read current enabled controllers
+    try:
+        current = set(subtree_control.read_text().strip().split())
+    except FileNotFoundError:
+        current = set()
+
+    # Determine what needs to be added
+    to_add = set(controllers) - current
+    if not to_add:
+        return
+
+    # Enable missing controllers
+    add_str = " ".join(f"+{c}" for c in sorted(to_add))
+    subtree_control.write_text(add_str)
+    logger.info(f"Enabled controllers {to_add} in {subtree_control}")
+
+
+def setup_cgroup_hierarchy(base_path: Path) -> None:
+    """Set up cgroup hierarchy with required controllers.
+
+    Creates oss-crs directory and enables cpuset+memory controllers at:
+    1. user@<uid>.service level (parent of oss-crs)
+    2. oss-crs level (for worker cgroups)
+
+    Args:
+        base_path: Path to oss-crs directory
+
+    Raises:
+        OSError: If setup fails
+    """
+    required_controllers = ["cpuset", "memory"]
+
+    # Enable controllers at user@<uid>.service level
+    parent_path = base_path.parent  # user@<uid>.service
+    ensure_controllers_enabled(parent_path, required_controllers)
+
+    # Create oss-crs directory
+    base_path.mkdir(parents=True, exist_ok=True)
+
+    # Enable controllers at oss-crs level
+    ensure_controllers_enabled(base_path, required_controllers)
+
+
 def check_cgroup_delegation(base_path: Path) -> tuple[bool, list[str]]:
     """Verify that required cgroup controllers are delegated.
 

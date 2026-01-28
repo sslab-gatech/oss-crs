@@ -13,12 +13,12 @@ from typing import Any
 import yaml
 
 from bug_finding.src.cgroup import (
-    check_cgroup_delegation,
     cleanup_cgroup,
     create_crs_cgroups,
     format_setup_instructions,
     generate_cgroup_name,
     get_user_cgroup_base,
+    setup_cgroup_hierarchy,
 )
 from bug_finding.src.render_compose import render as render_compose
 from bug_finding.src.crs_utils import (
@@ -297,16 +297,16 @@ def build_crs(
     # Build project image
     _build_project_image(project_name, oss_fuzz_dir, architecture, no_cache=no_cache)
 
-    # Validate cgroup setup if enabled (but don't create yet - need crs_list first)
+    # Set up cgroup hierarchy if enabled (but don't create worker cgroup yet - need crs_list first)
     cgroup_config = None
     if cgroup_parent:
         base_path = get_user_cgroup_base()
 
-        # Validate cgroup delegation
-        is_valid, missing = check_cgroup_delegation(base_path)
-        if not is_valid:
-            logger.error("Cgroup v2 base path not found or controllers not delegated")
-            logger.error("Missing controllers: %s", ", ".join(missing))
+        # Set up cgroup hierarchy (auto-enable controllers)
+        try:
+            setup_cgroup_hierarchy(base_path)
+        except OSError as e:
+            logger.error(f"Failed to set up cgroup hierarchy: {e}")
             logger.error(format_setup_instructions(base_path))
             return False
 
