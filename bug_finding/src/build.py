@@ -200,7 +200,7 @@ def build_crs(
     no_cache: bool = False,
     run_id: str | None = None,
     *,
-    cgroup_parent: bool = False,
+    cgroup_parent: str | None = None,
 ) -> bool:
     """
     Build CRS for a project using docker compose.
@@ -226,7 +226,7 @@ def build_crs(
         skip_oss_fuzz_clone: Skip cloning oss-fuzz (default: False)
         prepare_images: Auto-prepare CRS if bake images are missing (default: True)
         run_id: Custom run ID for Docker Compose project naming (default: random)
-        cgroup_parent: Use cgroup-parent for resource management (default: False)
+        cgroup_parent: Cgroup parent path. Empty string to auto-generate, path to use custom (default: None)
 
     Returns:
         bool: True if successful, False otherwise
@@ -301,7 +301,7 @@ def build_crs(
 
     # Set up cgroup hierarchy if enabled (but don't create worker cgroup yet - need crs_list first)
     cgroup_config = None
-    if cgroup_parent:
+    if cgroup_parent is not None:
         # Check Docker cgroup driver
         is_cgroupfs, driver = check_docker_cgroup_driver()
         if not is_cgroupfs:
@@ -309,26 +309,39 @@ def build_crs(
             logger.error(format_docker_cgroup_driver_instructions())
             return False
 
-        base_path = get_user_cgroup_base()
+        if cgroup_parent == "":
+            # Auto-generate mode: create cgroup under user service
+            base_path = get_user_cgroup_base()
 
-        # Set up cgroup hierarchy (auto-enable controllers)
-        try:
-            setup_cgroup_hierarchy(base_path)
-        except OSError as e:
-            logger.error(f"Failed to set up cgroup hierarchy: {e}")
-            logger.error(format_setup_instructions(base_path))
-            return False
+            # Set up cgroup hierarchy (auto-enable controllers)
+            try:
+                setup_cgroup_hierarchy(base_path)
+            except OSError as e:
+                logger.error(f"Failed to set up cgroup hierarchy: {e}")
+                logger.error(format_setup_instructions(base_path))
+                return False
 
-        # Generate unique cgroup name
-        build_run_id_for_cgroup = run_id if run_id else generate_run_id()
-        cgroup_name = generate_cgroup_name(build_run_id_for_cgroup, "build", "local")
+            # Generate unique cgroup name
+            build_run_id_for_cgroup = run_id if run_id else generate_run_id()
+            cgroup_name = generate_cgroup_name(build_run_id_for_cgroup, "build", "local")
 
-        # Store config for cgroup creation after we get crs_list
-        # Note: worker resources will be computed from crs_list
-        cgroup_config = {
-            "base_path": base_path,
-            "cgroup_name": cgroup_name,
-        }
+            # Store config for cgroup creation after we get crs_list
+            # Note: worker resources will be computed from crs_list
+            cgroup_config = {
+                "base_path": base_path,
+                "cgroup_name": cgroup_name,
+                "mode": "auto",
+            }
+        else:
+            # User-provided path mode: use the path directly
+            from pathlib import Path as PathlibPath
+
+            user_path = PathlibPath(cgroup_parent)
+            # Store for later use - we'll apply cgroup_path_for_docker when rendering
+            cgroup_config = {
+                "user_path": user_path,
+                "mode": "manual",
+            }
 
     # Generate compose files using render_compose module
     # Note: cgroup_parent_path will be set after cgroup creation
@@ -362,21 +375,30 @@ def build_crs(
 
     # Create cgroups now that we have crs_list
     cgroup_path = None
+    final_cgroup_parent_path = None
     if cgroup_config:
         try:
-            from bug_finding.src.cgroup import compute_cgroup_resources_from_crs_list
+            if cgroup_config["mode"] == "auto":
+                # Auto-generate mode: create cgroups
+                from bug_finding.src.cgroup import compute_cgroup_resources_from_crs_list
 
-            # Compute parent cgroup resources as union of all CRS resources
-            worker_cpuset, worker_memory_mb = compute_cgroup_resources_from_crs_list(crs_list)
+                # Compute parent cgroup resources as union of all CRS resources
+                worker_cpuset, worker_memory_mb = compute_cgroup_resources_from_crs_list(crs_list)
 
-            cgroup_path = create_crs_cgroups(
-                base_path=cgroup_config["base_path"],
-                worker_cgroup_name=cgroup_config["cgroup_name"],
-                worker_cpuset=worker_cpuset,
-                worker_memory_mb=worker_memory_mb,
-                crs_list=crs_list,
-            )
-            logger.info(f"Created worker cgroup with per-CRS sub-cgroups: {cgroup_path}")
+                cgroup_path = create_crs_cgroups(
+                    base_path=cgroup_config["base_path"],
+                    worker_cgroup_name=cgroup_config["cgroup_name"],
+                    worker_cpuset=worker_cpuset,
+                    worker_memory_mb=worker_memory_mb,
+                    crs_list=crs_list,
+                )
+                logger.info(f"Created worker cgroup with per-CRS sub-cgroups: {cgroup_path}")
+                final_cgroup_parent_path = cgroup_path_for_docker(cgroup_path)
+            else:
+                # Manual mode: use user-provided path
+                user_path = cgroup_config["user_path"]
+                final_cgroup_parent_path = cgroup_path_for_docker(user_path)
+                logger.info(f"Using user-provided cgroup parent: {final_cgroup_parent_path}")
 
             # Re-render compose file with cgroup_parent_path
             build_services, crs_build_dir, crs_list = (
@@ -393,12 +415,12 @@ def build_crs(
                     source_path=source_path,
                     project_image_prefix=project_image_prefix,
                     external_litellm=external_litellm,
-                    cgroup_parent_path=cgroup_path_for_docker(cgroup_path),
+                    cgroup_parent_path=final_cgroup_parent_path,
                     run_id=build_run_id,
                 )
             )
         except OSError as e:
-            logger.error(f"Failed to create cgroups: {e}")
+            logger.error(f"Failed to set up cgroups: {e}")
             return False
 
     # Auto-prepare CRS if docker-bake.hcl exists and images are missing

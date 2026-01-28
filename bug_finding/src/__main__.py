@@ -172,8 +172,12 @@ def main() -> int:
     )
     build_parser.add_argument(
         "--cgroup-parent",
-        action="store_true",
-        help="Use cgroup-parent for resource management (experimental, requires cgroup v2)",
+        nargs="?",
+        const="",  # value when flag is present without argument (auto-generate)
+        default=None,  # value when flag is not present
+        metavar="PATH",
+        help="Use cgroup-parent for resource management. Without value: auto-generate. "
+        "With value: use provided path (with or without /sys/fs/cgroup prefix)",
     )
 
     # run_crs subcommand
@@ -277,8 +281,12 @@ def main() -> int:
     )
     run_parser.add_argument(
         "--cgroup-parent",
-        action="store_true",
-        help="Use cgroup-parent for resource management (experimental, requires cgroup v2)",
+        nargs="?",
+        const="",  # value when flag is present without argument (auto-generate)
+        default=None,  # value when flag is not present
+        metavar="PATH",
+        help="Use cgroup-parent for resource management. Without value: auto-generate. "
+        "With value: use provided path (with or without /sys/fs/cgroup prefix)",
     )
 
     args = parser.parse_args()
