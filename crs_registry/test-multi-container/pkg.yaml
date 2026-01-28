@@ -1,0 +1,5 @@
+name: test-multi-container
+type: bug-finding
+source:
+  url: https://github.com/Team-Atlanta/crs-libfuzzer
+  ref: runner-compose

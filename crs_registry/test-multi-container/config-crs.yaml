@@ -1,0 +1,9 @@
+build:
+  dockerfiles:
+    - builder.Dockerfile.default
+    - builder.Dockerfile.coverage
+
+run:
+  docker_compose: docker-compose.yaml
+
+test-multi-container: []
