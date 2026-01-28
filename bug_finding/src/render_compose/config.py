@@ -373,6 +373,12 @@ def get_crs_for_worker(
         crs_run_env = crs_pkg.get("run_env", {})
         crs_build_env = crs_pkg.get("build_env", {})
 
+        # Get run.docker_compose path if specified
+        crs_run_docker_compose = crs_pkg.get("run_docker_compose")
+
+        # Get build.dockerfiles list if specified
+        crs_build_dockerfiles = crs_pkg.get("build_dockerfiles", [])
+
         result.append(
             {
                 "name": crs_name,
@@ -385,6 +391,8 @@ def get_crs_for_worker(
                 "volumes": crs_volumes,
                 "run_env": crs_run_env,
                 "build_env": crs_build_env,
+                "run_docker_compose": crs_run_docker_compose,
+                "build_dockerfiles": crs_build_dockerfiles,
             }
         )
 
@@ -450,6 +458,12 @@ def get_crs_for_worker(
             crs_run_env = crs_pkg.get("run_env", {})
             crs_build_env = crs_pkg.get("build_env", {})
 
+            # Get run.docker_compose path if specified
+            crs_run_docker_compose = crs_pkg.get("run_docker_compose")
+
+            # Get build.dockerfiles list if specified
+            crs_build_dockerfiles = crs_pkg.get("build_dockerfiles", [])
+
             result.append(
                 {
                     "name": crs_name,
@@ -462,6 +476,8 @@ def get_crs_for_worker(
                     "volumes": crs_volumes,
                     "run_env": crs_run_env,
                     "build_env": crs_build_env,
+                    "run_docker_compose": crs_run_docker_compose,
+                    "build_dockerfiles": crs_build_dockerfiles,
                 }
             )
 

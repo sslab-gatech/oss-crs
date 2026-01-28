@@ -6,4 +6,4 @@ build:
 run:
   docker_compose: docker-compose.yaml
 
-crs-libfuzzer: []
+test-multi-container: []

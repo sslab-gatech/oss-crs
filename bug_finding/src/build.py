@@ -167,6 +167,227 @@ def _clone_project_source(
         return False
 
 
+def build_crs_with_docker_run(
+    crs_name: str,
+    crs_path: Path,
+    crs_config: dict[str, Any],
+    project_name: str,
+    build_dir: Path,
+    oss_fuzz_dir: Path,
+    parent_image: str,
+    sanitizer: str = "address",
+    engine: str = "libfuzzer",
+    architecture: str = "x86_64",
+    source_path: Path | None = None,
+    no_cache: bool = False,
+) -> bool:
+    """
+    Build CRS using docker run instead of compose.
+
+    This is used when build.dockerfiles is specified in config-crs.yaml.
+    Each Dockerfile is built and run sequentially.
+
+    Args:
+        crs_name: Name of the CRS
+        crs_path: Path to CRS repository
+        crs_config: CRS configuration dict with build_dockerfiles list
+        project_name: Name of the OSS-Fuzz project
+        build_dir: Path to build directory
+        oss_fuzz_dir: Path to OSS-Fuzz directory
+        parent_image: Parent image for builders (e.g., gcr.io/oss-fuzz/project)
+        sanitizer: Sanitizer (default: address)
+        engine: Fuzzing engine (default: libfuzzer)
+        architecture: Architecture (default: x86_64)
+        source_path: Optional path to local source
+        no_cache: Disable Docker build cache
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    build_dockerfiles = crs_config.get("build_dockerfiles", [])
+    if not build_dockerfiles:
+        logger.warning(f"No build.dockerfiles specified for CRS '{crs_name}'")
+        return True
+
+    # Get resource limits from CRS config
+    cpuset = crs_config.get("cpuset", "0")
+    memory_limit = crs_config.get("memory_limit", "8G")
+    dind = crs_config.get("dind", False)
+    host_docker_builder = crs_config.get("host_docker_builder", False)
+
+    # Build environment variables
+    build_env = crs_config.get("build_env", {})
+
+    # Create output directories
+    out_dir = build_dir / "out" / crs_name / project_name / sanitizer
+    work_dir = build_dir / "work" / crs_name / project_name / sanitizer
+    artifacts_dir = build_dir / "artifacts" / crs_name / project_name / sanitizer
+    out_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get project language
+    project_yaml = oss_fuzz_dir / "projects" / project_name / "project.yaml"
+    project_language = "c++"
+    if project_yaml.exists():
+        try:
+            with open(project_yaml) as f:
+                project_config = yaml.safe_load(f) or {}
+            project_language = project_config.get("language", "c++")
+        except Exception:
+            pass
+
+    logger.info(
+        f"Building CRS '{crs_name}' with {len(build_dockerfiles)} sequential builders"
+    )
+
+    for idx, dockerfile in enumerate(build_dockerfiles, 1):
+        image_name = f"{project_name}_{crs_name}_builder_{idx}"
+        dockerfile_path = crs_path / dockerfile
+
+        if not dockerfile_path.exists():
+            logger.error(f"Dockerfile not found: {dockerfile_path}")
+            return False
+
+        logger.info(f"[{idx}/{len(build_dockerfiles)}] Building image: {image_name}")
+
+        # Build the image
+        build_cmd = [
+            "docker", "build",
+            "-t", image_name,
+            "-f", str(dockerfile_path),
+            "--build-arg", f"parent_image={parent_image}",
+            "--build-arg", f"CRS_TARGET={project_name}",
+            "--build-arg", f"PROJECT_PATH={oss_fuzz_dir}/projects/{project_name}",
+        ]
+        if no_cache:
+            build_cmd.append("--no-cache")
+        build_cmd.append(str(crs_path))
+
+        try:
+            subprocess.check_call(build_cmd, stdin=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            logger.error(f"Failed to build image: {image_name}")
+            return False
+
+        logger.info(f"[{idx}/{len(build_dockerfiles)}] Running builder: {image_name}")
+
+        # Build docker run command
+        run_cmd = [
+            "docker", "run", "--rm",
+            "-v", f"{out_dir}:/out",
+            "-v", f"{work_dir}:/work",
+            "-v", f"{artifacts_dir}:/artifacts",
+            "-e", f"SANITIZER={sanitizer}",
+            "-e", f"FUZZING_ENGINE={engine}",
+            "-e", f"ARCHITECTURE={architecture}",
+            "-e", f"PROJECT_NAME={project_name}",
+            "-e", f"FUZZING_LANGUAGE={project_language}",
+            "-e", f"HELPER=True",
+            "-e", f"BUILDER_INDEX={idx}",
+            "-e", f"BUILDER_DOCKERFILE={dockerfile}",
+            "-e", f"CPUSET_CPUS={cpuset}",
+            "-e", f"MEMORY_LIMIT={memory_limit}",
+            "--cpuset-cpus", cpuset,
+            "--memory", memory_limit,
+            "--shm-size", "2g",
+        ]
+
+        # Add custom build env vars
+        for key, value in build_env.items():
+            run_cmd.extend(["-e", f"{key}={value}"])
+
+        # Handle dind mode
+        if dind and not host_docker_builder:
+            run_cmd.append("--privileged")
+            docker_data_dir = build_dir / "docker-data" / crs_name / "build" / project_name / sanitizer
+            docker_data_dir.mkdir(parents=True, exist_ok=True)
+            run_cmd.extend(["-v", f"{docker_data_dir}:/var/lib/docker"])
+            run_cmd.extend(["-e", f"PARENT_IMAGE={parent_image}"])
+
+        # Handle host_docker_builder mode
+        if host_docker_builder:
+            run_cmd.extend(["-v", "/var/run/docker.sock:/var/run/docker.sock"])
+            run_cmd.extend(["-e", f"HOST_WORK_DIR={work_dir}"])
+            run_cmd.extend(["-e", f"HOST_OUT_DIR={out_dir}"])
+            run_cmd.extend(["-e", f"HOST_ARTIFACT_DIR={artifacts_dir}"])
+            run_cmd.extend(["-e", f"HOST_CRS_DIR={crs_path}"])
+            # Same-path mounts for host docker mode
+            run_cmd.extend(["-v", f"{out_dir}:{out_dir}"])
+            run_cmd.extend(["-v", f"{work_dir}:{work_dir}"])
+            run_cmd.extend(["-v", f"{artifacts_dir}:{artifacts_dir}"])
+
+        # If source_path provided, copy source into image before running build
+        if source_path:
+            logger.info(f"[{idx}/{len(build_dockerfiles)}] Copying source to image: {image_name}")
+
+            # Generate unique container name for docker commit
+            container_name = f"crs-source-copy-{uuid.uuid4().hex}"
+
+            # Run container to copy source from /local-source-mount to workdir
+            copy_cmd = [
+                "docker", "run",
+                "--name", container_name,
+                "-v", f"{source_path}:/local-source-mount:ro",
+                image_name,
+                "/bin/bash", "-c",
+                'workdir=$(pwd) && cd / && rm -rf "$workdir" && cp -r /local-source-mount "$workdir"',
+            ]
+            try:
+                subprocess.check_call(copy_cmd, stdin=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                logger.error(f"Failed to copy source for builder: {image_name}")
+                # Clean up container
+                subprocess.run(["docker", "rm", container_name], stdin=subprocess.DEVNULL)
+                return False
+
+            # Get original CMD and ENTRYPOINT to preserve them
+            cmd_inspect = subprocess.run(
+                ["docker", "inspect", image_name, "--format", "{{json .Config.Cmd}}"],
+                capture_output=True, text=True, check=True,
+            )
+            original_cmd = cmd_inspect.stdout.strip()
+
+            entrypoint_inspect = subprocess.run(
+                ["docker", "inspect", image_name, "--format", "{{json .Config.Entrypoint}}"],
+                capture_output=True, text=True, check=True,
+            )
+            original_entrypoint = entrypoint_inspect.stdout.strip()
+
+            # Commit container with source baked in
+            commit_cmd = ["docker", "commit"]
+            if original_cmd and original_cmd != "null":
+                commit_cmd.extend(["--change", f"CMD {original_cmd}"])
+            if original_entrypoint and original_entrypoint != "null":
+                commit_cmd.extend(["--change", f"ENTRYPOINT {original_entrypoint}"])
+            commit_cmd.extend([container_name, image_name])
+
+            try:
+                subprocess.check_call(commit_cmd, stdin=subprocess.DEVNULL)
+            except subprocess.CalledProcessError:
+                logger.error(f"Failed to commit source copy for: {image_name}")
+                subprocess.run(["docker", "rm", container_name], stdin=subprocess.DEVNULL)
+                return False
+
+            # Clean up container
+            subprocess.run(["docker", "rm", container_name], stdin=subprocess.DEVNULL)
+            logger.info(f"[{idx}/{len(build_dockerfiles)}] Source copied to image: {image_name}")
+
+        # Add the image name
+        run_cmd.append(image_name)
+
+        try:
+            subprocess.check_call(run_cmd, stdin=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            logger.error(f"Failed to run builder: {image_name}")
+            return False
+
+        logger.info(f"[{idx}/{len(build_dockerfiles)}] Completed: {dockerfile}")
+
+    logger.info(f"All {len(build_dockerfiles)} builders completed for CRS '{crs_name}'")
+    return True
+
+
 def build_crs(
     config_dir: Path,
     project_name: str,
@@ -356,12 +577,52 @@ def build_crs(
     ):
         return False
 
-    if not build_services:
-        logger.error("No build services found")
-        return False
+    # Separate CRS that use docker run (build_dockerfiles) from compose-based
+    docker_run_crs = [crs for crs in crs_list if crs.get("build_dockerfiles")]
+    compose_crs = [crs for crs in crs_list if not crs.get("build_dockerfiles")]
+
+    # Build CRS using docker run for those with build_dockerfiles
+    parent_image = f"{project_image_prefix}/{project_name}"
+    for crs in docker_run_crs:
+        crs_name = crs["name"]
+        crs_path = Path(crs["path"])
+        logger.info(f"Building CRS '{crs_name}' using docker run (build.dockerfiles)")
+        if not build_crs_with_docker_run(
+            crs_name=crs_name,
+            crs_path=crs_path,
+            crs_config=crs,
+            project_name=project_name,
+            build_dir=build_dir,
+            oss_fuzz_dir=oss_fuzz_dir,
+            parent_image=parent_image,
+            sanitizer=sanitizer,
+            engine=engine,
+            architecture=architecture,
+            source_path=source_path,
+            no_cache=no_cache,
+        ):
+            logger.error(f"Failed to build CRS '{crs_name}' with docker run")
+            return False
+
+    # Filter build_services to only include compose-based CRS
+    compose_crs_names = {crs["name"] for crs in compose_crs}
+    compose_build_services = [
+        svc for svc in build_services
+        if any(svc.startswith(name) for name in compose_crs_names)
+    ]
+
+    # If all CRS use docker run, we're done with building
+    if not compose_build_services:
+        if docker_run_crs:
+            logger.info("All CRS builds completed successfully (using docker run)")
+            fix_build_dir_permissions(build_dir)
+            return True
+        else:
+            logger.error("No build services found")
+            return False
 
     logger.info(
-        "Found %d build services: %s", len(build_services), ", ".join(build_services)
+        "Found %d compose build services: %s", len(compose_build_services), ", ".join(compose_build_services)
     )
 
     # Look for compose files in the hash directory
@@ -378,9 +639,9 @@ def build_crs(
     # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services
     # LiteLLM is only started during run phase
 
-    # Run docker compose run for each build service
+    # Run docker compose run for each compose-based build service
     try:
-        for service in build_services:
+        for service in compose_build_services:
             logger.info("Building service: %s", service)
 
             try:
