@@ -108,6 +108,9 @@ services:
 {%- if cgroup_parent %}
       - CGROUP_PARENT={{ cgroup_parent }}/{{ crs.name }}
 {%- endif %}
+{%- if run_id %}
+      - RUN_ID={{ run_id }}
+{%- endif %}
 {%- if crs.host_docker_builder %}
       - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
@@ -186,6 +189,9 @@ services:
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
 {%- if cgroup_parent %}
       - CGROUP_PARENT={{ cgroup_parent }}/{{ crs.name }}
+{%- endif %}
+{%- if run_id %}
+      - RUN_ID={{ run_id }}
 {%- endif %}
       - CRS_TARGET={{ project }}
       - CRS_NAME={{ crs.name }}
