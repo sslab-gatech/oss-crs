@@ -13,7 +13,6 @@ from pathlib import Path
 from bug_finding.src.cgroup import (
     cgroup_path_for_docker,
     check_docker_cgroup_driver,
-    cleanup_cgroup,
     create_crs_cgroups,
     format_docker_cgroup_driver_instructions,
     format_setup_instructions,
@@ -323,10 +322,12 @@ def run_crs(
         subprocess.run(compose_down_cmd, stdin=subprocess.DEVNULL)
         fix_build_dir_permissions(build_dir)
 
-        # Clean up cgroup if created
-        if cgroup_path:
-            logger.info("Cleaning up cgroup: %s", cgroup_path)
-            cleanup_cgroup(cgroup_path)
+        # TODO: Cgroup cleanup fails with "Device or resource busy" error
+        # Docker containers may still hold references to the cgroup after exit.
+        # Disabled for now - system will clean up when cgroup becomes empty.
+        # if cgroup_path:
+        #     logger.info("Cleaning up cgroup: %s", cgroup_path)
+        #     cleanup_cgroup(cgroup_path)
 
     def signal_handler(signum, frame):
         """Handle termination signals (first signal cleans up, subsequent ignored)."""
