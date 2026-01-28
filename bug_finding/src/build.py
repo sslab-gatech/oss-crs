@@ -333,6 +333,10 @@ def build_crs(
     # Generate compose files using render_compose module
     # Note: cgroup_parent_path will be set after cgroup creation
     logger.info("Generating compose-build.yaml")
+
+    # Generate run_id for this build (use provided or generate random)
+    build_run_id = run_id if run_id else generate_run_id()
+
     try:
         build_services, crs_build_dir, crs_list = (
             render_compose.render_build_compose(
@@ -349,6 +353,7 @@ def build_crs(
                 project_image_prefix=project_image_prefix,
                 external_litellm=external_litellm,
                 cgroup_parent_path=None,  # Will be set after cgroup creation
+                run_id=build_run_id,
             )
         )
     except Exception as e:
@@ -389,6 +394,7 @@ def build_crs(
                     project_image_prefix=project_image_prefix,
                     external_litellm=external_litellm,
                     cgroup_parent_path=cgroup_path_for_docker(cgroup_path),
+                    run_id=build_run_id,
                 )
             )
         except OSError as e:
@@ -457,8 +463,7 @@ def build_crs(
         logger.error("compose-build.yaml was not generated at: %s", compose_file)
         return False
 
-    # Project name for build compose (use provided run_id or generate random)
-    build_run_id = run_id if run_id else generate_run_id()
+    # Project name for build compose (use run_id from earlier)
     build_project = f"crs-build-{build_run_id}"
 
     # Note: LiteLLM is NOT needed during build - builder doesn't use LLM services

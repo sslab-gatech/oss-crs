@@ -385,6 +385,7 @@ def render_build_compose(
     project_image_prefix: str = "gcr.io/oss-fuzz",
     external_litellm: bool = False,
     cgroup_parent_path: str | None = None,
+    run_id: str | None = None,
 ) -> tuple[list[str], Path, list[dict[str, Any]]]:
     """
     Programmatic interface for build mode.
@@ -442,6 +443,7 @@ def render_build_compose(
         project_image_prefix=project_image_prefix,
         external_litellm=external_litellm,
         cgroup_parent_path=cgroup_parent_path,
+        run_id=run_id,
     )
 
     output_file = output_dir / "compose-build.yaml"
