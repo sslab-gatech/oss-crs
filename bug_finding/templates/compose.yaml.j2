@@ -30,6 +30,9 @@
       - CRS_TARGET={{ project }}
       - CRS_NAME={{ crs.name }}
       - SOURCE_WORKDIR={{ source_workdir }}
+{%- if harness_name %}
+      - HARNESS_NAME={{ harness_name }}
+{%- endif %}
 {%- for key, value in crs.run_env.items() %}
       - {{ key }}={{ value }}
 {%- endfor %}
@@ -221,7 +224,9 @@ services:
   # CRS {{ loop.index }} - {{ crs.name }} (imported from docker-compose)
 {%- for svc in crs.compose_services %}
   {{ crs.name }}_{{ svc.name }}:
-{%- if svc.config.image %}
+{%- if svc.config.build %}
+    image: {{ crs.name }}_{{ svc.name }}
+{%- elif svc.config.image %}
     image: {{ svc.config.image }}
 {%- endif %}
 {%- if svc.config.build %}
