@@ -141,7 +141,7 @@ services:
       - {{ source_path }}:/local-source-mount
 {%- endif %}
 {%- if cgroup_parent %}
-    cgroup_parent: {{ cgroup_parent }}
+    cgroup_parent: {{ cgroup_parent }}/{{ crs.name }}
 {%- else %}
 {%- if crs.cpuset %}
     cpuset: {{ crs.cpuset }}
@@ -232,7 +232,7 @@ services:
       - {{ ensemble_dir }}/corpus:/seed_share_dir:ro
 {%- endif %}
 {%- if cgroup_parent %}
-    cgroup_parent: {{ cgroup_parent }}
+    cgroup_parent: {{ cgroup_parent }}/{{ crs.name }}
 {%- else %}
     cpuset: {{ crs.cpuset }}
     deploy:

@@ -15,7 +15,7 @@ import yaml
 from bug_finding.src.cgroup import (
     check_cgroup_delegation,
     cleanup_cgroup,
-    create_cgroup,
+    create_crs_cgroups,
     format_setup_instructions,
     generate_cgroup_name,
     get_user_cgroup_base,
@@ -297,8 +297,8 @@ def build_crs(
     # Build project image
     _build_project_image(project_name, oss_fuzz_dir, architecture, no_cache=no_cache)
 
-    # Set up cgroup if enabled
-    cgroup_path = None
+    # Validate cgroup setup if enabled (but don't create yet - need crs_list first)
+    cgroup_config = None
     if cgroup_parent:
         base_path = get_user_cgroup_base()
 
@@ -314,19 +314,15 @@ def build_crs(
         build_run_id_for_cgroup = run_id if run_id else generate_run_id()
         cgroup_name = generate_cgroup_name(build_run_id_for_cgroup, "build", "local")
 
-        # TODO: Get cpuset and memory from config
-        # For now, use placeholder values
-        cpuset = "0-15"
-        memory_bytes = 16 * 1024 * 1024 * 1024  # 16GB
-
-        try:
-            cgroup_path = create_cgroup(base_path, cgroup_name, cpuset, memory_bytes)
-            logger.info(f"Created cgroup: {cgroup_path}")
-        except OSError as e:
-            logger.error(f"Failed to create cgroup: {e}")
-            return False
+        # Store config for cgroup creation after we get crs_list
+        # Note: worker resources will be computed from crs_list
+        cgroup_config = {
+            "base_path": base_path,
+            "cgroup_name": cgroup_name,
+        }
 
     # Generate compose files using render_compose module
+    # Note: cgroup_parent_path will be set after cgroup creation
     logger.info("Generating compose-build.yaml")
     try:
         build_services, crs_build_dir, crs_list = (
@@ -343,12 +339,52 @@ def build_crs(
                 source_path=source_path,
                 project_image_prefix=project_image_prefix,
                 external_litellm=external_litellm,
-                cgroup_parent_path=str(cgroup_path) if cgroup_path else None,
+                cgroup_parent_path=None,  # Will be set after cgroup creation
             )
         )
     except Exception as e:
         logger.error("Failed to generate compose files: %s", e)
         return False
+
+    # Create cgroups now that we have crs_list
+    cgroup_path = None
+    if cgroup_config:
+        try:
+            from bug_finding.src.cgroup import compute_cgroup_resources_from_crs_list
+
+            # Compute parent cgroup resources as union of all CRS resources
+            worker_cpuset, worker_memory_mb = compute_cgroup_resources_from_crs_list(crs_list)
+
+            cgroup_path = create_crs_cgroups(
+                base_path=cgroup_config["base_path"],
+                worker_cgroup_name=cgroup_config["cgroup_name"],
+                worker_cpuset=worker_cpuset,
+                worker_memory_mb=worker_memory_mb,
+                crs_list=crs_list,
+            )
+            logger.info(f"Created worker cgroup with per-CRS sub-cgroups: {cgroup_path}")
+
+            # Re-render compose file with cgroup_parent_path
+            build_services, crs_build_dir, crs_list = (
+                render_compose.render_build_compose(
+                    config_dir=config_dir,
+                    build_dir=build_dir,
+                    clone_dir=clone_dir,
+                    oss_fuzz_dir=oss_fuzz_dir,
+                    project=project_name,
+                    engine=engine,
+                    sanitizer=sanitizer,
+                    architecture=architecture,
+                    registry_dir=registry_dir,
+                    source_path=source_path,
+                    project_image_prefix=project_image_prefix,
+                    external_litellm=external_litellm,
+                    cgroup_parent_path=str(cgroup_path),
+                )
+            )
+        except OSError as e:
+            logger.error(f"Failed to create cgroups: {e}")
+            return False
 
     # Auto-prepare CRS if docker-bake.hcl exists and images are missing
     # or if dind CRS has no prepared docker-data

@@ -4,10 +4,13 @@ This module provides functions to create and manage cgroup v2 hierarchies
 for Docker container resource management using cgroup-parent.
 """
 
+import logging
 import os
 import secrets
 import time
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def get_user_cgroup_base() -> Path:
@@ -127,6 +130,110 @@ def generate_cgroup_name(run_id: str, phase: str, worker: str) -> str:
     # Sanitize worker name (replace special chars with dash)
     safe_worker = "".join(c if c.isalnum() else "-" for c in worker)
     return f"{run_id}-{phase}-{timestamp}-{random_suffix}-{safe_worker}"
+
+
+def compute_cgroup_resources_from_crs_list(crs_list: list[dict]) -> tuple[str, int]:
+    """Compute parent cgroup resources as union of all CRS resources.
+
+    Args:
+        crs_list: List of CRS dicts with 'cpuset' and 'memory_limit'
+
+    Returns:
+        Tuple of (cpuset_str, total_memory_mb)
+    """
+    from bug_finding.src.render_compose.config import (
+        format_cpu_list,
+        parse_cpu_range,
+        parse_memory_mb,
+    )
+
+    all_cpus = set()
+    total_memory_mb = 0
+    for crs in crs_list:
+        cpus = parse_cpu_range(crs["cpuset"])
+        all_cpus.update(cpus)
+        total_memory_mb += parse_memory_mb(crs["memory_limit"])
+
+    return format_cpu_list(sorted(all_cpus)), total_memory_mb
+
+
+def create_crs_cgroups(
+    base_path: Path,
+    worker_cgroup_name: str,
+    worker_cpuset: str,
+    worker_memory_mb: int,
+    crs_list: list[dict],
+) -> Path:
+    """Create worker cgroup with per-CRS sub-cgroups.
+
+    Creates a two-level hierarchy:
+    1. Worker cgroup with total resources for all CRS combined
+    2. Per-CRS sub-cgroups with individual CRS resource limits
+
+    Args:
+        base_path: Base cgroup directory (e.g., /sys/fs/cgroup/.../oss-crs)
+        worker_cgroup_name: Worker cgroup name (e.g., <run_id>-<phase>-<worker>)
+        worker_cpuset: Total cpuset for worker (e.g., "0-15")
+        worker_memory_mb: Total memory for worker in MB
+        crs_list: List of CRS dicts with 'name', 'cpuset', 'memory_limit'
+
+    Returns:
+        Path to worker cgroup (sub-cgroups are <path>/<crs_name>)
+
+    Raises:
+        OSError: If cgroup creation or configuration fails
+    """
+    # Import parse_memory_mb from render_compose.config
+    from bug_finding.src.render_compose.config import parse_memory_mb
+
+    # Create worker cgroup with total resources
+    worker_cgroup_path = base_path / worker_cgroup_name
+    worker_cgroup_path.mkdir(parents=True, exist_ok=True)
+
+    # Set worker-level cpuset and memory
+    worker_cpuset_file = worker_cgroup_path / "cpuset.cpus"
+    worker_cpuset_file.write_text(worker_cpuset)
+
+    worker_memory_bytes = worker_memory_mb * 1024 * 1024
+    worker_memory_file = worker_cgroup_path / "memory.max"
+    worker_memory_file.write_text(str(worker_memory_bytes))
+
+    logger.info(
+        f"Created worker cgroup: {worker_cgroup_path} "
+        f"(cpuset={worker_cpuset}, memory={worker_memory_mb}MB)"
+    )
+
+    # Enable controllers for sub-cgroups
+    subtree_control = worker_cgroup_path / "cgroup.subtree_control"
+    subtree_control.write_text("+cpuset +memory")
+
+    # Create per-CRS sub-cgroups
+    for crs in crs_list:
+        crs_name = crs["name"]
+        crs_cpuset = crs["cpuset"]
+        crs_memory_limit = crs["memory_limit"]  # e.g., "4G" or "512M"
+
+        # Parse memory limit to MB, then to bytes
+        crs_memory_mb = parse_memory_mb(crs_memory_limit)
+        crs_memory_bytes = crs_memory_mb * 1024 * 1024
+
+        # Create CRS sub-cgroup
+        crs_cgroup_path = worker_cgroup_path / crs_name
+        crs_cgroup_path.mkdir(parents=True, exist_ok=True)
+
+        # Set CRS-specific cpuset and memory
+        crs_cpuset_file = crs_cgroup_path / "cpuset.cpus"
+        crs_cpuset_file.write_text(crs_cpuset)
+
+        crs_memory_file = crs_cgroup_path / "memory.max"
+        crs_memory_file.write_text(str(crs_memory_bytes))
+
+        logger.info(
+            f"Created CRS sub-cgroup: {crs_cgroup_path} "
+            f"(cpuset={crs_cpuset}, memory={crs_memory_limit})"
+        )
+
+    return worker_cgroup_path
 
 
 def format_setup_instructions(base_path: Path) -> str:

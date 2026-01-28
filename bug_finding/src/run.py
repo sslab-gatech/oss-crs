@@ -13,7 +13,7 @@ from pathlib import Path
 from bug_finding.src.cgroup import (
     check_cgroup_delegation,
     cleanup_cgroup,
-    create_cgroup,
+    create_crs_cgroups,
     format_setup_instructions,
     generate_cgroup_name,
     get_user_cgroup_base,
@@ -161,8 +161,8 @@ def run_crs(
         else:
             logger.warning(f"No new corpus files copied from {corpus_dir}")
 
-    # Set up cgroup if enabled
-    cgroup_path = None
+    # Validate cgroup setup if enabled (but don't create yet - need crs_list first)
+    cgroup_config = None
     if cgroup_parent:
         base_path = get_user_cgroup_base()
 
@@ -178,19 +178,32 @@ def run_crs(
         run_run_id_for_cgroup = run_id if run_id else generate_run_id()
         cgroup_name = generate_cgroup_name(run_run_id_for_cgroup, "run", worker)
 
-        # TODO: Get cpuset and memory from config
-        # For now, use placeholder values
-        cpuset = "0-15"
-        memory_bytes = 16 * 1024 * 1024 * 1024  # 16GB
+        # Load config to get worker resources
+        from bug_finding.src.render_compose.config import load_config, parse_memory_mb
 
-        try:
-            cgroup_path = create_cgroup(base_path, cgroup_name, cpuset, memory_bytes)
-            logger.info(f"Created cgroup: {cgroup_path}")
-        except OSError as e:
-            logger.error(f"Failed to create cgroup: {e}")
+        config = load_config(config_dir)
+        resource_config = config["resource"]
+        workers = resource_config.get("workers", {})
+
+        if worker not in workers:
+            logger.error(f"Worker '{worker}' not found in config-resource.yaml")
             return False
 
+        worker_resources = workers[worker]
+        worker_cpuset = worker_resources.get("cpuset", "0-15")
+        worker_memory_spec = worker_resources.get("memory", "16G")
+        worker_memory_mb = parse_memory_mb(worker_memory_spec)
+
+        # Store config for cgroup creation after we get crs_list
+        cgroup_config = {
+            "base_path": base_path,
+            "cgroup_name": cgroup_name,
+            "worker_cpuset": worker_cpuset,
+            "worker_memory_mb": worker_memory_mb,
+        }
+
     # Generate compose files using render_compose module
+    # Note: cgroup_parent_path will be set after cgroup creation
     logger.info("Generating compose-%s.yaml", worker)
     fuzzer_command = [fuzzer_name] + fuzzer_args
     try:
@@ -212,11 +225,49 @@ def run_crs(
             ensemble_dir=final_ensemble_dir,
             coverage_build_dir=coverage_build_dir,
             run_id=run_id,
-            cgroup_parent_path=str(cgroup_path) if cgroup_path else None,
+            cgroup_parent_path=None,  # Will be set after cgroup creation
         )
     except Exception as e:
         logger.error("Failed to generate compose file: %s", e)
         return False
+
+    # Create cgroups now that we have crs_list
+    cgroup_path = None
+    if cgroup_config:
+        try:
+            cgroup_path = create_crs_cgroups(
+                base_path=cgroup_config["base_path"],
+                worker_cgroup_name=cgroup_config["cgroup_name"],
+                worker_cpuset=cgroup_config["worker_cpuset"],
+                worker_memory_mb=cgroup_config["worker_memory_mb"],
+                crs_list=crs_list,
+            )
+            logger.info(f"Created worker cgroup with per-CRS sub-cgroups: {cgroup_path}")
+
+            # Re-render compose file with cgroup_parent_path
+            actual_run_id, crs_build_dir, crs_list = render_compose.render_run_compose(
+                config_dir=config_dir,
+                build_dir=build_dir,
+                clone_dir=clone_dir,
+                oss_fuzz_dir=oss_fuzz_dir,
+                project=project_name,
+                engine=engine,
+                sanitizer=sanitizer,
+                architecture=architecture,
+                registry_dir=registry_dir,
+                worker=worker,
+                fuzzer_command=fuzzer_command,
+                harness_source=str(harness_source) if harness_source else None,
+                diff_path=diff_path,
+                external_litellm=external_litellm,
+                ensemble_dir=final_ensemble_dir,
+                coverage_build_dir=coverage_build_dir,
+                run_id=run_id,
+                cgroup_parent_path=str(cgroup_path),
+            )
+        except OSError as e:
+            logger.error(f"Failed to create cgroups: {e}")
+            return False
 
     # Set up docker-data for run phase (fresh copy from build phase)
     if not copy_docker_data(
