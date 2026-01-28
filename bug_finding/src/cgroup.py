@@ -7,6 +7,7 @@ for Docker container resource management using cgroup-parent.
 import logging
 import os
 import secrets
+import subprocess
 import time
 from pathlib import Path
 
@@ -185,6 +186,78 @@ def generate_cgroup_name(run_id: str, phase: str, worker: str) -> str:
     # Sanitize worker name (replace special chars with dash)
     safe_worker = "".join(c if c.isalnum() else "-" for c in worker)
     return f"{run_id}-{phase}-{timestamp}-{random_suffix}-{safe_worker}"
+
+
+CGROUP_FS_ROOT = "/sys/fs/cgroup"
+
+
+def check_docker_cgroup_driver() -> tuple[bool, str]:
+    """Check if Docker is using cgroupfs driver.
+
+    Returns:
+        Tuple of (is_cgroupfs, driver_name)
+        - is_cgroupfs: True if using cgroupfs driver
+        - driver_name: The actual driver name (e.g., "cgroupfs", "systemd")
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "info", "--format", "{{.CgroupDriver}}"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        driver = result.stdout.strip()
+        return driver == "cgroupfs", driver
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        # If we can't determine, assume cgroupfs for backward compatibility
+        return True, "unknown"
+
+
+def format_docker_cgroup_driver_instructions() -> str:
+    """Format instructions for configuring Docker to use cgroupfs driver.
+
+    Returns:
+        Formatted multi-line instruction string
+    """
+    return """
+Docker must use cgroupfs cgroup driver for cgroup-parent mode.
+
+To configure Docker to use cgroupfs driver:
+
+1. Edit or create /etc/docker/daemon.json:
+   {
+     "exec-opts": ["native.cgroupdriver=cgroupfs"]
+   }
+
+2. Restart Docker:
+   sudo systemctl restart docker
+
+3. Verify the change:
+   docker info | grep "Cgroup Driver"
+   (should show "cgroupfs")
+"""
+
+
+def cgroup_path_for_docker(cgroup_path: Path) -> str:
+    """Convert cgroup filesystem path to Docker cgroup_parent format.
+
+    Strips /sys/fs/cgroup prefix for Docker's cgroupfs driver on systemd hosts.
+
+    Example:
+        /sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/oss-crs/worker
+        -> /user.slice/user-1000.slice/user@1000.service/oss-crs/worker
+
+    Args:
+        cgroup_path: Full filesystem path to cgroup
+
+    Returns:
+        Path suitable for Docker's cgroup_parent option
+    """
+    path_str = str(cgroup_path)
+    if path_str.startswith(CGROUP_FS_ROOT):
+        return path_str[len(CGROUP_FS_ROOT):]
+    return path_str
 
 
 def compute_cgroup_resources_from_crs_list(crs_list: list[dict]) -> tuple[str, int]:

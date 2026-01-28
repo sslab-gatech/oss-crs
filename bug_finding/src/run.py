@@ -11,8 +11,11 @@ from importlib.resources import files
 from pathlib import Path
 
 from bug_finding.src.cgroup import (
+    cgroup_path_for_docker,
+    check_docker_cgroup_driver,
     cleanup_cgroup,
     create_crs_cgroups,
+    format_docker_cgroup_driver_instructions,
     format_setup_instructions,
     generate_cgroup_name,
     get_user_cgroup_base,
@@ -164,6 +167,13 @@ def run_crs(
     # Set up cgroup hierarchy if enabled (but don't create worker cgroup yet - need crs_list first)
     cgroup_config = None
     if cgroup_parent:
+        # Check Docker cgroup driver
+        is_cgroupfs, driver = check_docker_cgroup_driver()
+        if not is_cgroupfs:
+            logger.error(f"Docker is using '{driver}' cgroup driver, but cgroupfs is required")
+            logger.error(format_docker_cgroup_driver_instructions())
+            return False
+
         base_path = get_user_cgroup_base()
 
         # Set up cgroup hierarchy (auto-enable controllers)
@@ -263,7 +273,7 @@ def run_crs(
                 ensemble_dir=final_ensemble_dir,
                 coverage_build_dir=coverage_build_dir,
                 run_id=run_id,
-                cgroup_parent_path=str(cgroup_path),
+                cgroup_parent_path=cgroup_path_for_docker(cgroup_path),
             )
         except OSError as e:
             logger.error(f"Failed to create cgroups: {e}")
