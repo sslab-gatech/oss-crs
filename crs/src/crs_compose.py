@@ -2,6 +2,7 @@ from pathlib import Path
 from .config.crs_compose import CRSComposeConfig
 from .crs import CRS
 from .utils import MultiTaskProgress, TaskStatus
+from .target import Target
 
 
 class CRSCompose:
@@ -25,34 +26,36 @@ class CRSCompose:
         return True
 
     def prepare(self, publish: bool = False) -> bool:
-        self.__prepare_oss_crs_infra(
-            publish=publish, docker_registry=self.config.docker_registry
-        )
-
         # Collect task names (infra + all CRS)
-        task_names = ["oss-crs-infra"] + [crs.name for crs in self.crs_list]
+        tasks = [
+            (
+                "oss-crs-infra",
+                lambda progress: self.__prepare_oss_crs_infra(
+                    publish=publish, docker_registry=self.config.docker_registry
+                ),
+            )
+        ]
+        for crs in self.crs_list:
+            tasks.append(
+                (
+                    crs.name,
+                    lambda progress: crs.prepare(
+                        publish=publish,
+                        docker_registry=self.config.docker_registry,
+                        multi_task_progress=progress,
+                    ),
+                )
+            )
 
-        all_success = True
         with MultiTaskProgress(
-            task_names=task_names,
+            tasks=tasks,
             title="CRS Compose Prepare",
         ) as progress:
-            # Mark infra as done (TODO: actually implement infra preparation)
-            progress.set_status("oss-crs-infra", TaskStatus.SUCCESS)
+            result = progress.run_all_tasks()
+            if not result:
+                return False  # Stop on first failure
 
-            # Prepare each CRS
-            for crs in self.crs_list:
-                progress.set_status(crs.name, TaskStatus.IN_PROGRESS)
-                result = crs.prepare(
-                    publish=publish,
-                    docker_registry=self.config.docker_registry,
-                    multi_task_progress=progress,
-                )
-                progress.set_status(
-                    crs.name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
-                )
-                if not result:
-                    all_success = False
-                    break  # Stop on first failure
+        return True
 
-        return all_success
+    def build_target(self, target: Target) -> bool:
+        return False  # TODO

@@ -21,19 +21,26 @@ class MultiTaskProgress:
     """
     A progress tracker for multiple tasks with live updates.
     Shows a table of all tasks with their current status.
+
+    Args:
+        tasks: A list of (task_name, task_function) tuples.
+               Each function takes (progress: MultiTaskProgress) and returns bool.
+        title: Title for the progress panel.
+        console: Optional Rich console instance.
     """
 
     def __init__(
         self,
-        task_names: list[str],
+        tasks: list[tuple[str, Callable[["MultiTaskProgress"], bool]]],
         title: str = "Task Progress",
         console: Optional[Console] = None,
     ):
-        self.task_names = task_names
+        self.tasks = tasks
+        self.task_names = [name for name, _ in tasks]
         self.title = title
         self.console = console or Console()
         self.statuses: dict[str, TaskStatus] = {
-            name: TaskStatus.PENDING for name in task_names
+            name: TaskStatus.PENDING for name in self.task_names
         }
         self.task_info: dict[str, str] = {}  # Info text for each task
         self.cmd_info: dict[str, tuple[str, str]] = {}  # (cmd, cwd) for each task
@@ -41,6 +48,7 @@ class MultiTaskProgress:
         self.current_output_lines: list[str] = []
         self.max_output_lines = 10
         self._live: Optional[Live] = None
+        self._current_task: Optional[str] = None
 
     def _get_status_icon(self, status: TaskStatus) -> str:
         icons = {
@@ -135,17 +143,20 @@ class MultiTaskProgress:
         """Update the status of a task."""
         self.statuses[task_name] = status
         if status != TaskStatus.IN_PROGRESS:
+            # Clear output and cmd_info when task completes
             self.current_output_lines = []
+            if task_name in self.cmd_info:
+                del self.cmd_info[task_name]
         if self._live:
             self._live.update(self._build_display())
 
-    def set_task_info(self, task_name: str, info: str) -> None:
+    def __set_task_info(self, task_name: str, info: str) -> None:
         """Set info text for a task (shown when task is in progress)."""
         self.task_info[task_name] = info
         if self._live:
             self._live.update(self._build_display())
 
-    def set_cmd_info(self, task_name: str, cmd: str, cwd: str) -> None:
+    def __set_cmd_info(self, task_name: str, cmd: str, cwd: str) -> None:
         """Set command info for a task (shown in command progress panel)."""
         self.cmd_info[task_name] = (cmd, cwd)
         if self._live:
@@ -177,6 +188,32 @@ class MultiTaskProgress:
             self._live.__exit__(*args)
             self._live = None
 
+    def run_all_tasks(self) -> bool:
+        """
+        Run all tasks in order.
+
+        Returns:
+            True if all tasks succeeded, False if any task failed.
+        """
+        for task_name, task_func in self.tasks:
+            self._current_task = task_name
+            self.set_status(task_name, TaskStatus.IN_PROGRESS)
+            try:
+                result = task_func(self)
+                self.set_status(
+                    task_name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+                )
+                if not result:
+                    self._current_task = None
+                    return False
+            except Exception as e:
+                self.set_error_info(task_name, str(e))
+                self.set_status(task_name, TaskStatus.FAILED)
+                self._current_task = None
+                return False
+        self._current_task = None
+        return True
+
     def run_task(
         self,
         task_name: str,
@@ -203,74 +240,76 @@ class MultiTaskProgress:
             self.set_status(task_name, TaskStatus.FAILED)
             return False
 
+    def run_command_with_streaming_output(
+        self,
+        cmd: list[str],
+        cwd: Optional[Path] = None,
+        env: Optional[dict] = None,
+        info_text: Optional[str] = None,
+    ) -> bool:
+        """
+        Run a subprocess command with streaming output displayed via MultiTaskProgress.
 
-def run_command_with_streaming_output(
-    cmd: list[str],
-    cwd: Optional[Path] = None,
-    env: Optional[dict] = None,
-    multi_task_progress: Optional[MultiTaskProgress] = None,
-    task_name: Optional[str] = None,
-) -> bool:
-    """
-    Run a subprocess command with streaming output displayed via MultiTaskProgress.
+        Args:
+            cmd: Command and arguments to execute.
+            cwd: Working directory for the command.
+            env: Environment variables for the command.
 
-    Args:
-        cmd: Command and arguments to execute.
-        cwd: Working directory for the command.
-        env: Environment variables for the command.
-        multi_task_progress: MultiTaskProgress instance for live output display.
-        task_name: Task name for error reporting.
+        Returns:
+            True if command succeeded, False otherwise.
+        """
+        task_name = self._current_task
+        if info_text:
+            self.__set_task_info(task_name, info_text)
+        self.__set_cmd_info(self._current_task, " ".join(cmd), str(cwd) if cwd else ".")
+        output_lines = []
 
-    Returns:
-        True if command succeeded, False otherwise.
-    """
-    output_lines = []
+        def process_output(line: str) -> None:
+            """Process a line of output."""
+            output_lines.append(line)
+            self.add_output_line(line)
 
-    def process_output(line: str) -> None:
-        """Process a line of output."""
-        output_lines.append(line)
-        if multi_task_progress:
-            multi_task_progress.add_output_line(line)
+        try:
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=cwd,
+                env=env,
+                bufsize=1,
+            )
 
-    try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            cwd=cwd,
-            env=env,
-            bufsize=1,
-        )
+            for line in iter(process.stdout.readline, ""):
+                line = line.rstrip()
+                if line:
+                    process_output(line)
+            process.wait()
 
-        for line in iter(process.stdout.readline, ""):
-            line = line.rstrip()
-            if line:
-                process_output(line)
-        process.wait()
+            if process.returncode == 0:
+                return True
+            else:
+                # Set error info with last output lines
+                if task_name:
+                    error_msg = f"Command failed with exit code {process.returncode}:\n{' '.join(cmd)}\n\n"
+                    error_msg += "\n".join(output_lines[-10:])
+                    self.set_error_info(task_name, error_msg)
+                return False
 
-        if process.returncode == 0:
-            return True
-        else:
-            # Set error info with last output lines
-            if multi_task_progress and task_name:
-                error_msg = f"Command failed with exit code {process.returncode}:\n{' '.join(cmd)}\n\n"
-                error_msg += "\n".join(output_lines[-10:])
-                multi_task_progress.set_error_info(task_name, error_msg)
+        except FileNotFoundError:
+            cmd_name = cmd[0] if cmd else "command"
+            error_msg = (
+                f"{cmd_name} not found. Please ensure it is installed and in PATH."
+            )
+            if task_name:
+                self.set_error_info(task_name, error_msg)
+            else:
+                Console().print(f"[bold red]Error:[/bold red] {error_msg}")
             return False
-
-    except FileNotFoundError:
-        cmd_name = cmd[0] if cmd else "command"
-        error_msg = f"{cmd_name} not found. Please ensure it is installed and in PATH."
-        if multi_task_progress and task_name:
-            multi_task_progress.set_error_info(task_name, error_msg)
-        else:
-            Console().print(f"[bold red]Error:[/bold red] {error_msg}")
-        return False
-    except Exception as e:
-        error_msg = str(e)
-        if multi_task_progress and task_name:
-            multi_task_progress.set_error_info(task_name, error_msg)
-        else:
-            Console().print(f"[bold red]Error:[/bold red] {error_msg}")
-        return False
+        except Exception as e:
+            error_msg = str(e)
+            if task_name:
+                self.set_error_info(task_name, error_msg)
+            else:
+                Console().print(f"[bold red]Error:[/bold red] {error_msg}")
+            return False
