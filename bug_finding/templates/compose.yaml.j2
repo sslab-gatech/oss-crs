@@ -105,6 +105,9 @@ services:
 {%- endfor %}
       - CPUSET_CPUS={{ crs.cpuset }}
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
+{%- if cgroup_parent %}
+      - CGROUP_PARENT={{ cgroup_parent }}/{{ crs.name }}
+{%- endif %}
 {%- if crs.host_docker_builder %}
       - HOST_WORK_DIR={{ build_dir }}/work/{{ crs.name }}/{{ project }}/{{ sanitizer }}
       - HOST_OUT_DIR={{ build_dir }}/out/{{ crs.name }}/{{ project }}/{{ sanitizer }}
@@ -181,6 +184,9 @@ services:
       - HELPER=True
       - CPUSET_CPUS={{ crs.cpuset }}
       - MEMORY_LIMIT={{ crs.memory_limit | string }}
+{%- if cgroup_parent %}
+      - CGROUP_PARENT={{ cgroup_parent }}/{{ crs.name }}
+{%- endif %}
       - CRS_TARGET={{ project }}
       - CRS_NAME={{ crs.name }}
       - SOURCE_WORKDIR={{ source_workdir }}
