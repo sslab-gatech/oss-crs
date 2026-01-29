@@ -144,6 +144,9 @@ services:
 {%- if source_path %}
       - {{ source_path }}:/local-source-mount
 {%- endif %}
+{%- if diff_path %}
+      - {{ diff_path }}:/ref.diff:ro
+{%- endif %}
 {%- if cgroup_parent %}
     cgroup_parent: {{ cgroup_parent }}/{{ crs.name }}
 {%- else %}

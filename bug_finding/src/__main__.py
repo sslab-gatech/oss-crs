@@ -179,6 +179,7 @@ def main() -> int:
         help="Use cgroup-parent for resource management. Without value: auto-generate. "
         "With value: use provided path (with or without /sys/fs/cgroup prefix)",
     )
+    build_parser.add_argument("--diff", type=Path, help="Path to diff file for analysis")
 
     # run_crs subcommand
     run_parser = subparsers.add_parser("run", help="Run CRS")
@@ -371,6 +372,13 @@ def main() -> int:
     set_gitcache(args.gitcache)
 
     if args.command == "build":
+        # Resolve and validate build-specific paths
+        diff_path = args.diff.resolve() if args.diff else None
+
+        if diff_path and not diff_path.exists():
+            logging.error(f"Diff file does not exist: {diff_path}")
+            return 1
+
         # Build kwargs, only including non-None optional arguments
         build_kwargs = {
             "config_dir": config_dir,
@@ -401,6 +409,8 @@ def main() -> int:
             build_kwargs["registry_dir"] = args.registry_dir.resolve()
         if source_oss_fuzz_dir:
             build_kwargs["source_oss_fuzz_dir"] = source_oss_fuzz_dir
+        if diff_path:
+            build_kwargs["diff_path"] = diff_path
 
         result = build_crs(**build_kwargs)
     elif args.command == "run":

@@ -199,6 +199,7 @@ def build_crs(
     prepare_images: bool = True,
     no_cache: bool = False,
     run_id: str | None = None,
+    diff_path: Path | None = None,
     *,
     cgroup_parent: str | None = None,
 ) -> bool:
@@ -226,6 +227,7 @@ def build_crs(
         skip_oss_fuzz_clone: Skip cloning oss-fuzz (default: False)
         prepare_images: Auto-prepare CRS if bake images are missing (default: True)
         run_id: Custom run ID for Docker Compose project naming (default: random)
+        diff_path: Optional path to diff file for analysis (Path, already resolved)
         cgroup_parent: Cgroup parent path. Empty string to auto-generate, path to use custom (default: None)
 
     Returns:
@@ -367,6 +369,7 @@ def build_crs(
                 external_litellm=external_litellm,
                 cgroup_parent_path=None,  # Will be set after cgroup creation
                 run_id=build_run_id,
+                diff_path=diff_path,
             )
         )
     except Exception as e:
@@ -417,6 +420,7 @@ def build_crs(
                     external_litellm=external_litellm,
                     cgroup_parent_path=final_cgroup_parent_path,
                     run_id=build_run_id,
+                    diff_path=diff_path,
                 )
             )
         except OSError as e:

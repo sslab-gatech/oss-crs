@@ -386,6 +386,7 @@ def render_build_compose(
     external_litellm: bool = False,
     cgroup_parent_path: str | None = None,
     run_id: str | None = None,
+    diff_path: Path | None = None,
 ) -> tuple[list[str], Path, list[dict[str, Any]]]:
     """
     Programmatic interface for build mode.
@@ -444,6 +445,7 @@ def render_build_compose(
         external_litellm=external_litellm,
         cgroup_parent_path=cgroup_parent_path,
         run_id=run_id,
+        diff_path=diff_path,
     )
 
     output_file = output_dir / "compose-build.yaml"
