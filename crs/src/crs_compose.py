@@ -1,7 +1,7 @@
 from pathlib import Path
 from .config.crs_compose import CRSComposeConfig
 from .crs import CRS
-from .ui import MultiTaskProgress
+from .ui import MultiTaskProgress, TaskResult
 from .target import Target
 
 
@@ -21,9 +21,9 @@ class CRSCompose:
 
     def __prepare_oss_crs_infra(
         self, publish: bool = False, docker_registry: str = None
-    ) -> bool:
+    ) -> "TaskResult":
         # TODO
-        return True
+        return TaskResult(success=True)
 
     def prepare(self, publish: bool = False) -> bool:
         # Collect task names (infra + all CRS)

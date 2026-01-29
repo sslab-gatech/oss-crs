@@ -232,7 +232,7 @@ class MultiTaskProgress:
     def add_task(
         self,
         task_name: str,
-        task_func: Callable[["MultiTaskProgress"], bool],
+        task_func: Callable[["MultiTaskProgress"], "TaskResult"],
     ) -> None:
         """
         Add a task as a subtask of the current running task.
@@ -276,9 +276,11 @@ class MultiTaskProgress:
             try:
                 result = self._task_funcs[task_id](self)
                 self.set_status(
-                    task_id, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+                    task_id, TaskStatus.SUCCESS if result.success else TaskStatus.FAILED
                 )
-                if not result:
+                if not result.success:
+                    if result.error:
+                        self.set_error_info(task_id, result.error)
                     self._current_task = prev_task
                     return False
             except Exception as e:
@@ -322,9 +324,12 @@ class MultiTaskProgress:
             try:
                 result = task_func(self)
                 self.set_status(
-                    task_name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+                    task_name,
+                    TaskStatus.SUCCESS if result.success else TaskStatus.FAILED,
                 )
-                if not result:
+                if not result.success:
+                    if result.error:
+                        self.set_error_info(task_name, result.error)
                     self._current_task = None
                     return False
             except Exception as e:
@@ -341,7 +346,7 @@ class MultiTaskProgress:
         cwd: Optional[Path] = None,
         env: Optional[dict] = None,
         info_text: Optional[str] = None,
-    ) -> bool:
+    ) -> TaskResult:
         """
         Run a subprocess command with streaming output displayed via MultiTaskProgress.
 
@@ -382,14 +387,14 @@ class MultiTaskProgress:
             process.wait()
 
             if process.returncode == 0:
-                return True
+                return TaskResult(success=True, output="\n".join(output_lines))
             else:
                 # Set error info with last output lines
+                error_msg = f"Command failed with exit code {process.returncode}:\n{' '.join(cmd)}\n\n"
+                error_msg += "\n".join(output_lines[-10:])
                 if task_name:
-                    error_msg = f"Command failed with exit code {process.returncode}:\n{' '.join(cmd)}\n\n"
-                    error_msg += "\n".join(output_lines[-10:])
                     self.set_error_info(task_name, error_msg)
-                return False
+                return TaskResult(success=False, error=error_msg)
 
         except FileNotFoundError:
             cmd_name = cmd[0] if cmd else "command"
@@ -400,14 +405,14 @@ class MultiTaskProgress:
                 self.set_error_info(task_name, error_msg)
             else:
                 Console().print(f"[bold red]Error:[/bold red] {error_msg}")
-            return False
+            return TaskResult(success=False, error=error_msg)
         except Exception as e:
             error_msg = str(e)
             if task_name:
                 self.set_error_info(task_name, error_msg)
             else:
                 Console().print(f"[bold red]Error:[/bold red] {error_msg}")
-            return False
+            return TaskResult(success=False, error=error_msg)
 
     def add_items_to_head(self, items) -> None:
         self._head += items

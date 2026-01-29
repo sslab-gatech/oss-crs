@@ -5,7 +5,7 @@ import tempfile
 import git
 
 from .config.target import TargetConfig
-from .ui import MultiTaskProgress
+from .ui import MultiTaskProgress, TaskResult
 from . import ui
 
 
@@ -78,10 +78,7 @@ class Target:
             else:
                 head.append(ui.green("Fetching latest changes..."))
                 tasks += [
-                    (
-                        "Git fetch",
-                        lambda progress: self.__fetch_main_repo(progress),
-                    ),
+                    ("Git fetch", lambda progress: self.__fetch_main_repo(progress)),
                     (
                         "Git checkout main",
                         lambda progress: self.__checkout_main_repo(progress),
@@ -90,30 +87,27 @@ class Target:
         else:
             head.append(ui.green("Cloning repository..."))
             tasks += [
-                (
-                    "Git clone",
-                    lambda progress: self.__clone(progress),
-                ),
+                ("Git clone", lambda progress: self.__clone(progress)),
             ]
         with MultiTaskProgress(tasks=tasks, title=title) as progress:
             progress.add_items_to_head(head)
             return progress.run_all_tasks()
 
-    def __fetch_main_repo(self, progress: MultiTaskProgress) -> bool:
+    def __fetch_main_repo(self, progress: MultiTaskProgress) -> "TaskResult":
         cmd = ["git", "fetch", "origin"]
         return progress.run_command_with_streaming_output(
             cmd=cmd,
             cwd=self.repo_path,
         )
 
-    def __checkout_main_repo(self, progress: MultiTaskProgress) -> bool:
+    def __checkout_main_repo(self, progress: MultiTaskProgress) -> "TaskResult":
         cmd = ["git", "checkout", "-f", "main"]
         return progress.run_command_with_streaming_output(
             cmd=cmd,
             cwd=self.repo_path,
         )
 
-    def __clone(self, progress: MultiTaskProgress) -> bool:
+    def __clone(self, progress: MultiTaskProgress) -> "TaskResult":
         cmd = ["git", "clone", self.config.main_repo, str(self.repo_path)]
         return progress.run_command_with_streaming_output(
             cmd=cmd,
@@ -179,7 +173,7 @@ class Target:
 
     def __build_docker_image_with_repo(
         self, image_tag: str, progress: MultiTaskProgress
-    ) -> bool:
+    ) -> "TaskResult":
         with tempfile.NamedTemporaryFile(
             mode="wb", suffix=".Dockerfile", delete=True
         ) as tmp_dockerfile:

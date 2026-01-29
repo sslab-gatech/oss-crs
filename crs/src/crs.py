@@ -5,11 +5,10 @@ import os
 import tempfile
 
 from jinja2 import Template
-from rich.console import Console
 
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry
-from .ui import MultiTaskProgress
+from .ui import MultiTaskProgress, TaskResult
 from .target import Target
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
@@ -42,7 +41,7 @@ class CRS:
         publish: bool = False,
         docker_registry: Optional[str] = None,
         multi_task_progress: Optional[MultiTaskProgress] = None,
-    ) -> bool:
+    ) -> "TaskResult":
         """
         Run docker buildx bake to prepare CRS images.
 
@@ -80,11 +79,11 @@ class CRS:
         # Add push and cache-to options if publishing
         if publish:
             if not registry:
-                Console().print(
-                    "[bold red]Error:[/bold red] Cannot publish without a docker registry. "
+                error_msg = (
+                    "Cannot publish without a docker registry. "
                     "Provide docker_registry parameter or set it in config."
                 )
-                return False
+                return TaskResult(success=False, error=error_msg)
 
             cmd.append("--push")
             cache_ref_version = f"{registry}/{self.name}:{version}"
@@ -118,7 +117,7 @@ class CRS:
 
     def build_target(
         self, target: Target, target_base_image: str, progress: MultiTaskProgress
-    ) -> bool:
+    ) -> "TaskResult":
         build_out_dir = (
             self.work_dir / (target_base_image.replace(":", "_")) / "BUILD_OUT_DIR"
         )
@@ -136,7 +135,7 @@ class CRS:
                     p,
                 ),
             )
-        return progress.run_added_tasks()
+        return TaskResult(success=progress.run_added_tasks())
 
     def __build_target_one(
         self,
@@ -146,11 +145,12 @@ class CRS:
         build_config,
         build_out_dir: Path,
         progress: MultiTaskProgress,
-    ) -> bool:
+    ) -> "TaskResult":
         build_out_dir = build_out_dir / build_name
         build_out_dir.mkdir(parents=True, exist_ok=True)
+        docker_compose_output = ""
 
-        def check_outputs(progress=None) -> bool:
+        def check_outputs(progress=None) -> "TaskResult":
             output_paths = []
             for output in build_config.outputs:
                 output_path = build_out_dir / output.replace("$BUILD_OUT_DIR/", "")
@@ -159,16 +159,16 @@ class CRS:
                 for output_path in output_paths:
                     progress.add_task(
                         f"{output_path}",
-                        lambda p, o=output_path: o.exists(),
+                        lambda p, o=output_path: TaskResult(success=o.exists()),
                     )
-                return progress.run_added_tasks()
+                return TaskResult(success=progress.run_added_tasks())
             else:
                 all_exist = all(p.exists() for p in output_paths)
-                return all_exist
+                return TaskResult(success=all_exist)
 
         def prepare_docker_compose_file(
             progress, tmp_docker_compose_path: Path
-        ) -> bool:
+        ) -> "TaskResult":
             template_path = (
                 Path(__file__).parent
                 / "templates"
@@ -190,9 +190,10 @@ class CRS:
             )
 
             tmp_docker_compose_path.write_text(rendered)
-            return True
+            return TaskResult(success=True)
 
-        def run_docker_compose(progress, tmp_docker_compose_path) -> bool:
+        def run_docker_compose(progress, tmp_docker_compose_path) -> "TaskResult":
+            nonlocal docker_compose_output
             raw_name = f"{target_base_image}_{self.name}_{build_name}"
             name_hash = hashlib.sha256(raw_name.encode()).hexdigest()[:12]
             project_name = f"crs_{name_hash}"
@@ -206,12 +207,12 @@ class CRS:
                 "run",
                 "target_builder",
             ]
-            if progress.run_command_with_streaming_output(
+            ret = progress.run_command_with_streaming_output(
                 cmd=cmd,
                 cwd=self.crs_path,
-            ):
-                return True
-            return False
+            )
+            docker_compose_output = ret.output
+            return ret
 
         with tempfile.NamedTemporaryFile(
             mode="wb", suffix=".docker-compose", delete=True
@@ -227,10 +228,16 @@ class CRS:
             )
             progress.add_task("Check outputs", check_outputs)
 
-            if progress.run_added_tasks():
-                return True
-            # docker_compose_contents = tmp_docker_compose_path.read_text()
-            # progress.add_note(
-            #     f"Docker compose file contents:\n---\n{docker_compose_contents}\n---"
-            # )
-            return False
+            success = progress.run_added_tasks()
+            if success:
+                return TaskResult(success=True)
+            docker_compose_contents = tmp_docker_compose_path.read_text()
+            error = ""
+            if docker_compose_output:
+                error += (
+                    f"📝 Docker compose output:\n---\n{docker_compose_output}\n---\n"
+                )
+            error += (
+                f"📝 Docker compose file contents:\n---\n{docker_compose_contents}\n---"
+            )
+            return TaskResult(success=False, error=error)
