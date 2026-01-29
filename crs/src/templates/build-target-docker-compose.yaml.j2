@@ -1,6 +1,5 @@
 services:
   target_builder:
-    image: {{ target.image}}-{{ crs.name }}
     privileged: true
     shm_size: 2g
     environment:

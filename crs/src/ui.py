@@ -391,7 +391,7 @@ class MultiTaskProgress:
             else:
                 # Set error info with last output lines
                 error_msg = f"Command failed with exit code {process.returncode}:\n{' '.join(cmd)}\n\n"
-                error_msg += "\n".join(output_lines[-10:])
+                error_msg += "\n".join(output_lines)
                 if task_name:
                     self.set_error_info(task_name, error_msg)
                 return TaskResult(success=False, error=error_msg)

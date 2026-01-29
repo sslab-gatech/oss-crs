@@ -234,7 +234,10 @@ class CRS:
                 cmd=cmd,
                 cwd=self.crs_path,
             )
-            docker_compose_output = ret.output
+            if ret.success:
+                docker_compose_output = ret.output
+            else:
+                docker_compose_output = ret.error
             return ret
 
         with tempfile.NamedTemporaryFile(
