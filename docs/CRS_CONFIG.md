@@ -51,9 +51,10 @@ target_build_phase:
     outputs:
       - fuzzer
 crs_run_phase:
-  docker_compose: oss-crs/docker-compose.yaml
-  additional_env:
-    CUSTOM_VAR: "value"
+  module-1:
+    dockerfile: oss-crs/docker-compose/bug-finding.Dockerfile
+    additional_env:
+      CUSTOM_VAR: "value"
 supported_target:
   mode:
     - full
@@ -123,20 +124,31 @@ target_build_phase:
 
 ## CRS Run Phase
 
-The `crs_run_phase` configures how the CRS is executed.
+The `crs_run_phase` configures how the CRS is executed. It defines one or more modules, each with its own Dockerfile and environment variables.
+
+### Structure
+
+The CRS run phase is a dictionary where each key is a module name and each value is a `CRSRunPhaseModule` object.
+
+### CRSRunPhaseModule
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `docker_compose` | `string` | Yes | - | Path to the Docker Compose file (must end with `.yaml` or `.yml`) |
-| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass to the CRS |
+| `dockerfile` | `string` | Yes | - | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`) |
+| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass to the module |
 
 ### Example
 
 ```yaml
 crs_run_phase:
-  docker_compose: oss-crs/crs-docker-compose.yaml
-  additional_env:
-    CUSTOM_ENV: "CUSTOM_ENV"
+  module-1:
+    dockerfile: oss-crs/docker-compose/bug-finding.Dockerfile
+    additional_env:
+      RUNNING_TIME_ENV: "XXX"
+  module-2:
+    dockerfile: oss-crs/docker-compose/bug-finding.Dockerfile
+    additional_env:
+      RUNNING_TIME_ENV: "XXX2"
 ```
 
 ---

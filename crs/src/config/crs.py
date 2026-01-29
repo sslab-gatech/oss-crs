@@ -56,17 +56,17 @@ class TargetBuildPhase(BaseModel):
         return {"builds": {k: v for k, v in data.items()}}
 
 
-class CRSRunPhase(BaseModel):
-    """Configuration for the CRS run phase."""
+class CRSRunPhaseModule(BaseModel):
+    """Configuration for a single CRS run phase module."""
 
-    docker_compose: str
+    dockerfile: str
     additional_env: dict[str, str] = Field(default_factory=dict)
 
-    @field_validator("docker_compose")
+    @field_validator("dockerfile")
     @classmethod
-    def validate_docker_compose(cls, v: str) -> str:
-        if not v.endswith((".yaml", ".yml")):
-            raise ValueError("docker_compose must be a yaml file")
+    def validate_dockerfile(cls, v: str) -> str:
+        if not v.endswith(".Dockerfile") and "Dockerfile" not in v:
+            raise ValueError("must be a valid Dockerfile path")
         return v
 
     @field_validator("additional_env")
@@ -74,6 +74,18 @@ class CRSRunPhase(BaseModel):
     def validate_additional_env(cls, v: dict[str, str]) -> dict[str, str]:
         # TODO: check for valid env var names/values if needed (do not allow pre-defined vars)
         return v
+
+
+class CRSRunPhase(BaseModel):
+    """Configuration for the CRS run phase."""
+
+    modules: dict[str, CRSRunPhaseModule] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse_modules(cls, data: dict) -> dict:
+        """Parse modules from raw dictionary data."""
+        return {"modules": {k: v for k, v in data.items()}}
 
 
 class TargetMode(Enum):
