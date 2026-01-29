@@ -10,7 +10,7 @@ services:
       - PROJECT_NAME={{ target.name }}
       - FUZZING_LANGUAGE={{ target.language }}
       - HELPER=True
-      - BUILD_OUT_DIR=/BUILD_OUT_DIR
+      - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
       - CRS_TARGET={{ target.name }}
 {%- for key, value in additional_env.items() %}
       - {{ key }}={{ value }}
@@ -22,4 +22,4 @@ services:
         - target_base_image={{target.image}} 
         - crs_version={{ crs.version }}
     volumes:
-      - {{build_out_dir}}:/BUILD_OUT_DIR
+      - {{build_out_dir}}:/OSS_CRS_BUILD_OUT_DIR
