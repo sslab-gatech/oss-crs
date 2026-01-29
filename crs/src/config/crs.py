@@ -35,6 +35,14 @@ class BuildConfig(BaseModel):
             raise ValueError("must be a valid Dockerfile path")
         return v
 
+    @field_validator("outputs")
+    @classmethod
+    def validate_outputs(cls, v: list[str]) -> list[str]:
+        for output in v:
+            if ".." in output:
+                raise ValueError(f"output path cannot contain '..': {output}")
+        return v
+
 
 class TargetBuildPhase(BaseModel):
     """Configuration for the target build phase."""

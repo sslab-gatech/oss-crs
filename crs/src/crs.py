@@ -177,7 +177,7 @@ class CRS:
         def check_outputs(progress=None) -> "TaskResult":
             output_paths = []
             for output in build_config.outputs:
-                output_path = build_out_dir / output.replace("$BUILD_OUT_DIR/", "")
+                output_path = build_out_dir / output
                 output_paths.append(output_path)
             if progress:
                 for output_path in output_paths:
