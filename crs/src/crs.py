@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Optional
+import hashlib
 import os
+import tempfile
 
+from jinja2 import Template
 from rich.console import Console
 
 from .config.crs import CRSConfig
@@ -31,7 +34,8 @@ class CRS:
         self.name = name
         self.crs_path = crs_path.expanduser().resolve()
         self.config = CRSConfig.from_yaml_file(self.crs_path / CRS_YAML_PATH)
-        self.work_dir = work_dir
+        self.work_dir = work_dir / "crs" / self.name
+        self.work_dir.mkdir(parents=True, exist_ok=True)
 
     def prepare(
         self,
@@ -112,6 +116,121 @@ class CRS:
                 cmd=cmd, cwd=self.crs_path, env=env, info_text=info_text
             )
 
-    def build_target(self, target_base_image: str, progress: MultiTaskProgress) -> bool:
-        # TODO
-        return True
+    def build_target(
+        self, target: Target, target_base_image: str, progress: MultiTaskProgress
+    ) -> bool:
+        build_out_dir = (
+            self.work_dir / (target_base_image.replace(":", "_")) / "BUILD_OUT_DIR"
+        )
+        for build_name, build_config in self.config.target_build_phase.builds.items():
+            progress.add_task(
+                build_name,
+                lambda p,
+                build_name=build_name,
+                build_config=build_config: self.__build_target_one(
+                    target,
+                    target_base_image,
+                    build_name,
+                    build_config,
+                    build_out_dir,
+                    p,
+                ),
+            )
+        return progress.run_added_tasks()
+
+    def __build_target_one(
+        self,
+        target,
+        target_base_image: str,
+        build_name: str,
+        build_config,
+        build_out_dir: Path,
+        progress: MultiTaskProgress,
+    ) -> bool:
+        build_out_dir = build_out_dir / build_name
+        build_out_dir.mkdir(parents=True, exist_ok=True)
+
+        def check_outputs(progress=None) -> bool:
+            output_paths = []
+            for output in build_config.outputs:
+                output_path = build_out_dir / output.replace("$BUILD_OUT_DIR/", "")
+                output_paths.append(output_path)
+            if progress:
+                for output_path in output_paths:
+                    progress.add_task(
+                        f"{output_path}",
+                        lambda p, o=output_path: o.exists(),
+                    )
+                return progress.run_added_tasks()
+            else:
+                all_exist = all(p.exists() for p in output_paths)
+                return all_exist
+
+        def prepare_docker_compose_file(
+            progress, tmp_docker_compose_path: Path
+        ) -> bool:
+            template_path = (
+                Path(__file__).parent
+                / "templates"
+                / "build-target-docker-compose.yaml.j2"
+            )
+            template = Template(template_path.read_text())
+            target_env = target.get_target_env()
+            target_env["image"] = target_base_image
+
+            rendered = template.render(
+                crs={
+                    "name": self.name,
+                    "path": str(self.crs_path),
+                    "builder_dockerfile": str(self.crs_path / build_config.dockerfile),
+                    "version": self.config.version,
+                },
+                target=target_env,
+                build_out_dir=str(build_out_dir),
+            )
+
+            tmp_docker_compose_path.write_text(rendered)
+            return True
+
+        def run_docker_compose(progress, tmp_docker_compose_path) -> bool:
+            raw_name = f"{target_base_image}_{self.name}_{build_name}"
+            name_hash = hashlib.sha256(raw_name.encode()).hexdigest()[:12]
+            project_name = f"crs_{name_hash}"
+            cmd = [
+                "docker",
+                "compose",
+                "-p",
+                project_name,
+                "-f",
+                str(tmp_docker_compose_path),
+                "run",
+                "target_builder",
+            ]
+            if progress.run_command_with_streaming_output(
+                cmd=cmd,
+                cwd=self.crs_path,
+            ):
+                return True
+            return False
+
+        with tempfile.NamedTemporaryFile(
+            mode="wb", suffix=".docker-compose", delete=True
+        ) as tmp_docker_compose_file:
+            tmp_docker_compose_path = Path(tmp_docker_compose_file.name)
+            progress.add_task(
+                "Prepare docker compose file",
+                lambda p: prepare_docker_compose_file(p, tmp_docker_compose_path),
+            )
+            progress.add_task(
+                "Build target by executing the docker compose",
+                lambda p: run_docker_compose(p, tmp_docker_compose_path),
+            )
+            progress.add_task("Check outputs", check_outputs)
+
+            if progress.run_added_tasks():
+                return True
+            # docker_compose_contents = tmp_docker_compose_path.read_text()
+            # progress.add_note(
+            #     f"Docker compose file contents:\n---\n{docker_compose_contents}\n---"
+            # )
+            return False

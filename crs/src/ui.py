@@ -17,6 +17,15 @@ class TaskStatus(Enum):
     FAILED = "failed"
 
 
+class TaskResult:
+    def __init__(
+        self, success: bool, output: Optional[str] = None, error: Optional[str] = None
+    ):
+        self.success = success
+        self.output = output
+        self.error = error
+
+
 class MultiTaskProgress:
     """
     A progress tracker for multiple tasks with live updates.
@@ -32,7 +41,7 @@ class MultiTaskProgress:
 
     def __init__(
         self,
-        tasks: list[tuple[str, Callable[["MultiTaskProgress"], bool]]],
+        tasks: list[tuple[str, Callable[["MultiTaskProgress"], TaskResult]]],
         title: str = "Task Progress",
         console: Optional[Console] = None,
     ):
@@ -46,11 +55,19 @@ class MultiTaskProgress:
         self.task_info: dict[str, str] = {}  # Info text for each task
         self.cmd_info: dict[str, tuple[str, str]] = {}  # (cmd, cwd) for each task
         self.error_info: dict[str, str] = {}  # Error message for failed tasks
+        self.task_notes: dict[str, list[str]] = {}  # Notes for each task
         self.current_output_lines: list[str] = []
         self.max_output_lines = 10
         self._live: Optional[Live] = None
-        self._current_task: Optional[str] = None
+        self._current_task: Optional[str] = None  # Current task ID (full path)
         self._head = []
+        # Subtask hierarchy: parent_id -> list of child task IDs
+        self._subtasks: dict[Optional[str], list[str]] = {None: list(self.task_names)}
+        self._task_funcs: dict[str, Callable[["MultiTaskProgress"], TaskResult]] = {
+            name: func for name, func in tasks
+        }
+        # Mapping from task ID to display name
+        self._display_names: dict[str, str] = {name: name for name in self.task_names}
 
     def _get_status_icon(self, status: TaskStatus) -> str:
         icons = {
@@ -84,16 +101,35 @@ class MultiTaskProgress:
         table.add_column("Status")
 
         current_task = None
-        for name in self.task_names:
-            status = self.statuses[name]
-            if status == TaskStatus.IN_PROGRESS:
-                current_task = name
-            table.add_row(
-                self._get_status_icon(status),
-                name,
-                self._get_status_text(status),
-            )
 
+        def add_tasks_to_table(parent: Optional[str], depth: int = 0) -> None:
+            nonlocal current_task
+            if parent not in self._subtasks:
+                return
+            for task_id in self._subtasks[parent]:
+                status = self.statuses.get(task_id, TaskStatus.PENDING)
+                if status == TaskStatus.IN_PROGRESS:
+                    current_task = task_id
+                indent = "  " * depth
+                prefix = "└─ " if depth > 0 else ""
+                display_name = self._display_names.get(task_id, task_id)
+                table.add_row(
+                    self._get_status_icon(status) if depth == 0 else "",
+                    f"{indent}{prefix}{display_name}",
+                    self._get_status_text(status),
+                )
+                add_tasks_to_table(task_id, depth + 1)
+                # Add notes for this task below its subtasks
+                if task_id in self.task_notes:
+                    note_indent = "  " * (depth + 1)
+                    for note in self.task_notes[task_id]:
+                        table.add_row(
+                            "",
+                            f"{note_indent}[dim cyan]📝 {note}[/dim cyan]",
+                            "",
+                        )
+
+        add_tasks_to_table(None)
         content_parts.append(table)
 
         # Add task info if there's an in-progress task with info
@@ -131,11 +167,12 @@ class MultiTaskProgress:
             content_parts.append(cmd_panel)
 
         # Add error panel if there's a failed task with error info
-        for name in self.task_names:
-            if self.statuses[name] == TaskStatus.FAILED and name in self.error_info:
+        for task_id, status in self.statuses.items():
+            if status == TaskStatus.FAILED and task_id in self.error_info:
+                display_name = self._display_names.get(task_id, task_id)
                 error_panel = Panel(
-                    f"[red]{self.error_info[name]}[/red]",
-                    title=f"[bold red]Error: {name}[/bold red]",
+                    f"[red]{self.error_info[task_id]}[/red]",
+                    title=f"[bold red]Error: {display_name}[/bold red]",
                     border_style="red",
                 )
                 content_parts.append(error_panel)
@@ -175,6 +212,82 @@ class MultiTaskProgress:
         self.error_info[task_name] = error
         if self._live:
             self._live.update(self._build_display())
+
+    def add_note(self, note: str) -> None:
+        """Add a note to the current task (shown below subtasks in the table)."""
+        if self._current_task:
+            if self._current_task not in self.task_notes:
+                self.task_notes[self._current_task] = []
+            self.task_notes[self._current_task].append(note)
+            if self._live:
+                self._live.update(self._build_display())
+
+    def clear_notes(self) -> None:
+        """Clear all notes for the current task."""
+        if self._current_task and self._current_task in self.task_notes:
+            del self.task_notes[self._current_task]
+            if self._live:
+                self._live.update(self._build_display())
+
+    def add_task(
+        self,
+        task_name: str,
+        task_func: Callable[["MultiTaskProgress"], bool],
+    ) -> None:
+        """
+        Add a task as a subtask of the current running task.
+        If no task is running, it becomes a top-level task.
+
+        Args:
+            task_name: Name of the task to add.
+            task_func: Function that takes progress and returns bool.
+        """
+        parent = self._current_task
+        # Create unique task ID by combining parent path with task name
+        if parent:
+            task_id = f"{parent}/{task_name}"
+        else:
+            task_id = task_name
+
+        if parent not in self._subtasks:
+            self._subtasks[parent] = []
+        self._subtasks[parent].append(task_id)
+        self._task_funcs[task_id] = task_func
+        self._display_names[task_id] = task_name
+        self.statuses[task_id] = TaskStatus.PENDING
+        if self._live:
+            self._live.update(self._build_display())
+
+    def run_added_tasks(self) -> bool:
+        """
+        Run all subtasks added under the current task.
+
+        Returns:
+            True if all subtasks succeeded, False if any failed.
+        """
+        parent = self._current_task
+        if parent not in self._subtasks:
+            return True
+
+        for task_id in self._subtasks[parent]:
+            prev_task = self._current_task
+            self._current_task = task_id
+            self.set_status(task_id, TaskStatus.IN_PROGRESS)
+            try:
+                result = self._task_funcs[task_id](self)
+                self.set_status(
+                    task_id, TaskStatus.SUCCESS if result else TaskStatus.FAILED
+                )
+                if not result:
+                    self._current_task = prev_task
+                    return False
+            except Exception as e:
+                self.set_error_info(task_id, str(e))
+                self.set_status(task_id, TaskStatus.FAILED)
+                self._current_task = prev_task
+                return False
+            self._current_task = prev_task
+        return True
 
     def add_output_line(self, line: str) -> None:
         """Add an output line for the current in-progress task."""
@@ -221,32 +334,6 @@ class MultiTaskProgress:
                 return False
         self._current_task = None
         return True
-
-    def run_task(
-        self,
-        task_name: str,
-        task_func: Callable[[], bool],
-    ) -> bool:
-        """
-        Run a task and update its status.
-
-        Args:
-            task_name: Name of the task to run.
-            task_func: Function that returns True on success, False on failure.
-
-        Returns:
-            True if task succeeded, False otherwise.
-        """
-        self.set_status(task_name, TaskStatus.IN_PROGRESS)
-        try:
-            result = task_func()
-            self.set_status(
-                task_name, TaskStatus.SUCCESS if result else TaskStatus.FAILED
-            )
-            return result
-        except Exception:
-            self.set_status(task_name, TaskStatus.FAILED)
-            return False
 
     def run_command_with_streaming_output(
         self,

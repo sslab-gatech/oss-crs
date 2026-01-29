@@ -39,7 +39,7 @@ class CRSCompose:
             tasks.append(
                 (
                     crs.name,
-                    lambda progress: crs.prepare(
+                    lambda progress, crs=crs: crs.prepare(
                         publish=publish,
                         docker_registry=self.config.docker_registry,
                         multi_task_progress=progress,
@@ -65,7 +65,9 @@ class CRSCompose:
             tasks.append(
                 (
                     crs.name,
-                    lambda progress: crs.build_target(target_base_image, progress),
+                    lambda progress, crs=crs: crs.build_target(
+                        target, target_base_image, progress
+                    ),
                 )
             )
         with MultiTaskProgress(

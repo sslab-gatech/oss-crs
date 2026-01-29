@@ -185,7 +185,7 @@ class Target:
         ) as tmp_dockerfile:
             added_dockerfile = (self.proj_path / "Dockerfile").read_bytes()
             added_dockerfile += b"\n# Added by CRS Target build\n"
-            added_dockerfile += b"COPY --from=repo_path . /src/\n"
+            added_dockerfile += f"COPY --from=repo_path . /src/{self.name}\n".encode()
             tmp_dockerfile.write(added_dockerfile)
             tmp_dockerfile.flush()
 
@@ -207,3 +207,13 @@ class Target:
                 cmd=cmd,
                 cwd=self.work_dir,
             )
+
+    def get_target_env(self) -> dict:
+        # TODO: implement this properly
+        return {
+            "name": self.name,
+            "language": self.config.language.value,
+            "engine": "libfuzzer",
+            "sanitizer": "address",
+            "architecture": "x86_64",
+        }

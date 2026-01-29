@@ -1,0 +1,22 @@
+services:
+  target_builder:
+    image: {{ target.image}}-{{ crs.name }}
+    privileged: true
+    shm_size: 2g
+    environment:
+      - FUZZING_ENGINE={{ target.engine }}
+      - SANITIZER={{ target.sanitizer }}
+      - ARCHITECTURE={{ target.architecture }}
+      - PROJECT_NAME={{ target.name }}
+      - FUZZING_LANGUAGE={{ target.language }}
+      - HELPER=True
+      - BUILD_OUT_DIR=/BUILD_OUT_DIR
+      - CRS_TARGET={{ target.name }}
+    build:
+      context: {{ crs.path }}
+      dockerfile: {{ crs.builder_dockerfile }}
+      args:
+        - parent_image={{target.image}} 
+        - crs_version={{ crs.version }}
+    volumes:
+      - {{build_out_dir}}:/BUILD_OUT_DIR
