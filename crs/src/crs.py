@@ -126,9 +126,19 @@ class CRS:
                 cmd=cmd, cwd=self.crs_path, env=env, info_text=info_text
             )
 
+    def __is_supported_target(self, target: Target) -> bool:
+        # TODO: implement proper check based on self.config.supported_target
+        return True
+
     def build_target(
         self, target: Target, target_base_image: str, progress: MultiTaskProgress
     ) -> "TaskResult":
+        if not self.__is_supported_target(target):
+            # TODO: warn instead of error?
+            return TaskResult(
+                success=False,
+                error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
+            )
         build_out_dir = (
             self.work_dir / (target_base_image.replace(":", "_")) / "BUILD_OUT_DIR"
         )
