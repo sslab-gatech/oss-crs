@@ -26,6 +26,7 @@ class BuildConfig(BaseModel):
 
     dockerfile: str
     outputs: list[str]
+    additional_env: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("dockerfile")
     @classmethod

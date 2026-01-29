@@ -12,6 +12,9 @@ services:
       - HELPER=True
       - BUILD_OUT_DIR=/BUILD_OUT_DIR
       - CRS_TARGET={{ target.name }}
+{%- for key, value in additional_env.items() %}
+      - {{ key }}={{ value }}
+{%- endfor %}
     build:
       context: {{ crs.path }}
       dockerfile: {{ crs.builder_dockerfile }}

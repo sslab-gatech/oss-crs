@@ -97,10 +97,11 @@ The target build phase is a dictionary where each key is a build step name and e
 
 ### BuildConfig
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `dockerfile` | `string` | Yes | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`) |
-| `outputs` | `list[string]` | Yes | List of output paths (each must start with `$BUILD_OUT_DIR/`) |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `dockerfile` | `string` | Yes | - | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`) |
+| `outputs` | `list[string]` | Yes | - | List of output paths (each must start with `$BUILD_OUT_DIR/`) |
+| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass during the build |
 
 ### Example
 
@@ -108,6 +109,8 @@ The target build phase is a dictionary where each key is a build step name and e
 target_build_phase:
   asan:
     dockerfile: oss-crs/asan-builder.Dockerfile
+    additional_env:
+      RUNNING_TIME_ENV: "value"
     outputs:
       - $BUILD_OUT_DIR/asan.tar.gz
   cov-builder:

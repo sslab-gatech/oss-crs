@@ -185,6 +185,7 @@ class CRS:
                     "builder_dockerfile": str(self.crs_path / build_config.dockerfile),
                     "version": self.config.version,
                 },
+                additional_env=build_config.additional_env,
                 target=target_env,
                 build_out_dir=str(build_out_dir),
             )
