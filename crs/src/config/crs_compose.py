@@ -120,6 +120,14 @@ class CRSComposeConfig(BaseModel):
         )
 
 
+class CRSComposeEnv:
+    def __init__(self, run_env: RunEnv):
+        self.run_env = run_env
+
+    def get_env(self) -> dict[str, str]:
+        return {"type": self.run_env.value}
+
+
 if __name__ == "__main__":
     import sys
 

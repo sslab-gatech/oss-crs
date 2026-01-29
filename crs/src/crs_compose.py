@@ -1,5 +1,5 @@
 from pathlib import Path
-from .config.crs_compose import CRSComposeConfig
+from .config.crs_compose import CRSComposeConfig, CRSComposeEnv
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
@@ -14,8 +14,9 @@ class CRSCompose:
     def __init__(self, config: CRSComposeConfig, work_dir: Path):
         self.config = config
         self.work_dir = work_dir
+        self.crs_compose_env = CRSComposeEnv(self.config.run_env)
         self.crs_list = [
-            CRS.from_crs_compose_entry(name, crs_cfg, work_dir)
+            CRS.from_crs_compose_entry(name, crs_cfg, work_dir, self.crs_compose_env)
             for name, crs_cfg in self.config.crs_entries.items()
         ]
 

@@ -7,7 +7,7 @@ import tempfile
 from jinja2 import Template
 
 from .config.crs import CRSConfig
-from .config.crs_compose import CRSEntry
+from .config.crs_compose import CRSEntry, CRSComposeEnv
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
 
@@ -18,23 +18,34 @@ class CRS:
     @classmethod
     def from_yaml_file(cls, crs_path: Path, work_dir: Path) -> "CRS":
         config = CRSConfig.from_yaml_file(crs_path / CRS_YAML_PATH)
-        return cls(config.name, crs_path, work_dir)
+        return cls(config.name, crs_path, work_dir, None)
 
     @classmethod
     def from_crs_compose_entry(
-        cls, name: str, entry: CRSEntry, work_dir: Path
+        cls,
+        name: str,
+        entry: CRSEntry,
+        work_dir: Path,
+        crs_compose_env: CRSComposeEnv,
     ) -> "CRS":
         if entry.source.local_path:
-            return cls(name, Path(entry.source.local_path), work_dir)
+            return cls(name, Path(entry.source.local_path), work_dir, crs_compose_env)
         # TODO: implement other source types
         raise NotImplementedError("Only local_path source is implemented yet.")
 
-    def __init__(self, name: str, crs_path: Path, work_dir: Path):
+    def __init__(
+        self,
+        name: str,
+        crs_path: Path,
+        work_dir: Path,
+        crs_compose_env: Optional[CRSComposeEnv],
+    ):
         self.name = name
         self.crs_path = crs_path.expanduser().resolve()
         self.config = CRSConfig.from_yaml_file(self.crs_path / CRS_YAML_PATH)
         self.work_dir = work_dir / "crs" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        self.crs_compose_env = crs_compose_env
 
     def prepare(
         self,
@@ -188,6 +199,7 @@ class CRS:
                 additional_env=build_config.additional_env,
                 target=target_env,
                 build_out_dir=str(build_out_dir),
+                crs_compose_env=self.crs_compose_env.get_env(),
             )
 
             tmp_docker_compose_path.write_text(rendered)

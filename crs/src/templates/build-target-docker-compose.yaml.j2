@@ -4,6 +4,7 @@ services:
     privileged: true
     shm_size: 2g
     environment:
+      - RUN_ENV_TYPE= {{ crs_compose_env.type }}
       - FUZZING_ENGINE={{ target.engine }}
       - SANITIZER={{ target.sanitizer }}
       - ARCHITECTURE={{ target.architecture }}
