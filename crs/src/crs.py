@@ -139,9 +139,7 @@ class CRS:
                 success=False,
                 error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
-        build_out_dir = (
-            self.work_dir / (target_base_image.replace(":", "_")) / "BUILD_OUT_DIR"
-        )
+        build_work_dir = self.work_dir / (target_base_image.replace(":", "_"))
         for build_name, build_config in self.config.target_build_phase.builds.items():
             progress.add_task(
                 build_name,
@@ -152,7 +150,7 @@ class CRS:
                     target_base_image,
                     build_name,
                     build_config,
-                    build_out_dir,
+                    build_work_dir,
                     p,
                 ),
             )
@@ -164,11 +162,12 @@ class CRS:
         target_base_image: str,
         build_name: str,
         build_config,
-        build_out_dir: Path,
+        build_work_dir: Path,
         progress: MultiTaskProgress,
     ) -> "TaskResult":
-        build_out_dir = build_out_dir / build_name
+        build_out_dir = build_work_dir / "BUILD_OUT_DIR" / build_name
         build_out_dir.mkdir(parents=True, exist_ok=True)
+        build_cache_path = build_work_dir / f".{build_name}.cache"
         docker_compose_output = ""
         raw_name = f"{target_base_image}_{self.name}_{build_name}"
         name_hash = hashlib.sha256(raw_name.encode()).hexdigest()[:12]
@@ -235,6 +234,22 @@ class CRS:
 
         def run_docker_compose(progress, tmp_docker_compose_path) -> "TaskResult":
             nonlocal docker_compose_output
+            image_hash = get_image_content_hash(
+                f"{project_name}-target_builder", progress
+            )
+            if image_hash is None:
+                return TaskResult(
+                    success=False,
+                    error="Failed to get target_builder image hash.",
+                )
+
+            if build_cache_path.exists():
+                if build_cache_path.read_text() == image_hash:
+                    progress.add_note(
+                        "Build cache is up-to-date. Skipping target build."
+                    )
+                    return TaskResult(success=True)
+
             cmd = [
                 "docker",
                 "compose",
@@ -253,6 +268,7 @@ class CRS:
                 docker_compose_output = ret.output
             else:
                 docker_compose_output = ret.error
+            build_cache_path.write_text(image_hash)
             return ret
 
         with tempfile.NamedTemporaryFile(
@@ -286,3 +302,24 @@ class CRS:
                 f"📝 Docker compose file contents:\n---\n{docker_compose_contents}\n---"
             )
             return TaskResult(success=False, error=error)
+
+
+def get_image_content_hash(
+    image_name: str, progress: MultiTaskProgress
+) -> Optional[str]:
+    cmd = [
+        "docker",
+        "inspect",
+        "--format",
+        "{{json .RootFS.Layers}}",
+        image_name,
+    ]
+    ret = progress.run_command_with_streaming_output(
+        cmd=cmd,
+        cwd=None,
+    )
+    if not ret.success:
+        return None
+    layers_json = ret.output.strip()
+    image_hash = hashlib.sha256(layers_json.encode()).hexdigest()
+    return image_hash
