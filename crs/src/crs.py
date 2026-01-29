@@ -170,6 +170,9 @@ class CRS:
         build_out_dir = build_out_dir / build_name
         build_out_dir.mkdir(parents=True, exist_ok=True)
         docker_compose_output = ""
+        raw_name = f"{target_base_image}_{self.name}_{build_name}"
+        name_hash = hashlib.sha256(raw_name.encode()).hexdigest()[:12]
+        project_name = f"crs_{name_hash}"
 
         def check_outputs(progress=None) -> "TaskResult":
             output_paths = []
@@ -215,11 +218,23 @@ class CRS:
             tmp_docker_compose_path.write_text(rendered)
             return TaskResult(success=True)
 
+        def build_docker_compose(progress, tmp_docker_compose_path) -> TaskResult:
+            cmd = [
+                "docker",
+                "compose",
+                "-p",
+                project_name,
+                "-f",
+                str(tmp_docker_compose_path),
+                "build",
+            ]
+            return progress.run_command_with_streaming_output(
+                cmd=cmd,
+                cwd=self.crs_path,
+            )
+
         def run_docker_compose(progress, tmp_docker_compose_path) -> "TaskResult":
             nonlocal docker_compose_output
-            raw_name = f"{target_base_image}_{self.name}_{build_name}"
-            name_hash = hashlib.sha256(raw_name.encode()).hexdigest()[:12]
-            project_name = f"crs_{name_hash}"
             cmd = [
                 "docker",
                 "compose",
@@ -247,6 +262,10 @@ class CRS:
             progress.add_task(
                 "Prepare docker compose file",
                 lambda p: prepare_docker_compose_file(p, tmp_docker_compose_path),
+            )
+            progress.add_task(
+                "Prepare docker images defined in docker compose file",
+                lambda p: build_docker_compose(p, tmp_docker_compose_path),
             )
             progress.add_task(
                 "Build target by executing the docker compose",

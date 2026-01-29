@@ -179,7 +179,19 @@ class Target:
         ) as tmp_dockerfile:
             added_dockerfile = (self.proj_path / "Dockerfile").read_bytes()
             added_dockerfile += b"\n# Added by CRS Target build\n"
-            added_dockerfile += f"COPY --from=repo_path . /src/{self.name}\n".encode()
+            # Exclude volatile .git files that change on fetch/checkout but aren't needed for history:
+            # - FETCH_HEAD: updated every fetch
+            # - logs/: reflog entries (not needed for commit history)
+            # - refs/remotes/: remote tracking branches (updated on fetch)
+            # - ORIG_HEAD: updated on various operations
+            # Core history is preserved in: objects/, refs/heads/, refs/tags/, HEAD
+            added_dockerfile += (
+                f"COPY --exclude=.git/FETCH_HEAD "
+                f"--exclude=.git/logs "
+                f"--exclude=.git/refs/remotes "
+                f"--exclude=.git/ORIG_HEAD "
+                f"--from=repo_path . /src/{self.name}\n"
+            ).encode()
             tmp_dockerfile.write(added_dockerfile)
             tmp_dockerfile.flush()
 
