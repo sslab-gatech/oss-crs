@@ -218,6 +218,7 @@ class CRS:
             return TaskResult(success=True)
 
         def build_docker_compose(progress, tmp_docker_compose_path) -> TaskResult:
+            nonlocal docker_compose_output
             cmd = [
                 "docker",
                 "compose",
@@ -227,10 +228,12 @@ class CRS:
                 str(tmp_docker_compose_path),
                 "build",
             ]
-            return progress.run_command_with_streaming_output(
+            ret = progress.run_command_with_streaming_output(
                 cmd=cmd,
                 cwd=self.crs_path,
             )
+            docker_compose_output = ret.output if ret.success else ret.error
+            return ret
 
         def run_docker_compose(progress, tmp_docker_compose_path) -> "TaskResult":
             nonlocal docker_compose_output

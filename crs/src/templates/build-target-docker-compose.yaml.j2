@@ -19,7 +19,7 @@ services:
       context: {{ crs.path }}
       dockerfile: {{ crs.builder_dockerfile }}
       args:
-        - parent_image={{target.image}} 
+        - target_base_image={{target.image}} 
         - crs_version={{ crs.version }}
     volumes:
       - {{build_out_dir}}:/BUILD_OUT_DIR
