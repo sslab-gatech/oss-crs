@@ -20,6 +20,8 @@ services:
     build:
       context: {{ crs.crs_path }}
       dockerfile: {{ crs.crs_path }}/{{ module_config.dockerfile }}
+      additional_contexts:
+        libcrs: {{ libCRS_path }}
     environment:
       - RUN_ENV_TYPE= {{ crs_compose_env.type }}
       - FUZZING_ENGINE={{ target.engine }}

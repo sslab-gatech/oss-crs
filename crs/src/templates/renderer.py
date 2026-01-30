@@ -1,7 +1,15 @@
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..crs import CRS
+    from ..config.crs_compose import CRSComposeEnv
+    from ..target import Target
+    from ..config.crs import BuildConfig
 
 CUR_DIR = Path(__file__).parent
+LIBCRS_PATH = (CUR_DIR / "../../../libCRS").resolve()
 
 
 def render_template(template_path: Path, context: dict) -> str:
@@ -58,6 +66,7 @@ def render_build_target_docker_compose(
         "target": target_env,
         "build_out_dir": str(build_out_dir),
         "crs_compose_env": crs.crs_compose_env.get_env(),
+        "libCRS_path": str(LIBCRS_PATH),
     }
     return render_template(template_path, context)
 
@@ -70,6 +79,7 @@ def render_run_crs_compose_docker_compose(
 ) -> str:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
     context = {
+        "libCRS_path": str(LIBCRS_PATH),
         "crs_compose_name": crs_compose_name,
         "crs_list": crs_list,
         "crs_compose_env": crs_compose_env.get_env(),

@@ -162,7 +162,7 @@ class CRSCompose:
         progress.add_task(
             "Build docker images in the combined docker compose file",
             lambda progress: progress.docker_compose_build(
-                project_name, str(tmp_docker_compose_path)
+                project_name, tmp_docker_compose_path
             ),
         )
 

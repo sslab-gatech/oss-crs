@@ -431,10 +431,17 @@ class MultiTaskProgress:
             str(docker_compose_path),
             "build",
         ]
-        return self.run_command_with_streaming_output(
+        ret = self.run_command_with_streaming_output(
             cmd=cmd,
             info_text="Building Docker images with docker-compose",
         )
+        if ret.success:
+            return ret
+        docker_compose_contents = docker_compose_path.read_text()
+        ret.error += (
+            f"\n📝 Docker compose file contents:\n---\n{docker_compose_contents}\n---"
+        )
+        return ret
 
     def docker_compose_run(
         self, project_name: str, docker_compose_path: Path, service_name: str

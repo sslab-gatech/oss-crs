@@ -21,5 +21,7 @@ services:
       args:
         - target_base_image={{target.image}} 
         - crs_version={{ crs.version }}
+      additional_contexts:
+        libcrs: {{ libCRS_path }}
     volumes:
       - {{build_out_dir}}:/OSS_CRS_BUILD_OUT_DIR
