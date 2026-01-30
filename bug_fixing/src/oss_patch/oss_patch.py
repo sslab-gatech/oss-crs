@@ -174,6 +174,8 @@ class OSSPatch:
         skip_clone: bool = False,
         skip_baseline: bool = False,
         skip_snapshot: bool = False,
+        compare_rts: bool = False,
+        pull_snapshot: bool = False,
         benchmarks_dir: Path | None = None,
     ) -> bool:
         oss_fuzz_path = oss_fuzz_path.resolve()
@@ -229,6 +231,8 @@ class OSSPatch:
                 skip_clone=skip_clone,
                 skip_baseline=skip_baseline,
                 skip_snapshot=skip_snapshot,
+                compare_rts=compare_rts,
+                pull_snapshot=pull_snapshot,
             )
 
     def make_inc_snapshot(

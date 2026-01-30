@@ -13,6 +13,7 @@ from bug_fixing.src.oss_patch.functions import (
     change_ownership_with_docker,
     pull_project_source_from_tarball,
     get_cpv_config,
+    ensure_inc_build_image,
 )
 
 from bug_fixing.src.oss_patch.inc_build_checker.rts_checker import (
@@ -145,6 +146,8 @@ class IncrementalBuildChecker:
         skip_clone: bool = False,
         skip_baseline: bool = False,
         skip_snapshot: bool = False,
+        compare_rts: bool = False,
+        pull_snapshot: bool = False,
     ) -> bool:
         """Test incremental build (and optionally RTS) for a project.
 
@@ -154,6 +157,8 @@ class IncrementalBuildChecker:
             skip_clone: If True, use existing source code instead of cloning fresh
             skip_baseline: If True, skip baseline build and test measurement
             skip_snapshot: If True, skip creating incremental build snapshot (use existing snapshot)
+            compare_rts: If True, run both RTS OFF and RTS ON modes for comparison
+            pull_snapshot: If True, pull snapshot from remote registry instead of creating locally
         """
         proj_src_path = self.work_dir / "project-src"
 
@@ -229,16 +234,29 @@ class IncrementalBuildChecker:
                 return False
 
         # Step 4: Take snapshot for each required sanitizer
-        if skip_snapshot:
+        if pull_snapshot:
+            logger.info("Pulling incremental build snapshots from remote registry...")
+            for sanitizer in self.required_sanitizers:
+                if not ensure_inc_build_image(
+                    self.project_name,
+                    self.oss_fuzz_path,
+                    sanitizer=sanitizer,
+                ):
+                    logger.error(f"Failed to pull inc-build image for {sanitizer}")
+                    return False
+                logger.info(f"Successfully pulled inc-build image for {sanitizer}")
+        elif skip_snapshot:
             logger.info("Skipping snapshot creation (--skip-snapshot)")
         else:
+            # For compare_rts mode, we need RTS enabled in snapshot to support both modes
+            snapshot_rts_enabled = with_rts or compare_rts
             for sanitizer in self.required_sanitizers:
                 logger.info(
                     f"Now taking a snapshot for incremental build (sanitizer={sanitizer})"
                 )
                 if not self.project_builder.take_incremental_build_snapshot(
                     proj_src_path,
-                    rts_enabled=with_rts,
+                    rts_enabled=snapshot_rts_enabled,
                     rts_tool=rts_tool,
                     sanitizer=sanitizer,
                 ):
@@ -255,15 +273,40 @@ class IncrementalBuildChecker:
                 return False
 
         # Step 6: Check against POVs and measure test time with inc build (+ RTS if enabled)
-        if not self._check_against_povs(proj_src_path, with_rts=with_rts):
-            return False
+        if compare_rts:
+            # Mode 1: Inc-build only (RTS OFF)
+            logger.info("=" * 60)
+            logger.info("=== Mode 1: Inc-build only (RTS OFF) ===")
+            logger.info("=" * 60)
+            if not self._check_against_povs(proj_src_path, with_rts=False):
+                return False
+            self.test_results_no_rts = self.test_results.copy()
+            self.avg_test_time_no_rts = self.avg_test_time if hasattr(self, "avg_test_time") else None
+            self.test_results = []
 
-        logger.info(f"Incremental build is working correctly for {self.project_name}")
+            # Mode 2: Inc-build + RTS
+            logger.info("=" * 60)
+            logger.info("=== Mode 2: Inc-build + RTS ===")
+            logger.info("=" * 60)
+            if not self._check_against_povs(proj_src_path, with_rts=True):
+                return False
+            self.test_results_with_rts = self.test_results.copy()
+            self.avg_test_time_with_rts = self.avg_test_time if hasattr(self, "avg_test_time") else None
 
-        # Step 7: Print summary
-        self._print_test_summary(
-            with_rts=with_rts, skip_baseline=skip_baseline, skip_snapshot=skip_snapshot
-        )
+            logger.info(f"Incremental build comparison completed for {self.project_name}")
+
+            # Step 7: Print comparison summary
+            self._print_comparison_summary(skip_baseline=skip_baseline, skip_snapshot=skip_snapshot or pull_snapshot)
+        else:
+            if not self._check_against_povs(proj_src_path, with_rts=with_rts):
+                return False
+
+            logger.info(f"Incremental build is working correctly for {self.project_name}")
+
+            # Step 7: Print summary
+            self._print_test_summary(
+                with_rts=with_rts, skip_baseline=skip_baseline, skip_snapshot=skip_snapshot
+            )
 
         return True
 
@@ -957,6 +1000,90 @@ class IncrementalBuildChecker:
         log_and_collect("=" * 60)
 
         # Save summary to file
+        summary_file = self.work_dir / "summary.txt"
+        with open(summary_file, "w") as f:
+            f.write("\n".join(summary_lines) + "\n")
+        logger.info(f"Summary saved to: {summary_file}")
+
+    def _print_comparison_summary(
+        self,
+        skip_baseline: bool = False,
+        skip_snapshot: bool = False,
+    ):
+        """Print comparison summary for --compare-rts mode (RTS OFF vs RTS ON)."""
+        summary_lines = []
+
+        def log_and_collect(msg: str):
+            logger.info(msg)
+            summary_lines.append(msg)
+
+        log_and_collect("=" * 60)
+        log_and_collect("Test Benchmark Results (RTS Comparison Mode):")
+        log_and_collect("=" * 60)
+
+        log_and_collect("[Sanitizer Configuration]")
+        log_and_collect(f"  Required sanitizers: {self.required_sanitizers}")
+        log_and_collect("-" * 60)
+
+        log_and_collect("[Build Time Comparison]")
+        if skip_baseline:
+            log_and_collect("  Baseline build time: SKIPPED")
+        elif self.build_time_without_inc_build is not None:
+            log_and_collect(f"  Baseline (no inc-build): {self.build_time_without_inc_build:.2f}s")
+        if self.build_time_with_inc_build:
+            for sanitizer, build_time in self.build_time_with_inc_build.items():
+                log_and_collect(f"  Inc-build ({sanitizer}): {build_time:.2f}s")
+                if not skip_baseline and self.build_time_without_inc_build:
+                    speedup = self.build_time_without_inc_build / build_time
+                    log_and_collect(f"    Speedup: {speedup:.2f}x")
+        log_and_collect("-" * 60)
+
+        log_and_collect("[Test Time Comparison]")
+        baseline_time = None
+        if skip_baseline:
+            log_and_collect("  Baseline (no inc-build):     SKIPPED")
+        elif hasattr(self, "baseline_test_time"):
+            baseline_time = self.baseline_test_time
+            log_and_collect(f"  Baseline (no inc-build):     {baseline_time:.2f}s")
+
+        no_rts_time = None
+        if hasattr(self, "avg_test_time_no_rts") and self.avg_test_time_no_rts is not None:
+            no_rts_time = self.avg_test_time_no_rts
+            if baseline_time and baseline_time > 0:
+                speedup = baseline_time / no_rts_time
+                log_and_collect(f"  Inc-build only (RTS OFF):    {no_rts_time:.2f}s  ({speedup:.2f}x speedup)")
+            else:
+                log_and_collect(f"  Inc-build only (RTS OFF):    {no_rts_time:.2f}s")
+
+        with_rts_time = None
+        if hasattr(self, "avg_test_time_with_rts") and self.avg_test_time_with_rts is not None:
+            with_rts_time = self.avg_test_time_with_rts
+            if baseline_time and baseline_time > 0:
+                speedup = baseline_time / with_rts_time
+                log_and_collect(f"  Inc-build + RTS:             {with_rts_time:.2f}s  ({speedup:.2f}x speedup)")
+            else:
+                log_and_collect(f"  Inc-build + RTS:             {with_rts_time:.2f}s")
+
+        if no_rts_time and with_rts_time and no_rts_time > 0:
+            rts_speedup = no_rts_time / with_rts_time
+            log_and_collect(f"  RTS additional speedup:      {rts_speedup:.2f}x (over inc-build only)")
+
+        log_and_collect("-" * 60)
+        log_and_collect("[Per-POV Results - Inc-build only (RTS OFF)]")
+        if hasattr(self, "test_results_no_rts"):
+            for pov_name, test_time, stats, sanitizer in self.test_results_no_rts:
+                tests_str = f", tests={stats[0]}" if stats else ""
+                log_and_collect(f"  {pov_name} ({sanitizer}): time={test_time:.2f}s{tests_str}")
+
+        log_and_collect("-" * 60)
+        log_and_collect("[Per-POV Results - Inc-build + RTS]")
+        if hasattr(self, "test_results_with_rts"):
+            for pov_name, test_time, stats, sanitizer in self.test_results_with_rts:
+                tests_str = f", tests={stats[0]}" if stats else ""
+                log_and_collect(f"  {pov_name} ({sanitizer}): time={test_time:.2f}s{tests_str}")
+
+        log_and_collect("=" * 60)
+
         summary_file = self.work_dir / "summary.txt"
         with open(summary_file, "w") as f:
             f.write("\n".join(summary_lines) + "\n")

@@ -139,6 +139,8 @@ def main():  # pylint: disable=too-many-branches,too-many-return-statements
             skip_clone=args.skip_clone,
             skip_baseline=args.skip_baseline,
             skip_snapshot=args.skip_snapshot,
+            compare_rts=args.compare_rts,
+            pull_snapshot=args.pull_snapshot,
             benchmarks_dir=Path(args.benchmarks_dir),
         )
     elif args.command == "make-inc-snapshot":
@@ -368,6 +370,20 @@ def _get_parser():  # pylint: disable=too-many-statements,too-many-locals
         action="store_true",
         default=False,
         help="Skip creating incremental build snapshot. Useful when snapshot already exists.",
+    )
+    test_inc_build_parser.add_argument(
+        "--compare-rts",
+        action="store_true",
+        default=False,
+        help="Run tests twice: once with inc-build only (RTS OFF), "
+        "once with inc-build + RTS. Compares both results.",
+    )
+    test_inc_build_parser.add_argument(
+        "--pull-snapshot",
+        action="store_true",
+        default=False,
+        help="Pull incremental build snapshot from remote registry "
+        "(ghcr.io/team-atlanta/crsbench) instead of creating locally.",
     )
     test_inc_build_parser.add_argument(
         "--benchmarks-dir",
