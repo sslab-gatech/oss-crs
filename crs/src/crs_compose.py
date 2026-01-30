@@ -4,7 +4,6 @@ from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
-from . import utils
 
 
 class CRSCompose:
@@ -145,16 +144,10 @@ class CRSCompose:
         self, target: Target, tmp_docker_compose_path: Path, progress: MultiTaskProgress
     ) -> TaskResult:
         def prepare_docker_compose(progress) -> TaskResult:
-            template_path = (
-                Path(__file__).parent / "templates" / "run-crs-docker-compose.yaml.j2"
-            )
-            context = {}
-            rendered = utils.render_template(template_path, context)
-            tmp_docker_compose_path.write_text(rendered)
             return TaskResult(success=True)
 
         progress.add_task(
-            "Prepare combined docker compose file", prepare_docker_compose
+            "TODO: Prepare combined docker compose file", prepare_docker_compose
         )
         # progress.add_task("Prepare combined docker compose file", build_docker_compose)
 

@@ -4,13 +4,11 @@ import hashlib
 import os
 import tempfile
 
-from jinja2 import Template
-
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry, CRSComposeEnv
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
-from . import utils
+from .templates import renderer
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
@@ -220,28 +218,9 @@ class CRS:
         def prepare_docker_compose_file(
             progress, tmp_docker_compose_path: Path
         ) -> "TaskResult":
-            template_path = (
-                Path(__file__).parent
-                / "templates"
-                / "build-target-docker-compose.yaml.j2"
+            rendered = renderer.render_build_target_docker_compose(
+                self, target, target_base_image, build_config, build_out_dir
             )
-            target_env = target.get_target_env()
-            target_env["image"] = target_base_image
-
-            context = {
-                "crs": {
-                    "name": self.name,
-                    "path": str(self.crs_path),
-                    "builder_dockerfile": str(self.crs_path / build_config.dockerfile),
-                    "version": self.config.version,
-                },
-                "additional_env": build_config.additional_env,
-                "target": target_env,
-                "build_out_dir": str(build_out_dir),
-                "crs_compose_env": self.crs_compose_env.get_env(),
-            }
-
-            rendered = utils.render_template(template_path, context)
             tmp_docker_compose_path.write_text(rendered)
             return TaskResult(success=True)
 
