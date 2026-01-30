@@ -23,16 +23,16 @@ services:
       additional_contexts:
         libcrs: {{ libCRS_path }}
     environment:
-      - RUN_ENV_TYPE= {{ crs_compose_env.type }}
       - FUZZING_ENGINE={{ target.engine }}
       - SANITIZER={{ target.sanitizer }}
       - ARCHITECTURE={{ target.architecture }}
       - PROJECT_NAME={{ target.name }}
       - FUZZING_LANGUAGE={{ target.language }}
-      - CRS_TARGET={{ target.name }}
-      - OSS_CRS_TARGET_HARNESS={{ target.harness }}
       - HELPER=True
+      - OSS_CRS_RUN_ENV_TYPE= {{ crs_compose_env.type }}
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
+      - OSS_CRS_TARGET={{ target.name }}
+      - OSS_CRS_TARGET_HARNESS={{ target.harness }}
 {%- for env_key, env_value in module_config.additional_env.items() %}
       - {{ env_key }}="{{ env_value }}"
 {%- endfor %}

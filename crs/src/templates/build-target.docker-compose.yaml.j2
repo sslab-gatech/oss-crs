@@ -3,15 +3,15 @@ services:
     privileged: true
     shm_size: 2g
     environment:
-      - RUN_ENV_TYPE= {{ crs_compose_env.type }}
       - FUZZING_ENGINE={{ target.engine }}
       - SANITIZER={{ target.sanitizer }}
       - ARCHITECTURE={{ target.architecture }}
       - PROJECT_NAME={{ target.name }}
       - FUZZING_LANGUAGE={{ target.language }}
       - HELPER=True
+      - OSS_CRS_RUN_ENV_TYPE={{ crs_compose_env.type }}
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
-      - CRS_TARGET={{ target.name }}
+      - OSS_CRS_TARGET={{ target.name }}
 {%- for key, value in additional_env.items() %}
       - {{ key }}={{ value }}
 {%- endfor %}
