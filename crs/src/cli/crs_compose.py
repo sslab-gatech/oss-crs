@@ -74,6 +74,12 @@ def add_run_command(subparsers):
     )
     add_common_arguments(run)
     add_target_arguments(run)
+    run.add_argument(
+        "--target-harness",
+        type=str,
+        required=True,
+        help="Specify the target harness to use for the run",
+    )
 
 
 def add_check_command(subparsers):
@@ -81,8 +87,13 @@ def add_check_command(subparsers):
 
 
 def init_target_from_args(args) -> Target:
+    target_harness = args.target_harness if hasattr(args, "target_harness") else None
     return Target(
-        args.work_dir, args.target_proj_path, args.target_repo_path, args.no_checkout
+        args.work_dir,
+        args.target_proj_path,
+        args.target_repo_path,
+        args.no_checkout,
+        target_harness,
     )
 
 

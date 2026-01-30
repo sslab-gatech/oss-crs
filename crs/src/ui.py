@@ -418,7 +418,9 @@ class MultiTaskProgress:
         self._head += items
 
     def docker_compose_build(
-        self, project_name: str, docker_compose_path: Path, cwd: Path
+        self,
+        project_name: str,
+        docker_compose_path: Path,
     ) -> TaskResult:
         cmd = [
             "docker",
@@ -431,12 +433,11 @@ class MultiTaskProgress:
         ]
         return self.run_command_with_streaming_output(
             cmd=cmd,
-            cwd=cwd,
             info_text="Building Docker images with docker-compose",
         )
 
     def docker_compose_run(
-        self, project_name: str, docker_compose_path: Path, cwd: Path, service_name: str
+        self, project_name: str, docker_compose_path: Path, service_name: str
     ) -> TaskResult:
         cmd = [
             "docker",
@@ -451,12 +452,13 @@ class MultiTaskProgress:
         ]
         return self.run_command_with_streaming_output(
             cmd=cmd,
-            cwd=cwd,
             info_text=f"Running service {service_name} with docker-compose",
         )
 
     def docker_compose_up(
-        self, project_name: str, docker_compose_path: Path, cwd: Path
+        self,
+        project_name: str,
+        docker_compose_path: Path,
     ) -> TaskResult:
         cmd = [
             "docker",
@@ -466,10 +468,10 @@ class MultiTaskProgress:
             "-f",
             str(docker_compose_path),
             "up",
+            "--abort-on-container-failure",
         ]
         return self.run_command_with_streaming_output(
             cmd=cmd,
-            cwd=cwd,
             info_text="Bringing up services with docker-compose",
         )
 

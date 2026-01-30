@@ -21,6 +21,7 @@ class Target:
         proj_path: Path,
         repo_path: Optional[Path],
         no_checkout: bool = False,
+        target_harness: Optional[str] = None,
     ):
         self.name = extract_name_from_proj_path(str(proj_path))
         self.work_dir = work_dir / "targets" / self.name
@@ -33,6 +34,7 @@ class Target:
         self.config = TargetConfig.from_yaml_file(proj_path / "project.yaml")
         self.repo_hash: Optional[str] = None
         self.no_checkout = no_checkout
+        self.target_harness = target_harness
 
     def get_docker_image_name(self) -> str:
         repo_hash = self.__get_repo_hash()
@@ -227,10 +229,15 @@ class Target:
 
     def get_target_env(self) -> dict:
         # TODO: implement this properly
-        return {
+        ret = {
             "name": self.name,
             "language": self.config.language.value,
             "engine": "libfuzzer",
             "sanitizer": "address",
             "architecture": "x86_64",
         }
+
+        if self.target_harness:
+            ret["harness"] = self.target_harness
+
+        return ret

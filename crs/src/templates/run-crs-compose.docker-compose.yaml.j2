@@ -1,0 +1,46 @@
+networks:
+  crs-network:
+    driver: bridge
+    name: {{ crs_compose_name }}-network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  crs-shared-volume:
+    driver: local
+    name: {{ crs_compose_name }}-shared-volume
+
+services:
+# crs.name can be different from name defined in crs.yaml; crs.name comes from crs-compose.yaml
+{% for crs in crs_list %} 
+{% for module_name, module_config in crs.config.crs_run_phase.modules.items() %}
+  {{ crs.name }}_{{ module_name }}:
+    build:
+      context: {{ crs.crs_path }}
+      dockerfile: {{ crs.crs_path }}/{{ module_config.dockerfile }}
+    environment:
+      - RUN_ENV_TYPE= {{ crs_compose_env.type }}
+      - FUZZING_ENGINE={{ target.engine }}
+      - SANITIZER={{ target.sanitizer }}
+      - ARCHITECTURE={{ target.architecture }}
+      - PROJECT_NAME={{ target.name }}
+      - FUZZING_LANGUAGE={{ target.language }}
+      - CRS_TARGET={{ target.name }}
+      - OSS_CRS_TARGET_HARNESS={{ target.harness }}
+      - HELPER=True
+      - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
+{%- for env_key, env_value in module_config.additional_env.items() %}
+      - {{ env_key }}="{{ env_value }}"
+{%- endfor %}
+    # TODO: network, volumes, resource limits? 
+    # networks:
+    #  - crs-network
+    # volumes:
+    #  - crs-shared-volume:/shared
+    # cpuset: "{{ cpuset }}"
+    # mem_limit: {{ memory }}
+
+{% endfor %}
+{% endfor %}

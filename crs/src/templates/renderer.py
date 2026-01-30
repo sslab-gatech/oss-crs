@@ -44,7 +44,7 @@ def render_build_target_docker_compose(
     Returns:
         str: Rendered docker-compose content as a string.
     """
-    template_path = CUR_DIR / "build-target-docker-compose.yaml.j2"
+    template_path = CUR_DIR / "build-target.docker-compose.yaml.j2"
     target_env = target.get_target_env()
     target_env["image"] = target_base_image
     context = {
@@ -59,5 +59,20 @@ def render_build_target_docker_compose(
         "build_out_dir": str(build_out_dir),
         "crs_compose_env": crs.crs_compose_env.get_env(),
     }
-    rendered = render_template(template_path, context)
-    return rendered
+    return render_template(template_path, context)
+
+
+def render_run_crs_compose_docker_compose(
+    crs_compose_name: str,
+    crs_compose_env: "CRSComposeEnv",
+    crs_list: list["CRS"],
+    target: "Target",
+) -> str:
+    template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
+    context = {
+        "crs_compose_name": crs_compose_name,
+        "crs_list": crs_list,
+        "crs_compose_env": crs_compose_env.get_env(),
+        "target": target.get_target_env(),
+    }
+    return render_template(template_path, context)

@@ -4,6 +4,7 @@ from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
+from .templates import renderer
 
 
 class CRSCompose:
@@ -118,17 +119,18 @@ class CRSCompose:
             mode="w+", suffix=".docker-compose", delete=True
         ) as tmp_docker_compose_file:
             tmp_docker_compose_path = Path(tmp_docker_compose_file.name)
+            project_name = f"crs_compose_{tmp_docker_compose_path.stem}"
             tasks = [
                 (
                     "Prepare Running Environment",
                     lambda progress: self.__prepare_local_running_env(
-                        target, tmp_docker_compose_path, progress
+                        project_name, target, tmp_docker_compose_path, progress
                     ),
                 ),
                 (
                     "Run CRSs!",
                     lambda progress: self.__run_local_running_env(
-                        tmp_docker_compose_path, progress
+                        project_name, tmp_docker_compose_path, progress
                     ),
                 ),
             ]
@@ -141,22 +143,39 @@ class CRSCompose:
         return False
 
     def __prepare_local_running_env(
-        self, target: Target, tmp_docker_compose_path: Path, progress: MultiTaskProgress
+        self,
+        project_name: str,
+        target: Target,
+        tmp_docker_compose_path: Path,
+        progress: MultiTaskProgress,
     ) -> TaskResult:
-        def prepare_docker_compose(progress) -> TaskResult:
+        def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
+            content = renderer.render_run_crs_compose_docker_compose(
+                project_name, self.crs_compose_env, self.crs_list, target
+            )
+            tmp_docker_compose_path.write_text(content)
             return TaskResult(success=True)
 
         progress.add_task(
-            "TODO: Prepare combined docker compose file", prepare_docker_compose
+            "Prepare combined docker compose file", prepare_docker_compose
         )
-        # progress.add_task("Prepare combined docker compose file", build_docker_compose)
+        progress.add_task(
+            "Build docker images in the combined docker compose file",
+            lambda progress: progress.docker_compose_build(
+                project_name, str(tmp_docker_compose_path)
+            ),
+        )
 
         return progress.run_added_tasks()
 
     def __run_local_running_env(
-        self, tmp_docker_compose_path: Path, progress: MultiTaskProgress
+        self,
+        project_name: str,
+        tmp_docker_compose_path: Path,
+        progress: MultiTaskProgress,
     ) -> TaskResult:
-        # TODO: Implement actual running logic
-        cmd = ["/bin/bash", "-c", "ls -als; sleep 10"]
-        progress.run_command_with_streaming_output(cmd, info_text="Running CRS Compose")
-        return TaskResult(success=False, error="TODO: Implement __run_all_crs")
+        ret = progress.docker_compose_up(project_name, str(tmp_docker_compose_path))
+        if ret.success:
+            return ret
+        ret.error += "\n\n📝 Depending on your Dockerfile, You might need to run `uv run crs-compose prepare` to apply your changes."
+        return ret
