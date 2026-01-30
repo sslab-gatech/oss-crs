@@ -15,7 +15,13 @@ def extract_name_from_proj_path(proj_path: str) -> str:
 
 
 class Target:
-    def __init__(self, work_dir: Path, proj_path: Path, repo_path: Optional[Path]):
+    def __init__(
+        self,
+        work_dir: Path,
+        proj_path: Path,
+        repo_path: Optional[Path],
+        no_checkout: bool = False,
+    ):
         self.name = extract_name_from_proj_path(str(proj_path))
         self.work_dir = work_dir / "targets" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
@@ -26,12 +32,17 @@ class Target:
             self.repo_path = self.work_dir / "repo"
         self.config = TargetConfig.from_yaml_file(proj_path / "project.yaml")
         self.repo_hash: Optional[str] = None
+        self.no_checkout = no_checkout
 
-    def build_docker_image(self, no_checkout: bool) -> str:
-        if not self.__init_repo(no_checkout):
+    def get_docker_image_name(self) -> str:
+        repo_hash = self.__get_repo_hash()
+        return f"{self.name}:{repo_hash}"
+
+    def build_docker_image(self) -> str:
+        if not self.__init_repo(self.no_checkout):
             return None
         repo_hash = self.__get_repo_hash()
-        image_tag = f"{self.name}:{repo_hash}"
+        image_tag = self.get_docker_image_name()
 
         tasks = [
             (

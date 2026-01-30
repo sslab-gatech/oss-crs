@@ -156,6 +156,49 @@ class CRS:
             )
         return TaskResult(success=progress.run_added_tasks())
 
+    def is_target_built(
+        self, target: Target, target_base_image: str, progress: MultiTaskProgress
+    ) -> TaskResult:
+        if not self.__is_supported_target(target):
+            return TaskResult(
+                success=False,
+                error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
+            )
+        build_work_dir = self.work_dir / (target_base_image.replace(":", "_"))
+        for build_name, build_config in self.config.target_build_phase.builds.items():
+            progress.add_task(
+                f"Check build outputs for {build_name}",
+                lambda p,
+                build_name=build_name,
+                build_config=build_config: self.__check_outputs(
+                    build_config,
+                    self.__get_build_output_dir(build_work_dir, build_name),
+                    p,
+                ),
+            )
+        return TaskResult(success=progress.run_added_tasks())
+
+    def __get_build_output_dir(self, build_work_dir: Path, build_name: str) -> Path:
+        return build_work_dir / "BUILD_OUT_DIR" / build_name
+
+    def __check_outputs(
+        self, build_config, build_out_dir, progress=None
+    ) -> "TaskResult":
+        output_paths = []
+        for output in build_config.outputs:
+            output_path = build_out_dir / output
+            output_paths.append(output_path)
+        if progress:
+            for output_path in output_paths:
+                progress.add_task(
+                    f"{output_path}",
+                    lambda p, o=output_path: TaskResult(success=o.exists()),
+                )
+            return TaskResult(success=progress.run_added_tasks())
+        else:
+            all_exist = all(p.exists() for p in output_paths)
+            return TaskResult(success=all_exist)
+
     def __build_target_one(
         self,
         target,
@@ -165,29 +208,13 @@ class CRS:
         build_work_dir: Path,
         progress: MultiTaskProgress,
     ) -> "TaskResult":
-        build_out_dir = build_work_dir / "BUILD_OUT_DIR" / build_name
+        build_out_dir = self.__get_build_output_dir(build_work_dir, build_name)
         build_out_dir.mkdir(parents=True, exist_ok=True)
         build_cache_path = build_work_dir / f".{build_name}.cache"
         docker_compose_output = ""
         raw_name = f"{target_base_image}_{self.name}_{build_name}"
         name_hash = hashlib.sha256(raw_name.encode()).hexdigest()[:12]
         project_name = f"crs_{name_hash}"
-
-        def check_outputs(progress=None) -> "TaskResult":
-            output_paths = []
-            for output in build_config.outputs:
-                output_path = build_out_dir / output
-                output_paths.append(output_path)
-            if progress:
-                for output_path in output_paths:
-                    progress.add_task(
-                        f"{output_path}",
-                        lambda p, o=output_path: TaskResult(success=o.exists()),
-                    )
-                return TaskResult(success=progress.run_added_tasks())
-            else:
-                all_exist = all(p.exists() for p in output_paths)
-                return TaskResult(success=all_exist)
 
         def prepare_docker_compose_file(
             progress, tmp_docker_compose_path: Path
@@ -290,7 +317,10 @@ class CRS:
                 "Build target by executing the docker compose",
                 lambda p: run_docker_compose(p, tmp_docker_compose_path),
             )
-            progress.add_task("Check outputs", check_outputs)
+            progress.add_task(
+                "Check outputs",
+                lambda p: self.__check_outputs(build_config, build_out_dir, p),
+            )
 
             success = progress.run_added_tasks()
             if success:

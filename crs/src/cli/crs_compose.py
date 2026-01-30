@@ -23,6 +23,30 @@ def add_common_arguments(parser):
     )
 
 
+def add_target_arguments(parser):
+    parser.add_argument(
+        "--target-proj-path",
+        type=Path,
+        required=True,
+        help="""
+        Target Project Path where includes oss-fuzz compatible files (e.g., Dockerfile, project.yaml, ...)
+        # TODO: this accepts only local paths for now. But, we will support remote paths later.
+        """,
+    )
+    parser.add_argument(
+        "--target-repo-path",
+        type=Path,
+        required=False,
+        help="Local path to the target repository to build with the target project configuration.",
+    )
+    parser.add_argument(
+        "--no-checkout",
+        type=bool,
+        default=False,
+        help="Whether to checkout the target repository before building.",
+    )
+
+
 def add_prepare_command(subparsers):
     prepare = subparsers.add_parser(
         "prepare", help="Prepare CRSs defined in CRS Compose file"
@@ -41,35 +65,25 @@ def add_build_target_command(subparsers):
         "build-target", help="Build target repository defined in CRS Compose file"
     )
     add_common_arguments(build_target)
-    build_target.add_argument(
-        "--target-proj-path",
-        type=Path,
-        required=True,
-        help="""
-        Target Project Path where includes oss-fuzz compatible files (e.g., Dockerfile, project.yaml, ...)
-        # TODO: this accepts only local paths for now. But, we will support remote paths later.
-        """,
-    )
-    build_target.add_argument(
-        "--target-repo-path",
-        type=Path,
-        required=False,
-        help="Local path to the target repository to build with the target project configuration.",
-    )
-    build_target.add_argument(
-        "--no-checkout",
-        type=bool,
-        default=False,
-        help="Whether to checkout the target repository before building.",
-    )
+    add_target_arguments(build_target)
 
 
 def add_run_command(subparsers):
-    pass
+    run = subparsers.add_parser(
+        "run", help="Run CRSs against a target using CRS Compose file"
+    )
+    add_common_arguments(run)
+    add_target_arguments(run)
 
 
 def add_check_command(subparsers):
     pass
+
+
+def init_target_from_args(args) -> Target:
+    return Target(
+        args.work_dir, args.target_proj_path, args.target_repo_path, args.no_checkout
+    )
 
 
 def main() -> bool:
@@ -92,11 +106,13 @@ def main() -> bool:
         if not crs_compose.prepare(publish=args.publish):
             return False
     elif args.command == "build-target":
-        target = Target(args.work_dir, args.target_proj_path, args.target_repo_path)
-        if not crs_compose.build_target(target, args.no_checkout):
+        target = init_target_from_args(args)
+        if not crs_compose.build_target(target):
             return False
     elif args.command == "run":
-        pass
+        target = init_target_from_args(args)
+        if not crs_compose.run(target):
+            return False
     elif args.command == "check":
         pass
     return True

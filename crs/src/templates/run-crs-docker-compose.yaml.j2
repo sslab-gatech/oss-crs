@@ -1,0 +1,47 @@
+# Docker Compose configuration generated from CRS configuration
+# CRS Name: {{ crs_config.name }}
+# CRS Version: {{ crs_config.version }}
+# CRS Type: {{ crs_config.type | join(', ') }}
+
+networks:
+  crs-network:
+    driver: bridge
+    name: {{ crs_name }}-network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  crs-shared-volume:
+    driver: local
+    name: {{ crs_name }}-shared-volume
+
+services:
+{% for module_name, module_config in crs_config.crs_run_phase.items() %}
+  {{ module_name }}:
+    image: {{ docker_registry }}/{{ crs_config.name }}/{{ module_name }}:{{ crs_config.version }}
+    container_name: {{ crs_name }}-{{ module_name }}
+    build:
+      context: {{ crs_source_path }}
+      dockerfile: {{ module_config.dockerfile }}
+    networks:
+      - crs-network
+    volumes:
+      - crs-shared-volume:/shared
+      - {{ work_dir }}:/work
+{% if module_config.additional_env %}
+    environment:
+{% for env_key, env_value in module_config.additional_env.items() %}
+      {{ env_key }}: "{{ env_value }}"
+{% endfor %}
+{% endif %}
+{% if cpuset is defined %}
+    cpuset: "{{ cpuset }}"
+{% endif %}
+{% if memory is defined %}
+    mem_limit: {{ memory }}
+{% endif %}
+    # TODO: consider: `restart: unless-stopped`
+
+{% endfor %}
