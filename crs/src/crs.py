@@ -247,18 +247,8 @@ class CRS:
 
         def build_docker_compose(progress, tmp_docker_compose_path) -> TaskResult:
             nonlocal docker_compose_output
-            cmd = [
-                "docker",
-                "compose",
-                "-p",
-                project_name,
-                "-f",
-                str(tmp_docker_compose_path),
-                "build",
-            ]
-            ret = progress.run_command_with_streaming_output(
-                cmd=cmd,
-                cwd=self.crs_path,
+            ret = progress.docker_compose_build(
+                project_name, tmp_docker_compose_path, self.crs_path
             )
             docker_compose_output = ret.output if ret.success else ret.error
             return ret
@@ -280,21 +270,10 @@ class CRS:
                         "Build cache is up-to-date. Skipping target build."
                     )
                     return TaskResult(success=True)
-
-            cmd = [
-                "docker",
-                "compose",
-                "-p",
-                project_name,
-                "-f",
-                str(tmp_docker_compose_path),
-                "run",
-                "target_builder",
-            ]
-            ret = progress.run_command_with_streaming_output(
-                cmd=cmd,
-                cwd=self.crs_path,
+            ret = progress.docker_compose_run(
+                project_name, tmp_docker_compose_path, self.crs_path, "target_builder"
             )
+
             if ret.success:
                 docker_compose_output = ret.output
             else:
