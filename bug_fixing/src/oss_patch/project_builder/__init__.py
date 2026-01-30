@@ -778,17 +778,12 @@ class OSSPatchProjectBuilder:
             )
             return False
 
-        # Replace the current :latest with incremental build snapshot
         # Only create :original tag if it doesn't exist (to prevent overwriting on re-runs)
+        # Note: :latest retag is now handled in _load_necessary_images_to_docker_root
+        # to avoid affecting host docker images
         original_tag = f"{builder_image_name}:original"
         if not docker_image_exists(original_tag):
             retag_docker_image(builder_image_name, original_tag)
-        retag_docker_image(
-            get_incremental_build_image_name(
-                self.oss_fuzz_path, self.project_name, sanitizer
-            ),
-            f"{builder_image_name}:latest",
-        )
 
         return True
 

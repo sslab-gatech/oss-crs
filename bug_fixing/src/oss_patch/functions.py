@@ -559,6 +559,31 @@ def docker_image_exists_in_dir(image_name: str, docker_root_path: Path) -> bool:
         return False
 
 
+def retag_docker_image_in_dir(
+    src_image: str, dst_image: str, docker_root_path: Path
+) -> bool:
+    """Retag a Docker image inside a docker root directory."""
+    command = (
+        f"docker run --privileged --rm "
+        f"-v {docker_root_path}:{DEFAULT_DOCKER_ROOT_DIR} "
+        f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
+        f"docker tag {src_image} {dst_image}"
+    )
+    proc = subprocess.run(
+        command,
+        shell=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    if proc.returncode == 0:
+        logger.info(f'Retagged "{src_image}" -> "{dst_image}" in docker root')
+        return True
+    else:
+        logger.error(f'Failed to retag "{src_image}" -> "{dst_image}" in docker root')
+        return False
+
+
 def docker_image_exists(image_name: str) -> bool:
     client = docker.from_env()
 

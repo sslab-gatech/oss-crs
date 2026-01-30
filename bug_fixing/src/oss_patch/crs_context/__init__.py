@@ -11,11 +11,13 @@ from bug_fixing.src.oss_patch.functions import (
     load_docker_images_to_dir,
     get_builder_image_name,
     get_base_runner_image_name,
+    get_incremental_build_image_name,
     get_git_commit_hash,
     copy_git_repo,
     pull_project_source,
     is_git_repository,
-    remove_directory_with_docker
+    remove_directory_with_docker,
+    retag_docker_image_in_dir,
 )
 from bug_fixing.src.oss_patch.project_builder import OSSPatchProjectBuilder
 from bug_fixing.src.oss_patch.globals import (
@@ -211,12 +213,21 @@ class OSSPatchCRSContext:
 
         return True
 
-    def _load_necessary_images_to_docker_root(self) -> bool:
-        # @NOTE: if incremental build is enabled, image with inc-address tag is re-tagged to latest image. Refer to `take_incremental_build_snapshot` method for a more detail.
-        images_to_load = [
-            get_builder_image_name(self.oss_fuzz_path, self.project_name),
-            get_base_runner_image_name(self.oss_fuzz_path),
-        ]
+    def _load_necessary_images_to_docker_root(
+        self, *, inc_build_enabled: bool = False
+    ) -> bool:
+        builder_image = get_builder_image_name(self.oss_fuzz_path, self.project_name)
+        base_runner_image = get_base_runner_image_name(self.oss_fuzz_path)
+
+        if inc_build_enabled:
+            # Load inc-build image instead of the regular builder image
+            inc_image = get_incremental_build_image_name(
+                self.oss_fuzz_path, self.project_name
+            )
+            images_to_load = [inc_image, base_runner_image]
+        else:
+            images_to_load = [builder_image, base_runner_image]
+
         # TODO: optimize speed; caching
         if not load_docker_images_to_dir(
             [
@@ -228,6 +239,18 @@ class OSSPatchCRSContext:
         ):
             logger.error(f'Image loading to "{self.docker_root_path}" has failed')
             return False
+
+        if inc_build_enabled:
+            # Retag inc-build image to :latest inside docker root
+            # This is isolated to this run's docker root, not affecting host docker
+            inc_image = get_incremental_build_image_name(
+                self.oss_fuzz_path, self.project_name
+            )
+            if not retag_docker_image_in_dir(
+                inc_image, f"{builder_image}:latest", self.docker_root_path
+            ):
+                logger.error("Failed to retag inc-build image to :latest in docker root")
+                return False
 
         return True
 
@@ -263,7 +286,7 @@ class OSSPatchCRSContext:
         )  # FIXME: should support non-git source
 
         logger.info("Loading necessary Docker images...")
-        if not self._load_necessary_images_to_docker_root():
+        if not self._load_necessary_images_to_docker_root(inc_build_enabled=inc_build_enabled):
             return False
         logger.info("Docker images loaded successfully.")
 
