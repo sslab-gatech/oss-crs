@@ -85,6 +85,17 @@ class CRSComposeConfig(BaseModel):
         # TODO: Add more robust validation for docker registry URL if needed
         return v
 
+    @field_validator("crs_entries")
+    @classmethod
+    def validate_crs_entries_keys(cls, v: dict[str, CRSEntry]) -> dict[str, CRSEntry]:
+        uppercase_keys = [key for key in v.keys() if key != key.lower()]
+        if uppercase_keys:
+            raise ValueError(
+                f"CRS entry names must be lowercase. "
+                f"Invalid names: {', '.join(uppercase_keys)}"
+            )
+        return v
+
     @classmethod
     def from_yaml(cls, yaml_content: str) -> "CRSComposeConfig":
         """Parse CRS Compose config from YAML string."""

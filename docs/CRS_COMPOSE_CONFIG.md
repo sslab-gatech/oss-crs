@@ -205,6 +205,11 @@ The configuration is validated using Pydantic with the following rules:
 4. **LLM Budget Validation:**
    - If specified, must be a positive integer (> 0)
 
+5. **CRS Entry Name Validation:**
+   - CRS entry names (keys) must be lowercase only
+   - Invalid examples: `"My-CRS"`, `"ATLANTIS"`, `"myLocalCRS"`
+   - Valid examples: `"my-crs"`, `"atlantis"`, `"my-local-crs"`
+
 ---
 
 ## Validate via CMD
