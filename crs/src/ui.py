@@ -258,7 +258,7 @@ class MultiTaskProgress:
         if self._live:
             self._live.update(self._build_display())
 
-    def run_added_tasks(self) -> bool:
+    def run_added_tasks(self) -> TaskResult:
         """
         Run all subtasks added under the current task.
 
@@ -267,7 +267,7 @@ class MultiTaskProgress:
         """
         parent = self._current_task
         if parent not in self._subtasks:
-            return True
+            return TaskResult(success=True)
 
         for task_id in self._subtasks[parent]:
             prev_task = self._current_task
@@ -282,14 +282,14 @@ class MultiTaskProgress:
                     if result.error:
                         self.set_error_info(task_id, result.error)
                     self._current_task = prev_task
-                    return False
+                    return TaskResult(success=False, error=result.error)
             except Exception as e:
                 self.set_error_info(task_id, str(e))
                 self.set_status(task_id, TaskStatus.FAILED)
                 self._current_task = prev_task
-                return False
+                return TaskResult(success=False, error=str(e))
             self._current_task = prev_task
-        return True
+        return TaskResult(success=True)
 
     def add_output_line(self, line: str) -> None:
         """Add an output line for the current in-progress task."""

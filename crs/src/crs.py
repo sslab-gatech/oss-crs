@@ -10,6 +10,7 @@ from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry, CRSComposeEnv
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
+from . import utils
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
@@ -154,7 +155,7 @@ class CRS:
                     p,
                 ),
             )
-        return TaskResult(success=progress.run_added_tasks())
+        return progress.run_added_tasks()
 
     def is_target_built(
         self, target: Target, target_base_image: str, progress: MultiTaskProgress
@@ -176,7 +177,7 @@ class CRS:
                     p,
                 ),
             )
-        return TaskResult(success=progress.run_added_tasks())
+        return progress.run_added_tasks()
 
     def __get_build_output_dir(self, build_work_dir: Path, build_name: str) -> Path:
         return build_work_dir / "BUILD_OUT_DIR" / build_name
@@ -194,7 +195,7 @@ class CRS:
                     f"{output_path}",
                     lambda p, o=output_path: TaskResult(success=o.exists()),
                 )
-            return TaskResult(success=progress.run_added_tasks())
+            return progress.run_added_tasks()
         else:
             all_exist = all(p.exists() for p in output_paths)
             return TaskResult(success=all_exist)
@@ -224,23 +225,23 @@ class CRS:
                 / "templates"
                 / "build-target-docker-compose.yaml.j2"
             )
-            template = Template(template_path.read_text())
             target_env = target.get_target_env()
             target_env["image"] = target_base_image
 
-            rendered = template.render(
-                crs={
+            context = {
+                "crs": {
                     "name": self.name,
                     "path": str(self.crs_path),
                     "builder_dockerfile": str(self.crs_path / build_config.dockerfile),
                     "version": self.config.version,
                 },
-                additional_env=build_config.additional_env,
-                target=target_env,
-                build_out_dir=str(build_out_dir),
-                crs_compose_env=self.crs_compose_env.get_env(),
-            )
+                "additional_env": build_config.additional_env,
+                "target": target_env,
+                "build_out_dir": str(build_out_dir),
+                "crs_compose_env": self.crs_compose_env.get_env(),
+            }
 
+            rendered = utils.render_template(template_path, context)
             tmp_docker_compose_path.write_text(rendered)
             return TaskResult(success=True)
 
@@ -322,11 +323,12 @@ class CRS:
                 lambda p: self.__check_outputs(build_config, build_out_dir, p),
             )
 
-            success = progress.run_added_tasks()
-            if success:
+            result = progress.run_added_tasks()
+            if result.success:
                 return TaskResult(success=True)
             docker_compose_contents = tmp_docker_compose_path.read_text()
-            error = ""
+            error = result.error or ""
+            error += "\n"
             if docker_compose_output:
                 error += (
                     f"📝 Docker compose output:\n---\n{docker_compose_output}\n---\n"

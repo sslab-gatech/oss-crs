@@ -148,7 +148,7 @@ class CRSCompose:
             "TODO: Prepare combined docker compose file",
             lambda progress: TaskResult(success=True),
         )
-        return TaskResult(progress.run_added_tasks())
+        return progress.run_added_tasks()
 
     def __run_local_running_env(
         self, tmp_docker_compose_path: Path, progress: MultiTaskProgress
