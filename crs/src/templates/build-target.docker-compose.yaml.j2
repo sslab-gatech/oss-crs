@@ -1,0 +1,28 @@
+services:
+  target_builder:
+    privileged: true
+    shm_size: 2g
+    environment:
+      - FUZZING_ENGINE={{ target.engine }}
+      - SANITIZER={{ target.sanitizer }}
+      - ARCHITECTURE={{ target.architecture }}
+      - PROJECT_NAME={{ target.name }}
+      - FUZZING_LANGUAGE={{ target.language }}
+      - HELPER=True
+      - OSS_CRS_RUN_ENV_TYPE={{ crs_compose_env.type }}
+      - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
+      - OSS_CRS_TARGET={{ target.name }}
+      - OSS_CRS_TARGET_PROJ_DIR=/project_dir
+{%- for key, value in additional_env.items() %}
+      - {{ key }}={{ value }}
+{%- endfor %}
+    build:
+      context: {{ crs.path }}
+      dockerfile: {{ crs.builder_dockerfile }}
+      args:
+        - target_base_image={{target.image}} 
+        - crs_version={{ crs.version }}
+      additional_contexts:
+        libcrs: {{ libCRS_path }}
+    volumes:
+      - {{build_out_dir}}:/OSS_CRS_BUILD_OUT_DIR
