@@ -4,6 +4,7 @@
 import logging
 import shutil
 import subprocess
+import sys
 import uuid
 from collections.abc import Callable
 from importlib.resources import files
@@ -630,7 +631,22 @@ def build_crs(
                     service,
                 ]
                 logger.info("Running build for service: %s", service)
-                subprocess.check_call(run_cmd, stdin=subprocess.DEVNULL)
+                proc = subprocess.Popen(
+                    run_cmd,
+                    stdin=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+                assert proc.stderr is not None
+                for line in iter(proc.stderr.readline, b""):
+                    text = line.decode("utf-8", errors="replace")
+                    if "exited with code 0" in text or "Aborting on container exit" in text:
+                        continue
+                    sys.stderr.buffer.write(line)
+                    sys.stderr.buffer.flush()
+                proc.wait()
+                if proc.returncode != 0:
+                    logger.error("Docker compose operation failed for service: %s", service)
+                    return False
             except subprocess.CalledProcessError:
                 logger.error("Docker compose operation failed for service: %s", service)
                 return False
