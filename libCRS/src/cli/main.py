@@ -1,5 +1,8 @@
 import argparse
+from pathlib import Path
 from ..build import submit_build_output, skip_build_output, download_build_output
+from ..seed import register_seed_dir, register_shared_seed_dir
+from ..pov import register_pov_dir
 
 
 def main():
@@ -39,6 +42,40 @@ def main():
     copy_parser.add_argument("dst_path", help="Destination path in docker container")
     copy_parser.set_defaults(
         func=lambda args: download_build_output(args.src_path, args.dst_path)
+    )
+
+    # register-pov-dir command
+    register_pov_dir_parser = subparsers.add_parser(
+        "register-pov-dir",
+        help="Register POV directory to automatically submit POVs in the POV directory",
+    )
+    register_pov_dir_parser.add_argument(
+        "path", type=Path, help="Path to the POV directory"
+    )
+    register_pov_dir_parser.set_defaults(func=lambda args: register_pov_dir(args.path))
+
+    # register-seed-dir command
+    register_seed_dir_parser = subparsers.add_parser(
+        "register-seed-dir",
+        help="Register seed directory to automatically submit seeds in the seed directory",
+    )
+    register_seed_dir_parser.add_argument(
+        "path", type=Path, help="Path to the seed directory"
+    )
+    register_seed_dir_parser.set_defaults(
+        func=lambda args: register_seed_dir(args.path)
+    )
+
+    # register-shared-seed-dir command
+    register_shared_seed_dir_parser = subparsers.add_parser(
+        "register-shared-seed-dir",
+        help="Register shared seed directory to automatically fetch seeds from other CRS into",
+    )
+    register_shared_seed_dir_parser.add_argument(
+        "path", type=Path, help="Path to the shared seed directory"
+    )
+    register_shared_seed_dir_parser.set_defaults(
+        func=lambda args: register_shared_seed_dir(args.path)
     )
 
     args = parser.parse_args()

@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 from .common import OSS_CRS_BUILD_OUT_DIR, is_local_run_env, rsync_copy
