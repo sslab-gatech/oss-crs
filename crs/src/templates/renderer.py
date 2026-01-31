@@ -83,6 +83,7 @@ def render_run_crs_compose_docker_compose(
         "crs_compose_name": crs_compose_name,
         "crs_list": crs_list,
         "crs_compose_env": crs_compose_env.get_env(),
-        "target": target.get_target_env(),
+        "target_env": target.get_target_env(),
+        "target": target,
     }
     return render_template(template_path, context)

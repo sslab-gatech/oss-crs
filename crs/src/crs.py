@@ -163,22 +163,21 @@ class CRS:
                 success=False,
                 error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
-        build_work_dir = self.work_dir / (target_base_image.replace(":", "_"))
+        build_out_dir = self.get_build_output_dir(target)
         for build_name, build_config in self.config.target_build_phase.builds.items():
             progress.add_task(
                 f"Check build outputs for {build_name}",
-                lambda p,
-                build_name=build_name,
-                build_config=build_config: self.__check_outputs(
+                lambda p, build_config=build_config: self.__check_outputs(
                     build_config,
-                    self.__get_build_output_dir(build_work_dir, build_name),
+                    build_out_dir,
                     p,
                 ),
             )
         return progress.run_added_tasks()
 
-    def __get_build_output_dir(self, build_work_dir: Path, build_name: str) -> Path:
-        return build_work_dir / "BUILD_OUT_DIR" / build_name
+    def get_build_output_dir(self, target: Target) -> Path:
+        target_image_name = target.get_docker_image_name().replace(":", "_")
+        return self.work_dir / target_image_name / "BUILD_OUT_DIR"
 
     def __check_outputs(
         self, build_config, build_out_dir, progress=None
@@ -207,7 +206,7 @@ class CRS:
         build_work_dir: Path,
         progress: MultiTaskProgress,
     ) -> "TaskResult":
-        build_out_dir = self.__get_build_output_dir(build_work_dir, build_name)
+        build_out_dir = self.get_build_output_dir(target)
         build_out_dir.mkdir(parents=True, exist_ok=True)
         build_cache_path = build_work_dir / f".{build_name}.cache"
         docker_compose_output = ""
