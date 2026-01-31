@@ -2,13 +2,13 @@ from pathlib import Path
 from typing import Optional
 import hashlib
 import os
-import tempfile
 
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry, CRSComposeEnv
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
 from .templates import renderer
+from .utils import TmpDockerCompose
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
@@ -262,11 +262,9 @@ class CRS:
             build_cache_path.write_text(image_hash)
             return ret
 
-        with tempfile.NamedTemporaryFile(
-            mode="wb", suffix=".docker-compose", delete=True
-        ) as tmp_docker_compose_file:
-            tmp_docker_compose_path = Path(tmp_docker_compose_file.name)
-            project_name = f"crs_{tmp_docker_compose_path.stem}"
+        with TmpDockerCompose(progress, "crs") as tmp_docker_compose:
+            tmp_docker_compose_path = tmp_docker_compose.path
+            project_name = tmp_docker_compose.project_name
             progress.add_task(
                 "Prepare docker compose file",
                 lambda p: prepare_docker_compose_file(

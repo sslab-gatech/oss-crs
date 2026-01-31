@@ -1,10 +1,10 @@
-import tempfile
 from pathlib import Path
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
 from .templates import renderer
+from .utils import TmpDockerCompose
 
 
 class CRSCompose:
@@ -115,30 +115,29 @@ class CRSCompose:
             return False
 
     def __run_local(self, target: Target) -> bool:
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".docker-compose", delete=True
-        ) as tmp_docker_compose_file:
-            tmp_docker_compose_path = Path(tmp_docker_compose_file.name)
-            project_name = f"crs_compose_{tmp_docker_compose_path.stem}"
-            tasks = [
-                (
-                    "Prepare Running Environment",
-                    lambda progress: self.__prepare_local_running_env(
-                        project_name, target, tmp_docker_compose_path, progress
+        with MultiTaskProgress(
+            tasks=[],
+            title="CRS Compose Run",
+        ) as progress:
+            with TmpDockerCompose(progress, "crs_compose") as tmp_docker_compose:
+                tmp_docker_compose_path = tmp_docker_compose.path
+                project_name = tmp_docker_compose.project_name
+                tasks = [
+                    (
+                        "Prepare Running Environment",
+                        lambda progress: self.__prepare_local_running_env(
+                            project_name, target, tmp_docker_compose_path, progress
+                        ),
                     ),
-                ),
-                (
-                    "Run CRSs!",
-                    lambda progress: self.__run_local_running_env(
-                        project_name, tmp_docker_compose_path, progress
+                    (
+                        "Run CRSs!",
+                        lambda progress: self.__run_local_running_env(
+                            project_name, tmp_docker_compose_path, progress
+                        ),
                     ),
-                ),
-            ]
-            with MultiTaskProgress(
-                tasks=tasks,
-                title="CRS Compose Run",
-            ) as progress:
-                return progress.run_all_tasks()
+                ]
+                progress.add_tasks(tasks)
+                return progress.run_added_tasks()
 
         return False
 

@@ -68,6 +68,20 @@ class MultiTaskProgress:
         }
         # Mapping from task ID to display name
         self._display_names: dict[str, str] = {name: name for name in self.task_names}
+        # Cleanup tasks: parent_id -> list of cleanup task IDs (run at end of subtasks)
+        self._cleanup_tasks: dict[Optional[str], list[str]] = {}
+        # Set of parent task IDs whose cleanup is complete (errors should be shown)
+        self._cleanup_complete: set[Optional[str]] = set()
+
+    def _get_task_parent(self, task_id: str) -> Optional[str]:
+        """Find the parent of a given task ID."""
+        for parent, children in self._subtasks.items():
+            if task_id in children:
+                return parent
+        for parent, children in self._cleanup_tasks.items():
+            if task_id in children:
+                return parent
+        return None
 
     def _get_status_icon(self, status: TaskStatus) -> str:
         icons = {
@@ -128,6 +142,20 @@ class MultiTaskProgress:
                             f"{note_indent}[dim cyan]📝 {note}[/dim cyan]",
                             "",
                         )
+            # Add cleanup tasks for this parent
+            if parent in self._cleanup_tasks:
+                for task_id in self._cleanup_tasks[parent]:
+                    status = self.statuses.get(task_id, TaskStatus.PENDING)
+                    if status == TaskStatus.IN_PROGRESS:
+                        current_task = task_id
+                    indent = "  " * depth
+                    prefix = "└─ " if depth > 0 else ""
+                    display_name = self._display_names.get(task_id, task_id)
+                    table.add_row(
+                        self._get_status_icon(status) if depth == 0 else "",
+                        f"{indent}{prefix}{display_name}",
+                        self._get_status_text(status),
+                    )
 
         add_tasks_to_table(None)
         content_parts.append(table)
@@ -166,17 +194,19 @@ class MultiTaskProgress:
             )
             content_parts.append(cmd_panel)
 
-        # Add error panel if there's a failed task with error info
+        # Add error panels for all failed tasks (only after their parent's cleanup is complete)
         for task_id, status in self.statuses.items():
             if status == TaskStatus.FAILED and task_id in self.error_info:
-                display_name = self._display_names.get(task_id, task_id)
-                error_panel = Panel(
-                    f"[red]{self.error_info[task_id]}[/red]",
-                    title=f"[bold red]Error: {display_name}[/bold red]",
-                    border_style="red",
-                )
-                content_parts.append(error_panel)
-                break  # Only show the first error
+                # Find the parent of this task and check if cleanup is complete
+                parent = self._get_task_parent(task_id)
+                if parent in self._cleanup_complete:
+                    display_name = self._display_names.get(task_id, task_id)
+                    error_panel = Panel(
+                        f"[red]{self.error_info[task_id]}[/red]",
+                        title=f"[bold red]Error: {display_name}[/bold red]",
+                        border_style="red",
+                    )
+                    content_parts.append(error_panel)
 
         return Panel(
             Group(*content_parts),
@@ -258,18 +288,117 @@ class MultiTaskProgress:
         if self._live:
             self._live.update(self._build_display())
 
+    def add_tasks(
+        self, tasks: list[tuple[str, Callable[["MultiTaskProgress"], "TaskResult"]]]
+    ) -> None:
+        for task_name, task_func in tasks:
+            self.add_task(task_name, task_func)
+
+    def add_cleanup_task(
+        self,
+        task_name: str,
+        task_func: Callable[["MultiTaskProgress"], "TaskResult"],
+    ) -> None:
+        """
+        Add a cleanup task that runs at the end of subtasks, regardless of success/failure.
+        Cleanup tasks run in the order they were added, after all regular subtasks.
+
+        Args:
+            task_name: Name of the cleanup task to add.
+            task_func: Function that takes progress and returns TaskResult.
+        """
+        parent = self._current_task
+        # Create unique task ID by combining parent path with task name
+        if parent:
+            task_id = f"{parent}/{task_name}"
+        else:
+            task_id = task_name
+
+        if parent not in self._cleanup_tasks:
+            self._cleanup_tasks[parent] = []
+        self._cleanup_tasks[parent].append(task_id)
+        self._task_funcs[task_id] = task_func
+        self._display_names[task_id] = f"🧹 {task_name}"
+        self.statuses[task_id] = TaskStatus.PENDING
+        if self._live:
+            self._live.update(self._build_display())
+
+    def add_cleanup_tasks(
+        self, tasks: list[tuple[str, Callable[["MultiTaskProgress"], "TaskResult"]]]
+    ) -> None:
+        """Add multiple cleanup tasks."""
+        for task_name, task_func in tasks:
+            self.add_cleanup_task(task_name, task_func)
+
     def run_added_tasks(self) -> TaskResult:
         """
-        Run all subtasks added under the current task.
+        Run all subtasks added under the current task, then run cleanup tasks.
+        Cleanup tasks always run, even if regular subtasks fail.
 
         Returns:
             True if all subtasks succeeded, False if any failed.
         """
         parent = self._current_task
-        if parent not in self._subtasks:
+        main_result = TaskResult(success=True)
+
+        # Run regular subtasks
+        if parent in self._subtasks:
+            for task_id in self._subtasks[parent]:
+                if self.statuses[task_id] != TaskStatus.PENDING:
+                    continue  # Skip already run tasks
+                prev_task = self._current_task
+                self._current_task = task_id
+                self.set_status(task_id, TaskStatus.IN_PROGRESS)
+                try:
+                    result = self._task_funcs[task_id](self)
+                    self.set_status(
+                        task_id,
+                        TaskStatus.SUCCESS if result.success else TaskStatus.FAILED,
+                    )
+                    if not result.success:
+                        if result.error:
+                            self.set_error_info(task_id, result.error)
+                        self._current_task = prev_task
+                        main_result = TaskResult(success=False, error=result.error)
+                        break  # Stop regular tasks on failure, but continue to cleanup
+                except Exception as e:
+                    self.set_error_info(task_id, str(e))
+                    self.set_status(task_id, TaskStatus.FAILED)
+                    self._current_task = prev_task
+                    main_result = TaskResult(success=False, error=str(e))
+                    break  # Stop regular tasks on failure, but continue to cleanup
+                self._current_task = prev_task
+
+        # Always run cleanup tasks, even if regular subtasks failed
+        cleanup_result = self._run_cleanup_tasks(parent)
+
+        # Mark this parent's cleanup as complete so its errors can be displayed
+        self._cleanup_complete.add(parent)
+        if self._live:
+            self._live.update(self._build_display())
+
+        # Return the first failure (main task failure takes precedence)
+        if not main_result.success:
+            return main_result
+        return cleanup_result
+
+    def _run_cleanup_tasks(self, parent: Optional[str]) -> TaskResult:
+        """
+        Run cleanup tasks for a given parent task.
+        All cleanup tasks are attempted even if some fail.
+
+        Returns:
+            TaskResult indicating overall cleanup success.
+        """
+        if parent not in self._cleanup_tasks:
             return TaskResult(success=True)
 
-        for task_id in self._subtasks[parent]:
+        first_error = None
+        all_success = True
+
+        for task_id in self._cleanup_tasks[parent]:
+            if self.statuses[task_id] != TaskStatus.PENDING:
+                continue  # Skip already run tasks
             prev_task = self._current_task
             self._current_task = task_id
             self.set_status(task_id, TaskStatus.IN_PROGRESS)
@@ -281,15 +410,20 @@ class MultiTaskProgress:
                 if not result.success:
                     if result.error:
                         self.set_error_info(task_id, result.error)
-                    self._current_task = prev_task
-                    return TaskResult(success=False, error=result.error)
+                    all_success = False
+                    if first_error is None:
+                        first_error = result.error
+                    # Continue running other cleanup tasks even on failure
             except Exception as e:
                 self.set_error_info(task_id, str(e))
                 self.set_status(task_id, TaskStatus.FAILED)
-                self._current_task = prev_task
-                return TaskResult(success=False, error=str(e))
+                all_success = False
+                if first_error is None:
+                    first_error = str(e)
+                # Continue running other cleanup tasks even on failure
             self._current_task = prev_task
-        return TaskResult(success=True)
+
+        return TaskResult(success=all_success, error=first_error)
 
     def add_output_line(self, line: str) -> None:
         """Add an output line for the current in-progress task."""
@@ -480,6 +614,26 @@ class MultiTaskProgress:
         return self.run_command_with_streaming_output(
             cmd=cmd,
             info_text="Bringing up services with docker-compose",
+        )
+
+    def docker_compose_down(
+        self, project_name: str, docker_compose_path: Path
+    ) -> TaskResult:
+        cmd = [
+            "docker",
+            "compose",
+            "-p",
+            project_name,
+            "-f",
+            str(docker_compose_path),
+            "down",
+            "-v",
+            "--rmi",
+            "local",
+        ]
+        return self.run_command_with_streaming_output(
+            cmd=cmd,
+            info_text="Stopping and removing containers with docker-compose down",
         )
 
 
