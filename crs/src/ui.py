@@ -547,6 +547,10 @@ class MultiTaskProgress:
             else:
                 Console().print(f"[bold red]Error:[/bold red] {error_msg}")
             return TaskResult(success=False, error=error_msg)
+        except KeyboardInterrupt as e:
+            error = "\n".join(output_lines)
+            error += "\n\n📝 Process interrupted by user"
+            return TaskResult(success=False, error=error)
 
     def add_items_to_head(self, items) -> None:
         self._head += items
