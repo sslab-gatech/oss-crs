@@ -562,18 +562,36 @@ def docker_image_exists_in_dir(image_name: str, docker_root_path: Path) -> bool:
 def retag_docker_image_in_dir(
     src_image: str, dst_image: str, docker_root_path: Path
 ) -> bool:
-    """Retag a Docker image inside a docker root directory."""
+    """Retag a Docker image inside a docker root directory.
+
+    Uses dind container to run docker tag. Must wait for dockerd to be ready
+    before executing the tag command (similar to image_checker.sh).
+    """
+    # Wait for dockerd to be ready (up to 30s), then run docker tag
+    wait_and_tag_cmd = (
+        "sh -c '"
+        "ELAPSED=0; "
+        "until docker info > /dev/null 2>&1 || [ $ELAPSED -ge 30 ]; do "
+        "sleep 1; ELAPSED=$((ELAPSED + 1)); "
+        "done; "
+        "if [ $ELAPSED -ge 30 ]; then "
+        "echo ERROR: dockerd not ready; exit 1; "
+        "fi; "
+        f"docker tag {src_image} {dst_image}"
+        "'"
+    )
     command = (
         f"docker run --privileged --rm "
         f"-v {docker_root_path}:{DEFAULT_DOCKER_ROOT_DIR} "
         f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
-        f"docker tag {src_image} {dst_image}"
+        f"{wait_and_tag_cmd}"
     )
+    logger.debug(f"Retag command: {command}")
     proc = subprocess.run(
         command,
         shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
     )
 
     if proc.returncode == 0:
@@ -581,6 +599,8 @@ def retag_docker_image_in_dir(
         return True
     else:
         logger.error(f'Failed to retag "{src_image}" -> "{dst_image}" in docker root')
+        logger.error(f"stdout: {proc.stdout}")
+        logger.error(f"stderr: {proc.stderr}")
         return False
 
 
