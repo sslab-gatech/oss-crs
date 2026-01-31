@@ -17,33 +17,41 @@ services:
 {% for crs in crs_list %} 
 {% for module_name, module_config in crs.config.crs_run_phase.modules.items() %}
   {{ crs.name }}_{{ module_name }}:
+    privileged: true
     build:
       context: {{ crs.crs_path }}
       dockerfile: {{ crs.crs_path }}/{{ module_config.dockerfile }}
       additional_contexts:
         libcrs: {{ libCRS_path }}
     environment:
+      ###########################################
+      # OSS_FUZZ standard environment variables
+      - HELPER=True
+      - RUN_FUZZER_MODE=interactive
       - FUZZING_ENGINE={{ target_env.engine }}
       - SANITIZER={{ target_env.sanitizer }}
       - ARCHITECTURE={{ target_env.architecture }}
       - PROJECT_NAME={{ target_env.name }}
       - FUZZING_LANGUAGE={{ target_env.language }}
-      - HELPER=True
+      ###########################################
       - OSS_CRS_RUN_ENV_TYPE={{ crs_compose_env.type }}
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
-      - OSS_CRS_target_env={{ target.name }}
-      - OSS_CRS_target_env_HARNESS={{ target.harness }}
+      - OSS_CRS_TARGET={{ target_env.name }}
+      - OSS_CRS_TARGET_HARNESS={{ target_env.harness }}
+      - OSS_CRS_CPUSET="{{ crs.resource.cpuset }}"
+      - OSS_CRS_MEMORY_LIMIT="{{ crs.resource.memory }}"
 {%- for env_key, env_value in module_config.additional_env.items() %}
       - {{ env_key }}="{{ env_value }}"
 {%- endfor %}
+    cpuset: "{{ crs.resource.cpuset }}"
+    # TODO: Check memory limit because it's for all services in a single CRS
+    mem_limit: "{{ crs.resource.memory }}"
     volumes:
       - {{ crs.get_build_output_dir(target) }}:/OSS_CRS_BUILD_OUT_DIR:ro
     #  TODO: - crs-shared-volume:/shared
     # TODO: network, volumes, resource limits? 
     # networks:
     #  - crs-network
-    # cpuset: "{{ cpuset }}"
-    # mem_limit: {{ memory }}
 
 {% endfor %}
 {% endfor %}

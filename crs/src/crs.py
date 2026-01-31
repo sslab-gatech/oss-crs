@@ -28,7 +28,9 @@ class CRS:
         crs_compose_env: CRSComposeEnv,
     ) -> "CRS":
         if entry.source.local_path:
-            return cls(name, Path(entry.source.local_path), work_dir, crs_compose_env)
+            return cls(
+                name, Path(entry.source.local_path), work_dir, entry, crs_compose_env
+            )
         # TODO: implement other source types
         raise NotImplementedError("Only local_path source is implemented yet.")
 
@@ -37,6 +39,7 @@ class CRS:
         name: str,
         crs_path: Path,
         work_dir: Path,
+        resource: Optional[CRSEntry],
         crs_compose_env: Optional[CRSComposeEnv],
     ):
         self.name = name
@@ -44,6 +47,7 @@ class CRS:
         self.config = CRSConfig.from_yaml_file(self.crs_path / CRS_YAML_PATH)
         self.work_dir = work_dir / "crs" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        self.resource = resource
         self.crs_compose_env = crs_compose_env
 
     def prepare(

@@ -12,6 +12,7 @@ services:
       - OSS_CRS_RUN_ENV_TYPE={{ crs_compose_env.type }}
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
       - OSS_CRS_TARGET={{ target.name }}
+      - OSS_CRS_TARGET_PROJ_DIR=/project_dir
 {%- for key, value in additional_env.items() %}
       - {{ key }}={{ value }}
 {%- endfor %}
