@@ -218,6 +218,15 @@ class OSSPatch:
             # Workflow B or C: Incremental build enabled
             effective_with_rts = effective_rts_mode != "none"
 
+            # Validate compare_rts: only valid when RTS is supported
+            effective_compare_rts = compare_rts
+            if compare_rts and not effective_with_rts:
+                logger.warning(
+                    "--compare-rts is ignored because rts_mode='none' for this project. "
+                    "RTS comparison requires a valid rts_mode (e.g., 'ekstazi', 'jcgeks')."
+                )
+                effective_compare_rts = False
+
             if effective_with_rts:
                 logger.info(
                     f"Running incremental build + RTS workflow (rts_mode={effective_rts_mode})"
@@ -231,7 +240,7 @@ class OSSPatch:
                 skip_clone=skip_clone,
                 skip_baseline=skip_baseline,
                 skip_snapshot=skip_snapshot,
-                compare_rts=compare_rts,
+                compare_rts=effective_compare_rts,
                 pull_snapshot=pull_snapshot,
             )
 
