@@ -358,7 +358,7 @@ def copy_directory_with_docker(src_path: Path, dst_path: Path) -> bool:
         f"-v {src_path.resolve().parent}:/src "
         f"-v {dst_path.resolve().parent}:/dst "
         f"alpine:latest "
-        f"cp -r /src/{src_path.name} /dst/{dst_path.name}"
+        f"cp -a /src/{src_path.name} /dst/{dst_path.name}"
     )
 
     proc = subprocess.run(
