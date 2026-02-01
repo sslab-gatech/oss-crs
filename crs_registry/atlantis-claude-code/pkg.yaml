@@ -2,4 +2,4 @@ name: atlantis-claude-code
 type: bug-fixing
 source:
   url: git@github.com:sslab-gatech/atlantis-crete.git
-  ref: main
+  ref: crsbench
