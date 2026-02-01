@@ -72,6 +72,7 @@ class OSSPatch:
         custom_source_path: Path | None = None,
         force_rebuild: bool = False,
         inc_build_enabled: bool = True,
+        sanitizer: str = "address",
     ) -> bool:
         logger.info(f'Preparing project "{self.project_name}"')
 
@@ -82,6 +83,7 @@ class OSSPatch:
             custom_source_path=custom_source_path,
             force_rebuild=force_rebuild,
             inc_build_enabled=inc_build_enabled,
+            sanitizer=sanitizer,
         ):
             return False
 
@@ -97,6 +99,7 @@ class OSSPatch:
         use_gitcache: bool = False,
         force_rebuild: bool = False,
         inc_build_enabled: bool = True,
+        sanitizer: str = "address",
     ) -> bool:
         if not prepare_docker_cache_builder():
             return False
@@ -118,6 +121,7 @@ class OSSPatch:
             custom_source_path=custom_source_path,
             force_rebuild=force_rebuild,
             inc_build_enabled=inc_build_enabled,
+            sanitizer=sanitizer,
         ):
             return False
 

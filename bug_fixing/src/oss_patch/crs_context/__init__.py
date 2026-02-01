@@ -213,7 +213,7 @@ class OSSPatchCRSContext:
         return True
 
     def _load_necessary_images_to_docker_root(
-        self, *, inc_build_enabled: bool = False
+        self, *, inc_build_enabled: bool = False, sanitizer: str = "address"
     ) -> bool:
         builder_image = get_builder_image_name(self.oss_fuzz_path, self.project_name)
         base_runner_image = get_base_runner_image_name(self.oss_fuzz_path)
@@ -224,7 +224,7 @@ class OSSPatchCRSContext:
         if inc_build_enabled:
             # Load inc-build image instead of the regular builder image
             inc_image = get_incremental_build_image_name(
-                self.oss_fuzz_path, self.project_name
+                self.oss_fuzz_path, self.project_name, sanitizer
             )
             images_to_load = [inc_image, base_runner_image]
             # Retag inc-build image to :latest inside docker root
@@ -257,6 +257,7 @@ class OSSPatchCRSContext:
         custom_source_path: Path | None = None,
         force_rebuild: bool = False,
         inc_build_enabled: bool = True,
+        sanitizer: str = "address",
     ) -> bool:
         if not self._construct_run_context(
             oss_fuzz_path, custom_project_path, custom_source_path
@@ -271,7 +272,9 @@ class OSSPatchCRSContext:
             force_rebuild=force_rebuild,
         )
         if not project_builder.build(
-            self.proj_src_path, inc_build_enabled=inc_build_enabled
+            self.proj_src_path,
+            inc_build_enabled=inc_build_enabled,
+            sanitizer=sanitizer,
         ):
             return False
         logger.info("Project build completed successfully.")
@@ -282,7 +285,9 @@ class OSSPatchCRSContext:
         )  # FIXME: should support non-git source
 
         logger.info("Loading necessary Docker images...")
-        if not self._load_necessary_images_to_docker_root(inc_build_enabled=inc_build_enabled):
+        if not self._load_necessary_images_to_docker_root(
+            inc_build_enabled=inc_build_enabled, sanitizer=sanitizer
+        ):
             return False
         logger.info("Docker images loaded successfully.")
 
