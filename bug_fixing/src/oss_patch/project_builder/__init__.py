@@ -142,24 +142,34 @@ class OSSPatchProjectBuilder:
         source_path: Path,
         inc_build_enabled: bool = True,
         rts_enabled: bool = False,
+        sanitizer: str = "address",
     ) -> bool:
         if not self._validate_arguments():
             return False
 
-        if not self._prepare_project_builder_image():
-            return False
-
         if inc_build_enabled:
-            # Try to pull inc-build image from remote registry first
-            if ensure_inc_build_image(self.project_name, self.oss_fuzz_path):
+            # First check if inc-build image already exists (locally or in registry)
+            # If it exists, we can skip building the base :latest image entirely
+            if ensure_inc_build_image(self.project_name, self.oss_fuzz_path, sanitizer):
                 logger.info(
-                    f'Using pre-built inc-build image from registry for "{self.project_name}"'
+                    f'Using pre-built inc-build image for "{self.project_name}"'
                 )
-            else:
-                # Build locally if pull failed
-                if not self.take_incremental_build_snapshot(source_path, rts_enabled):
-                    logger.warning("incremental build is disabled due to the failure")
-                    return False
+                return True
+
+            # Inc-build image not available, need to build from scratch
+            if not self._prepare_project_builder_image():
+                return False
+
+            # Build inc-build image locally
+            if not self.take_incremental_build_snapshot(
+                source_path, rts_enabled, sanitizer=sanitizer
+            ):
+                logger.warning("incremental build is disabled due to the failure")
+                return False
+        else:
+            # No incremental build, just prepare the base builder image
+            if not self._prepare_project_builder_image():
+                return False
 
         return True
 
