@@ -17,7 +17,6 @@ from bug_fixing.src.oss_patch.functions import (
     pull_project_source,
     is_git_repository,
     remove_directory_with_docker,
-    retag_docker_image_in_dir,
 )
 from bug_fixing.src.oss_patch.project_builder import OSSPatchProjectBuilder
 from bug_fixing.src.oss_patch.globals import (
@@ -184,10 +183,10 @@ class OSSPatchCRSContext:
 
         if custom_project_path:
             logger.info(f"Using custom project from {custom_project_path}...")
-            shutil.copytree(custom_project_path, self.project_path)
+            shutil.copytree(custom_project_path, self.project_path, symlinks=True)
         else:
             # Copy the project from original oss-fuzz
-            shutil.copytree(oss_fuzz_path / "projects" / self.project_name, self.project_path)
+            shutil.copytree(oss_fuzz_path / "projects" / self.project_name, self.project_path, symlinks=True)
         logger.info(f"Project {self.project_name} copied successfully.")
 
         assert self.project_path.exists()
@@ -195,7 +194,7 @@ class OSSPatchCRSContext:
         if custom_source_path:
             logger.info(f'Using the provided project source: "{custom_source_path}"')
             logger.info("Copying project source...")
-            shutil.copytree(custom_source_path, self.proj_src_path)
+            shutil.copytree(custom_source_path, self.proj_src_path, symlinks=True)
             logger.info("Project source copied successfully.")
         else:
             logger.info("Pulling project source code...")
@@ -219,38 +218,35 @@ class OSSPatchCRSContext:
         builder_image = get_builder_image_name(self.oss_fuzz_path, self.project_name)
         base_runner_image = get_base_runner_image_name(self.oss_fuzz_path)
 
+        # Determine which images to load and prepare retag if needed
+        retag_param: tuple[str, str] | None = None
+
         if inc_build_enabled:
             # Load inc-build image instead of the regular builder image
             inc_image = get_incremental_build_image_name(
                 self.oss_fuzz_path, self.project_name
             )
             images_to_load = [inc_image, base_runner_image]
+            # Retag inc-build image to :latest inside docker root
+            # This is isolated to this run's docker root, not affecting host docker
+            retag_param = (inc_image, f"{builder_image}:latest")
         else:
             images_to_load = [builder_image, base_runner_image]
 
-        # TODO: optimize speed; caching
+        # Check which images already exist and filter to missing ones
+        missing_images = [
+            img for img in images_to_load
+            if not docker_image_exists_in_dir(img, self.docker_root_path)
+        ]
+
+        # Load missing images and optionally retag (single DinD session)
         if not load_docker_images_to_dir(
-            [
-                image_name
-                for image_name in images_to_load
-                if not docker_image_exists_in_dir(image_name, self.docker_root_path)
-            ],
+            missing_images,
             self.docker_root_path,
+            retag=retag_param,
         ):
             logger.error(f'Image loading to "{self.docker_root_path}" has failed')
             return False
-
-        if inc_build_enabled:
-            # Retag inc-build image to :latest inside docker root
-            # This is isolated to this run's docker root, not affecting host docker
-            inc_image = get_incremental_build_image_name(
-                self.oss_fuzz_path, self.project_name
-            )
-            if not retag_docker_image_in_dir(
-                inc_image, f"{builder_image}:latest", self.docker_root_path
-            ):
-                logger.error("Failed to retag inc-build image to :latest in docker root")
-                return False
 
         return True
 
