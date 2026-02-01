@@ -491,13 +491,29 @@ def reset_repository(path: Path) -> bool:
         return False
 
 
-def load_docker_images_to_dir(images: list[str], docker_root_path: Path) -> bool:
+def load_docker_images_to_dir(
+    images: list[str],
+    docker_root_path: Path,
+    *,
+    retag: tuple[str, str] | None = None,
+) -> bool:
+    """Load Docker images to a docker root directory.
+
+    Args:
+        images: List of image names to load
+        docker_root_path: Path to docker root directory
+        retag: Optional tuple of (src_image, dst_image) to retag after loading
+               in the same DinD session
+
+    Returns:
+        True if successful, False otherwise
+    """
     logger.info(
         f'Loading docker images to "{docker_root_path}". It may take a while...'
     )
 
-    if len(images) == 0:
-        logger.warning(f"No images to load provided")
+    if len(images) == 0 and retag is None:
+        logger.warning("No images to load provided")
         return True
 
     with TemporaryDirectory() as tmp_dir:
@@ -516,13 +532,30 @@ def load_docker_images_to_dir(images: list[str], docker_root_path: Path) -> bool
                 stderr=subprocess.DEVNULL,
             )
 
-        # TODO: skip save if already exists
+        # Build the shell command to run inside DinD
+        # First load images, then optionally retag
+        inner_cmds = []
+
+        if len(images) > 0:
+            inner_cmds.append('for f in /images/*; do docker load -i "$f"; done')
+
+        if retag is not None:
+            src_image, dst_image = retag
+            inner_cmds.append(f"docker tag {src_image} {dst_image}")
+            logger.info(f'Will retag "{src_image}" -> "{dst_image}" after loading')
+
+        if not inner_cmds:
+            # Nothing to do
+            return True
+
+        combined_cmd = " && ".join(inner_cmds)
+
         docker_load_cmd = (
             f"docker run --privileged --rm "
             f"-v {docker_root_path}:{DEFAULT_DOCKER_ROOT_DIR} "
             f"-v {images_path}:/images "
             f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
-            f"sh -c 'for f in /images/*; do docker load -i \"$f\"; done'"
+            f"sh -c '{combined_cmd}'"
         )
 
         proc = subprocess.run(
@@ -534,6 +567,8 @@ def load_docker_images_to_dir(images: list[str], docker_root_path: Path) -> bool
 
         if proc.returncode == 0:
             change_ownership_with_docker(docker_root_path)
+            if retag is not None:
+                logger.info(f'Retagged "{retag[0]}" -> "{retag[1]}" in docker root')
             return True
         else:
             return False
@@ -556,6 +591,51 @@ def docker_image_exists_in_dir(image_name: str, docker_root_path: Path) -> bool:
     if proc.returncode == 0:
         return True
     else:
+        return False
+
+
+def retag_docker_image_in_dir(
+    src_image: str, dst_image: str, docker_root_path: Path
+) -> bool:
+    """Retag a Docker image inside a docker root directory.
+
+    Uses dind container to run docker tag. Must wait for dockerd to be ready
+    before executing the tag command (similar to image_checker.sh).
+    """
+    # Wait for dockerd to be ready (up to 30s), then run docker tag
+    wait_and_tag_cmd = (
+        "sh -c '"
+        "ELAPSED=0; "
+        "until docker info > /dev/null 2>&1 || [ $ELAPSED -ge 30 ]; do "
+        "sleep 1; ELAPSED=$((ELAPSED + 1)); "
+        "done; "
+        "if [ $ELAPSED -ge 30 ]; then "
+        "echo ERROR: dockerd not ready; exit 1; "
+        "fi; "
+        f"docker tag {src_image} {dst_image}"
+        "'"
+    )
+    command = (
+        f"docker run --privileged --rm "
+        f"-v {docker_root_path}:{DEFAULT_DOCKER_ROOT_DIR} "
+        f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
+        f"{wait_and_tag_cmd}"
+    )
+    logger.debug(f"Retag command: {command}")
+    proc = subprocess.run(
+        command,
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+
+    if proc.returncode == 0:
+        logger.info(f'Retagged "{src_image}" -> "{dst_image}" in docker root')
+        return True
+    else:
+        logger.error(f'Failed to retag "{src_image}" -> "{dst_image}" in docker root')
+        logger.error(f"stdout: {proc.stdout}")
+        logger.error(f"stderr: {proc.stderr}")
         return False
 
 
