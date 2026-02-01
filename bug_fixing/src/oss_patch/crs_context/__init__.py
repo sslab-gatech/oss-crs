@@ -9,6 +9,7 @@ from bug_fixing.src.oss_patch.functions import (
     docker_image_exists,
     docker_image_exists_in_dir,
     load_docker_images_to_dir,
+    retag_docker_image_in_dir,
     get_builder_image_name,
     get_base_runner_image_name,
     get_incremental_build_image_name,
@@ -56,7 +57,7 @@ def _copy_clean_oss_fuzz(src_oss_fuzz: Path, dst_oss_fuzz: Path) -> None:
         return ignored
 
     logger.info(f"Copying clean OSS-Fuzz from {src_oss_fuzz} to {dst_oss_fuzz}...")
-    shutil.copytree(src_oss_fuzz, dst_oss_fuzz, ignore=ignore_build_artifacts)
+    shutil.copytree(src_oss_fuzz, dst_oss_fuzz, symlinks=True, ignore=ignore_build_artifacts)
     logger.info("Clean OSS-Fuzz copied successfully.")
 
 
@@ -82,7 +83,7 @@ def _remove_all_projects_in_oss_fuzz(
             tmp_dir_path = Path(tmp_dir)
             tmp_project_path = tmp_dir_path / "target-project"
 
-            shutil.copytree(except_project_path, tmp_project_path)
+            shutil.copytree(except_project_path, tmp_project_path, symlinks=True)
 
             shutil.rmtree(oss_fuzz_path / "projects")
 
@@ -218,18 +219,12 @@ class OSSPatchCRSContext:
         builder_image = get_builder_image_name(self.oss_fuzz_path, self.project_name)
         base_runner_image = get_base_runner_image_name(self.oss_fuzz_path)
 
-        # Determine which images to load and prepare retag if needed
-        retag_param: tuple[str, str] | None = None
-
         if inc_build_enabled:
             # Load inc-build image instead of the regular builder image
             inc_image = get_incremental_build_image_name(
                 self.oss_fuzz_path, self.project_name, sanitizer
             )
             images_to_load = [inc_image, base_runner_image]
-            # Retag inc-build image to :latest inside docker root
-            # This is isolated to this run's docker root, not affecting host docker
-            retag_param = (inc_image, f"{builder_image}:latest")
         else:
             images_to_load = [builder_image, base_runner_image]
 
@@ -239,14 +234,19 @@ class OSSPatchCRSContext:
             if not docker_image_exists_in_dir(img, self.docker_root_path)
         ]
 
-        # Load missing images and optionally retag (single DinD session)
-        if not load_docker_images_to_dir(
-            missing_images,
-            self.docker_root_path,
-            retag=retag_param,
-        ):
+        # Load missing images
+        if not load_docker_images_to_dir(missing_images, self.docker_root_path):
             logger.error(f'Image loading to "{self.docker_root_path}" has failed')
             return False
+
+        # Retag inc-build image to :latest inside docker root (separate DinD session)
+        # This is isolated to this run's docker root, not affecting host docker
+        if inc_build_enabled:
+            if not retag_docker_image_in_dir(
+                inc_image, f"{builder_image}:latest", self.docker_root_path
+            ):
+                logger.error(f'Retagging "{inc_image}" to "{builder_image}:latest" has failed')
+                return False
 
         return True
 
@@ -313,7 +313,7 @@ class OSSPatchCRSContext:
         # Ensure clean copy
         if copied_oss_fuzz_path.exists():
             shutil.rmtree(copied_oss_fuzz_path)
-        shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path)
+        shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path, symlinks=True)
 
         target_project_path = copied_oss_fuzz_path / "projects" / self.project_name
 
@@ -382,7 +382,7 @@ class OSSPatchCRSContext:
         dst_patch_dir = build_context / OSS_PATCH_DIR.name  # Uses basename
         if dst_patch_dir.exists():
             shutil.rmtree(dst_patch_dir)
-        shutil.copytree(OSS_PATCH_DIR, dst_patch_dir)
+        shutil.copytree(OSS_PATCH_DIR, dst_patch_dir, symlinks=True)
 
         try:
             command = (

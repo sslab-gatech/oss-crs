@@ -8,11 +8,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import yaml
-from bug_finding.src.utils import check_rsync_available, run_rsync
 
 from bug_fixing.src.oss_patch.crs_context import OSSPatchCRSContext
 from bug_fixing.src.oss_patch.functions import (
     change_ownership_with_docker,
+    copy_directory_with_docker,
     copy_git_repo,
     get_crs_image_name,
     remove_directory_with_docker,
@@ -34,7 +34,7 @@ def _remove_all_projects_in_oss_fuzz(
             tmp_dir_path = Path(tmp_dir)
             tmp_project_path = tmp_dir_path / "target-project"
 
-            shutil.copytree(except_project_path, tmp_project_path)
+            shutil.copytree(except_project_path, tmp_project_path, symlinks=True)
 
             shutil.rmtree(oss_fuzz_path / "projects")
 
@@ -129,65 +129,10 @@ class OSSPatchCRSRunner:
         )
 
         logger.info(f'Copying pre-populated docker root to "{tmp_docker_root_dir}"')
-        if not self._copy_docker_root_with_rsync(self.docker_root_path, tmp_docker_root_dir):
+        # @TODO: find a way to optimize this copying routine
+        if not copy_directory_with_docker(self.docker_root_path, tmp_docker_root_dir):
             logger.error(f'Failed to copy docker root from "{self.docker_root_path}" to "{tmp_docker_root_dir}"')
             raise RuntimeError('Failed to copy docker root directory')
-
-    def _copy_docker_root_with_rsync(self, src_path: Path, dst_path: Path) -> bool:
-        """Copy docker root directory using rsync with hardlinks for optimization.
-
-        Uses two-phase rsync like bug_finding's copy_docker_data:
-        - Phase 1: rsync with --link-dest for all files except *.db (hardlinks for immutable blobs)
-        - Phase 2: rsync *.db files without --link-dest (full copies to avoid corruption)
-
-        The containerd metadata database (meta.db) is mutable and must NOT be hardlinked.
-        If hardlinked, updates during CRS run would corrupt the source directory.
-
-        Args:
-            src_path: Source docker root path (crs_context/docker)
-            dst_path: Destination docker root path (run_base/docker)
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        if not check_rsync_available():
-            logger.error("rsync is required but not available")
-            return False
-
-        if not src_path.exists():
-            logger.error(f"Source docker root does not exist: {src_path}")
-            return False
-
-        # Create destination directory
-        dst_path.mkdir(parents=True, exist_ok=True)
-
-        # Phase 1: rsync with hardlinks, excluding mutable .db files and overlayfs work dirs
-        logger.info("Phase 1: Copying docker root with hardlinks (excluding *.db files)")
-        if not run_rsync(
-            src_path,
-            dst_path,
-            hard_links=True,
-            link_dest=src_path,
-            exclude=["**/work/work", "*.db"],
-        ):
-            logger.error("Failed to copy docker root (phase 1: hardlinks)")
-            return False
-
-        # Phase 2: rsync .db files WITHOUT hardlinks (full copies to avoid corruption)
-        logger.info("Phase 2: Copying mutable database files (full copies)")
-        if not run_rsync(
-            src_path,
-            dst_path,
-            hard_links=False,
-            link_dest=None,
-            exclude=["**/work/work"],
-            include_only=["*/", "*.db"],
-        ):
-            logger.error("Failed to copy docker root (phase 2: db files)")
-            return False
-
-        logger.info(f"Successfully copied docker root to {dst_path}")
-        return True
 
     def _prepare_povs_yaml(
         self, harness_name: str, povs_path: Path, mode: str, dst_dir: Path
@@ -306,7 +251,7 @@ class OSSPatchCRSRunner:
         # Ensure clean copy
         if copied_oss_fuzz_path.exists():
             shutil.rmtree(copied_oss_fuzz_path)
-        shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path)
+        shutil.copytree(oss_fuzz_path, copied_oss_fuzz_path, symlinks=True)
 
         target_project_path = copied_oss_fuzz_path / "projects" / self.project_name
 

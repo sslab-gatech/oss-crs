@@ -268,8 +268,8 @@ def copy_git_repo(src: Path, dst: Path) -> None:
         src: Source repository path
         dst: Destination path
     """
-    # First, do a regular copy
-    shutil.copytree(src, dst)
+    # First, do a regular copy (symlinks=True to avoid infinite loops with circular symlinks)
+    shutil.copytree(src, dst, symlinks=True)
 
     # Check if .git is a file (submodule pointer) instead of a directory
     git_path = dst / ".git"
@@ -494,28 +494,12 @@ def reset_repository(path: Path) -> bool:
         return False
 
 
-def load_docker_images_to_dir(
-    images: list[str],
-    docker_root_path: Path,
-    *,
-    retag: tuple[str, str] | None = None,
-) -> bool:
-    """Load Docker images to a docker root directory.
-
-    Args:
-        images: List of image names to load
-        docker_root_path: Path to docker root directory
-        retag: Optional tuple of (src_image, dst_image) to retag after loading
-               in the same DinD session
-
-    Returns:
-        True if successful, False otherwise
-    """
+def load_docker_images_to_dir(images: list[str], docker_root_path: Path) -> bool:
     logger.info(
         f'Loading docker images to "{docker_root_path}". It may take a while...'
     )
 
-    if len(images) == 0 and retag is None:
+    if len(images) == 0:
         logger.warning("No images to load provided")
         return True
 
@@ -535,30 +519,12 @@ def load_docker_images_to_dir(
                 stderr=subprocess.DEVNULL,
             )
 
-        # Build the shell command to run inside DinD
-        # First load images, then optionally retag
-        inner_cmds = []
-
-        if len(images) > 0:
-            inner_cmds.append('for f in /images/*; do docker load -i "$f"; done')
-
-        if retag is not None:
-            src_image, dst_image = retag
-            inner_cmds.append(f"docker tag {src_image} {dst_image}")
-            logger.info(f'Will retag "{src_image}" -> "{dst_image}" after loading')
-
-        if not inner_cmds:
-            # Nothing to do
-            return True
-
-        combined_cmd = " && ".join(inner_cmds)
-
         docker_load_cmd = (
             f"docker run --privileged --rm "
             f"-v {docker_root_path}:{DEFAULT_DOCKER_ROOT_DIR} "
             f"-v {images_path}:/images "
             f"{OSS_PATCH_DOCKER_DATA_MANAGER_IMAGE} "
-            f"sh -c '{combined_cmd}'"
+            f"sh -c 'for f in /images/*; do docker load -i \"$f\"; done'"
         )
 
         proc = subprocess.run(
@@ -570,8 +536,6 @@ def load_docker_images_to_dir(
 
         if proc.returncode == 0:
             change_ownership_with_docker(docker_root_path)
-            if retag is not None:
-                logger.info(f'Retagged "{retag[0]}" -> "{retag[1]}" in docker root')
             return True
         else:
             return False
