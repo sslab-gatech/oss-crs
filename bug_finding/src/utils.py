@@ -62,6 +62,7 @@ def run_rsync(
     link_dest: Path | None = None,
     hard_links: bool = False,
     include_only: list[str] | None = None,
+    ignore_errors: bool = False,
 ) -> bool:
     """Run rsync command with specified options.
 
@@ -76,6 +77,8 @@ def run_rsync(
         hard_links: Preserve existing hard links in source (-H)
         include_only: List of patterns to include (excludes everything else).
                       Use '*/' to include directories for traversal.
+        ignore_errors: Continue despite I/O errors (--ignore-errors). Also treats
+                       exit code 23 (partial transfer) as success.
 
     Returns:
         bool: True if rsync succeeded, False otherwise.
@@ -90,6 +93,8 @@ def run_rsync(
         cmd.append("--delete")
     if hard_links:
         cmd.append("-H")
+    if ignore_errors:
+        cmd.append("--ignore-errors")
     if link_dest:
         # --link-dest must be absolute path for rsync to work correctly
         cmd.extend(["--link-dest", str(link_dest.resolve())])
@@ -119,6 +124,14 @@ def run_rsync(
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
         return True
     except subprocess.CalledProcessError as e:
+        # Exit code 23 = partial transfer due to error (e.g., permission denied on some files)
+        # When ignore_errors is True, treat this as success since important files were likely copied
+        if ignore_errors and e.returncode == 23:
+            logger.warning(
+                "rsync completed with partial transfer (exit code 23). "
+                "Some files could not be copied due to permission errors."
+            )
+            return True
         logger.error("rsync failed with exit code %d", e.returncode)
         return False
     except FileNotFoundError:
@@ -202,6 +215,7 @@ def copy_docker_data(
         dest_path.mkdir(parents=True, exist_ok=True)
 
         # Phase 1: rsync with hardlinks, excluding mutable .db files and overlayfs work dirs
+        # ignore_errors=True to handle permission denied on special dirs (e.g., systemd's inaccessible/)
         logger.info(
             f"Copying {source_subdir} docker-data to {dest_subdir}/{project_name} "
             f"for CRS '{crs_name}' (using hardlinks for immutable files)"
@@ -212,6 +226,7 @@ def copy_docker_data(
             hard_links=True,
             link_dest=source_path,
             exclude=["**/work/work", "*.db"],
+            ignore_errors=True,
         ):
             logger.error(f"Failed to copy docker-data for '{crs_name}' (phase 1: hardlinks)")
             return False
@@ -226,6 +241,7 @@ def copy_docker_data(
             link_dest=None,  # No hardlinks for mutable files
             exclude=["**/work/work"],  # Skip overlayfs work directories
             include_only=["*/", "*.db"],  # Only directories and .db files
+            ignore_errors=True,
         ):
             logger.error(f"Failed to copy docker-data for '{crs_name}' (phase 2: db files)")
             return False
