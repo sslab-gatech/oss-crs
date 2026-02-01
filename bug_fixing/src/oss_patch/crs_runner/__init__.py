@@ -129,7 +129,9 @@ class OSSPatchCRSRunner:
 
         logger.info(f'Copying pre-populated docker root to "{tmp_docker_root_dir}"')
         # @TODO: find a way to optimize this copying routine
-        copy_directory_with_docker(self.docker_root_path, tmp_docker_root_dir)
+        if not copy_directory_with_docker(self.docker_root_path, tmp_docker_root_dir):
+            logger.error(f'Failed to copy docker root from "{self.docker_root_path}" to "{tmp_docker_root_dir}"')
+            raise RuntimeError(f'Failed to copy docker root directory')
 
     def _prepare_povs_yaml(
         self, harness_name: str, povs_path: Path, mode: str, dst_dir: Path
@@ -160,6 +162,7 @@ class OSSPatchCRSRunner:
         litellm_api_base: str,
         cpuset: str | None = None,
         memory: str | None = None,
+        crs_log_level: str = "info",
     ) -> bool:
         docker_root_path = self.run_base_dir / "docker"
         oss_fuzz_path = self.run_base_dir / "oss-fuzz"
@@ -199,6 +202,8 @@ class OSSPatchCRSRunner:
         if memory:
             resource_flags += f"--memory={memory} "
 
+        log_level_env = f"-e CRS_LOG_LEVEL={crs_log_level.upper()} "
+
         command = (
             f"docker run --rm --privileged "
             f"{resource_flags}"
@@ -212,6 +217,7 @@ class OSSPatchCRSRunner:
             f"-e TARGET_PROJ={self.project_name} "
             f"-e OSS_FUZZ=/oss-fuzz "
             f"-e PROJECT_SOURCE=/cp-sources "
+            f"{log_level_env}"
             f"{get_crs_image_name(crs_name)}"
         )
 
@@ -272,6 +278,7 @@ class OSSPatchCRSRunner:
         diff_path: Path | None,
         cpuset: str | None = None,
         memory: str | None = None,
+        crs_log_level: str = "info",
     ) -> bool:
         if not _check_povs(povs_path):
             return False
@@ -290,6 +297,7 @@ class OSSPatchCRSRunner:
                 litellm_api_base,
                 cpuset=cpuset,
                 memory=memory,
+                crs_log_level=crs_log_level,
             ):
                 return False
         finally:

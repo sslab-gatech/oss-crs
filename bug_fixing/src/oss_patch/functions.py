@@ -362,12 +362,15 @@ def copy_directory_with_docker(src_path: Path, dst_path: Path) -> bool:
     )
 
     proc = subprocess.run(
-        command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
     )
 
     if proc.returncode == 0:
         return True
     else:
+        logger.error(f"copy_directory_with_docker failed: {command}")
+        logger.error(f"stdout: {proc.stdout.decode()}")
+        logger.error(f"stderr: {proc.stderr.decode()}")
         return False
 
 
