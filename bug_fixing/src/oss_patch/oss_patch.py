@@ -136,6 +136,7 @@ class OSSPatch:
         log_dir: Path | None = None,
         cpuset: str | None = None,
         memory: str | None = None,
+        crs_log_level: str = "info",
     ) -> bool:
         assert self.crs_name
 
@@ -161,6 +162,7 @@ class OSSPatch:
             diff_path,
             cpuset=cpuset,
             memory=memory,
+            crs_log_level=crs_log_level,
         )
 
     # Testing purpose function
