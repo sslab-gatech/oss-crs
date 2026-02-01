@@ -30,6 +30,7 @@ class BenchmarkMetrics:
     build_time_saved: Optional[float] = None
     build_time_reduction_pct: Optional[float] = None
     build_speedup: Optional[float] = None
+    avg_rebuild_time_with_patch: Optional[float] = None
     # Test time metrics
     num_povs: Optional[int] = None
     baseline_test_time: Optional[float] = None
@@ -81,8 +82,14 @@ def parse_log_file(log_path: Path) -> Optional[BenchmarkMetrics]:
     build_section_pattern = re.compile(
         r'\[Build Time Comparison\].*?'
         r'Build time \(w/o inc build\):\s*([\d.]+)s.*?'
-        r'Build time \(w/ inc build, address\):\s*([\d.]+)s.*?'
+        r'(?:Build time|Rebuild time) \(w/ inc build,.*?\):\s*([\d.]+)s.*?'
         r'Time saved:\s*([-\d.]+)s\s*\(([-\d.]+)%\s*reduction,\s*([\d.]+)x\)',
+        re.DOTALL
+    )
+
+    # Pattern for avg rebuild time with patch
+    avg_rebuild_with_patch_pattern = re.compile(
+        r'Avg rebuild time \(w/ inc build, w/ patch\):\s*([\d.]+)s',
         re.DOTALL
     )
 
@@ -107,6 +114,7 @@ def parse_log_file(log_path: Path) -> Optional[BenchmarkMetrics]:
 
     # Find all matches and use the last one (final results)
     build_matches = list(build_section_pattern.finditer(content))
+    avg_rebuild_matches = list(avg_rebuild_with_patch_pattern.finditer(content))
     test_matches = list(test_section_pattern.finditer(content))
     test_count_matches = list(test_count_pattern.finditer(content))
 
@@ -117,6 +125,10 @@ def parse_log_file(log_path: Path) -> Optional[BenchmarkMetrics]:
         metrics.build_time_saved = parse_float(m.group(3))
         metrics.build_time_reduction_pct = parse_float(m.group(4))
         metrics.build_speedup = parse_float(m.group(5))
+
+    if avg_rebuild_matches:
+        m = avg_rebuild_matches[-1]  # Use last match
+        metrics.avg_rebuild_time_with_patch = parse_float(m.group(1))
 
     if test_matches:
         m = test_matches[-1]  # Use last match
@@ -150,6 +162,7 @@ def write_csv(metrics_list: list[BenchmarkMetrics], output_path: Path):
         'build_time_saved_s',
         'build_time_reduction_pct',
         'build_speedup',
+        'avg_rebuild_time_with_patch_s',
         'num_povs',
         'baseline_test_time_s',
         'rts_avg_test_time_s',
@@ -174,6 +187,7 @@ def write_csv(metrics_list: list[BenchmarkMetrics], output_path: Path):
                 'build_time_saved_s': m.build_time_saved,
                 'build_time_reduction_pct': m.build_time_reduction_pct,
                 'build_speedup': m.build_speedup,
+                'avg_rebuild_time_with_patch_s': m.avg_rebuild_time_with_patch,
                 'num_povs': m.num_povs,
                 'baseline_test_time_s': m.baseline_test_time,
                 'rts_avg_test_time_s': m.rts_avg_test_time,

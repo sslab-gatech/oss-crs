@@ -82,6 +82,8 @@ class IncrementalBuildChecker:
 
         self.build_time_without_inc_build: float | None = None
         self.build_time_with_inc_build: dict[str, float] = {}  # {sanitizer: build_time}
+        self.rebuild_times_with_patch: list[float] = []  # rebuild times after patch applied
+        self.avg_rebuild_time_with_patch: float | None = None  # average of rebuild times with patch
         self.required_sanitizers: list[str] = []  # sanitizers from project.yaml
         self.project_language: str = "c"  # language from project.yaml
         self.test_mode: str | None = None  # test_mode from project.yaml
@@ -655,6 +657,9 @@ class IncrementalBuildChecker:
                     return False
 
                 build_time_with_patch = time.time() - cur_time
+                # Track rebuild times with patch for fair comparison
+                if use_inc_image:
+                    self.rebuild_times_with_patch.append(build_time_with_patch)
                 logger.info(
                     f'Build time with {build_mode} and patch ("{patch_path.name}"): {build_time_with_patch}'
                 )
@@ -771,6 +776,16 @@ class IncrementalBuildChecker:
         total_time = sum(r[1] for r in self.test_results)
         self.avg_test_time = total_time / len(self.test_results)
 
+        # Calculate average rebuild time with patch
+        if self.rebuild_times_with_patch:
+            self.avg_rebuild_time_with_patch = (
+                sum(self.rebuild_times_with_patch) / len(self.rebuild_times_with_patch)
+            )
+            logger.info(
+                f"Avg rebuild time with patch ({len(self.rebuild_times_with_patch)} patches): "
+                f"{self.avg_rebuild_time_with_patch:.2f}s"
+            )
+
         # Calculate average stats
         # stats structure: [test_run, total_time, run_classes_list, output_class_set, [failure, error, skip]]
         valid_stats = [r[2] for r in self.test_results if r[2] is not None]
@@ -840,7 +855,7 @@ class IncrementalBuildChecker:
         if self.build_time_with_inc_build:
             for sanitizer, build_time in self.build_time_with_inc_build.items():
                 log_and_collect(
-                    f"  Build time (w/ inc build, {sanitizer}): {build_time:.2f}s"
+                    f"  Rebuild time (w/ inc build, no patch, {sanitizer}): {build_time:.2f}s"
                 )
                 if not skip_baseline and self.build_time_without_inc_build:
                     build_speedup = self.build_time_without_inc_build / build_time
@@ -851,6 +866,11 @@ class IncrementalBuildChecker:
                     log_and_collect(
                         f"    Time saved: {build_saved:.2f}s ({build_reduction:.1f}% reduction, {build_speedup:.2f}x)"
                     )
+        # Add average rebuild time with patch
+        if self.avg_rebuild_time_with_patch is not None:
+            log_and_collect(
+                f"  Avg rebuild time (w/ inc build, w/ patch): {self.avg_rebuild_time_with_patch:.2f}s"
+            )
         log_and_collect("-" * 60)
 
         # Print per-POV results first
