@@ -1,6 +1,11 @@
+from enum import Enum
 import os
 import subprocess
 from pathlib import Path
+
+
+class EnvType(str, Enum):
+    LOCAL = "local"
 
 
 def get_env(key: str) -> str:
@@ -11,12 +16,7 @@ def get_env(key: str) -> str:
     return value
 
 
-OSS_CRS_BUILD_OUT_DIR = Path(get_env("OSS_CRS_BUILD_OUT_DIR"))
-OSS_CRS_RUN_ENV_TYPE = get_env("OSS_CRS_RUN_ENV_TYPE")
-
-
-def is_local_run_env() -> bool:
-    return OSS_CRS_RUN_ENV_TYPE == "local"
+OSS_CRS_RUN_ENV_TYPE = EnvType(get_env("OSS_CRS_RUN_ENV_TYPE"))
 
 
 def rsync_copy(src: Path, dst: Path) -> None:
