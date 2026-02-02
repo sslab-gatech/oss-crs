@@ -70,7 +70,7 @@ class Target:
                     ),
                 ]
             )
-            if progress.run_all_tasks():
+            if progress.run_added_tasks().success:
                 return image_tag
         return None
 
@@ -104,7 +104,7 @@ class Target:
             ]
         with MultiTaskProgress(tasks=tasks, title=title) as progress:
             progress.add_items_to_head(head)
-            return progress.run_all_tasks()
+            return progress.run_added_tasks().success
 
     def __fetch_main_repo(self, progress: MultiTaskProgress) -> "TaskResult":
         cmd = ["git", "fetch", "origin"]

@@ -23,6 +23,8 @@ services:
       dockerfile: {{ crs.crs_path }}/{{ module_config.dockerfile }}
       additional_contexts:
         libcrs: {{ libCRS_path }}
+      args:
+        - crs_version={{ crs.version }}
     environment:
       ###########################################
       # OSS_FUZZ standard environment variables

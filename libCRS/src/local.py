@@ -5,13 +5,17 @@ from .common import rsync_copy, get_env
 from .submit import SubmitHelper
 
 OSS_CRS_BUILD_OUT_DIR = Path(get_env("OSS_CRS_BUILD_OUT_DIR"))
-OSS_CRS_FETCH_DIR = Path(get_env("OSS_CRS_FETCH_DIR"))
-OSS_CRS_SUBMIT_DIR = Path(get_env("OSS_CRS_SUBMIT_DIR"))
 
 
 class LocalCRSUtils(CRSUtils):
     def __init__(self):
         super().__init__()
+
+    def __init_submit_helper(self, data_type: DataType) -> SubmitHelper:
+        OSS_CRS_SUBMIT_DIR = Path(get_env("OSS_CRS_SUBMIT_DIR"))
+        shared_fs_dir = OSS_CRS_SUBMIT_DIR / data_type.value
+        shared_fs_dir.mkdir(parents=True, exist_ok=True)
+        return SubmitHelper(data_type, shared_fs_dir)
 
     def download_build_output(self, src_path: str, dst_path: Path) -> None:
         src = OSS_CRS_BUILD_OUT_DIR / src_path
@@ -28,17 +32,16 @@ class LocalCRSUtils(CRSUtils):
 
     def register_submit_dir(self, data_type: DataType, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
-        shared_fs_dir = OSS_CRS_SUBMIT_DIR / data_type.value
-        shared_fs_dir.mkdir(parents=True, exist_ok=True)
-        helper = SubmitHelper(data_type, shared_fs_dir)
+        helper = self.__init_submit_helper(data_type)
         helper.register_dir(path, batch_time=10, batch_size=100)
 
     def register_fetch_dir(self, type: DataType, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
         raise NotImplementedError("TODO: register_fetch_dir is not yet implemented")
 
-    def submit(self, type: DataType, src: Path) -> None:
-        raise NotImplementedError("TODO: submit is not yet implemented")
+    def submit(self, data_type: DataType, src: Path) -> None:
+        helper = self.__init_submit_helper(data_type)
+        helper.submit_file(src)
 
     def fetch(self, type: DataType, dst: Path) -> list[str]:
         raise NotImplementedError("TODO: fetch is not yet implemented")

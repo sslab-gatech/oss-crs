@@ -445,35 +445,6 @@ class MultiTaskProgress:
             self._live.__exit__(*args)
             self._live = None
 
-    def run_all_tasks(self) -> bool:
-        """
-        Run all tasks in order.
-
-        Returns:
-            True if all tasks succeeded, False if any task failed.
-        """
-        for task_name, task_func in self.tasks:
-            self._current_task = task_name
-            self.set_status(task_name, TaskStatus.IN_PROGRESS)
-            try:
-                result = task_func(self)
-                self.set_status(
-                    task_name,
-                    TaskStatus.SUCCESS if result.success else TaskStatus.FAILED,
-                )
-                if not result.success:
-                    if result.error:
-                        self.set_error_info(task_name, result.error)
-                    self._current_task = None
-                    return False
-            except Exception as e:
-                self.set_error_info(task_name, str(e))
-                self.set_status(task_name, TaskStatus.FAILED)
-                self._current_task = None
-                return False
-        self._current_task = None
-        return True
-
     def run_command_with_streaming_output(
         self,
         cmd: list[str],

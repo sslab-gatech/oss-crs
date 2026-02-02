@@ -54,7 +54,7 @@ class CRSCompose:
             tasks=tasks,
             title="CRS Compose Prepare",
         ) as progress:
-            return progress.run_all_tasks()
+            return progress.run_added_tasks().success
 
         return True
 
@@ -77,7 +77,7 @@ class CRSCompose:
             tasks=tasks,
             title="CRS Compose Build Target",
         ) as progress:
-            return progress.run_all_tasks()
+            return progress.run_added_tasks().success
 
         return True
 
@@ -103,7 +103,7 @@ class CRSCompose:
             tasks=tasks,
             title="CRS Compose Check Target Built",
         ) as progress:
-            return progress.run_all_tasks()
+            return progress.run_added_tasks().success
 
         return True
 
