@@ -1,3 +1,4 @@
+import hashlib
 import re
 from enum import Enum
 from typing import Optional
@@ -129,6 +130,11 @@ class CRSComposeConfig(BaseModel):
             oss_crs_infra=oss_crs_infra,
             crs_entries=crs_entries,
         )
+
+    def md5_hash(self) -> str:
+        """Compute MD5 hash of the configuration."""
+        config_json = self.model_dump_json(exclude_none=True)
+        return hashlib.md5(config_json.encode()).hexdigest()
 
 
 class CRSComposeEnv:

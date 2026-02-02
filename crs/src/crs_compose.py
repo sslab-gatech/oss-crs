@@ -14,11 +14,15 @@ class CRSCompose:
         return cls(config, work_dir)
 
     def __init__(self, config: CRSComposeConfig, work_dir: Path):
+        hash = config.md5_hash()
         self.config = config
-        self.work_dir = work_dir
+        self.work_dir = work_dir / f"crs_compose/{hash}"
+        self.work_dir.mkdir(parents=True, exist_ok=True)
         self.crs_compose_env = CRSComposeEnv(self.config.run_env)
         self.crs_list = [
-            CRS.from_crs_compose_entry(name, crs_cfg, work_dir, self.crs_compose_env)
+            CRS.from_crs_compose_entry(
+                name, crs_cfg, self.work_dir, self.crs_compose_env
+            )
             for name, crs_cfg in self.config.crs_entries.items()
         ]
 
