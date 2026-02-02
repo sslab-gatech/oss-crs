@@ -2,6 +2,8 @@ from enum import Enum
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from .infra_client import InfraClient
+
 
 class DataType(str, Enum):
     POV = "pov"
@@ -14,6 +16,9 @@ class DataType(str, Enum):
 
 
 class CRSUtils(ABC):
+    def __init__(self):
+        self.infra_client = InfraClient()
+
     @abstractmethod
     def download_build_output(self, src_path: str, dst_path: Path) -> None:
         """Download build output from src_path (in infra) to dst_path (in local)."""

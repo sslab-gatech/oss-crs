@@ -1,5 +1,6 @@
 from enum import Enum
 import os
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -8,15 +9,18 @@ class EnvType(str, Enum):
     LOCAL = "local"
 
 
-def get_env(key: str) -> str:
+def get_env(key: str, allow_none: bool = False) -> str:
     # Error if key does not exist in environment
     value = os.environ.get(key)
     if value is None:
+        if allow_none:
+            return ""
         raise KeyError(f"Environment variable '{key}' not found")
     return value
 
 
 OSS_CRS_RUN_ENV_TYPE = EnvType(get_env("OSS_CRS_RUN_ENV_TYPE"))
+CRS_NAME = get_env("OSS_CRS_NAME", allow_none=True) or "CRS_NONAMED"
 
 
 def rsync_copy(src: Path, dst: Path) -> None:
@@ -29,3 +33,9 @@ def rsync_copy(src: Path, dst: Path) -> None:
     else:
         # File: just copy it
         subprocess.run(["rsync", "-a", str(src), str(dst)], check=True)
+
+
+def file_hash(path: Path) -> str:
+    """Compute the MD5 checksum of a file."""
+    with path.open("rb") as f:
+        return hashlib.file_digest(f, "md5").hexdigest()

@@ -1,3 +1,5 @@
+import os
+import sys
 import argparse
 from pathlib import Path
 from ..base import DataType, CRSUtils
@@ -12,6 +14,49 @@ def init_crs_utils() -> CRSUtils:
         raise NotImplementedError(
             f"CRSUtils not implemented for run environment: {OSS_CRS_RUN_ENV_TYPE}"
         )
+
+
+class DaemonContext:
+    def __init__(self, log_path: str = None):
+        self.log_path = log_path
+        self.log_file = None
+
+    def __enter__(self):
+        pid = os.fork()
+        if pid > 0:
+            # Parent exits immediately
+            print(f"Started daemon with PID: {pid}")
+            os._exit(0)  # Use os._exit to avoid cleanup in parent
+
+        # Child continues as daemon
+        os.setsid()
+
+        # Redirect stdout/stderr to log file or /dev/null
+        if self.log_path:
+            self.log_file = open(self.log_path, "a", buffering=1)
+        else:
+            self.log_file = open(os.devnull, "w")
+
+        sys.stdout = self.log_file
+        sys.stderr = self.log_file
+        sys.stdin = open(os.devnull, "r")
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.log_file:
+            self.log_file.close()
+        return False
+
+
+def register_submit_dir(crs_utils, args):
+    with DaemonContext(log_path=args.log):
+        crs_utils.register_submit_dir(args.type, args.path)
+
+
+def register_fetch_dir(crs_utils, args):
+    with DaemonContext(log_path=args.log):
+        crs_utils.register_fetch_dir(args.type, args.path)
 
 
 def main():
@@ -83,8 +128,14 @@ def main():
     register_submit_dir_parser.add_argument(
         "path", type=Path, help="Directory path to register"
     )
+    register_submit_dir_parser.add_argument(
+        "--log",
+        type=Path,
+        default=None,
+        help="Log file path for the registered directory",
+    )
     register_submit_dir_parser.set_defaults(
-        func=lambda args: crs_utils.register_submit_dir(args.type, args.path)
+        func=lambda args: register_submit_dir(crs_utils, args)
     )
 
     # register-fetch-dir command (auto-fetch shared data from other CRS)
@@ -102,8 +153,14 @@ def main():
     register_fetch_dir_parser.add_argument(
         "path", type=Path, help="Directory path to receive shared data"
     )
+    register_fetch_dir_parser.add_argument(
+        "--log",
+        type=Path,
+        default=None,
+        help="Log file path for the registered directory",
+    )
     register_fetch_dir_parser.set_defaults(
-        func=lambda args: crs_utils.register_fetch_dir(args.type, args.path)
+        func=lambda args: register_fetch_dir(crs_utils, args)
     )
 
     # =========================================================================
@@ -148,7 +205,8 @@ def main():
         parser.print_help()
         return
 
-    args.func(args)
+    else:
+        args.func(args)
 
 
 if __name__ == "__main__":

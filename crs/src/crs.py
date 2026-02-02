@@ -179,9 +179,20 @@ class CRS:
             )
         return progress.run_added_tasks()
 
-    def get_build_output_dir(self, target: Target) -> Path:
+    def __get_sub_work_dir(self, target: Target, sub_dir_name: str) -> Path:
         target_image_name = target.get_docker_image_name().replace(":", "_")
-        return self.work_dir / target_image_name / "BUILD_OUT_DIR"
+        sub_work_dir = self.work_dir / target_image_name / sub_dir_name
+        sub_work_dir.mkdir(parents=True, exist_ok=True)
+        return sub_work_dir
+
+    def get_build_output_dir(self, target: Target) -> Path:
+        return self.__get_sub_work_dir(target, "BUILD_OUT_DIR")
+
+    def get_submit_dir(self, target: Target) -> Path:
+        return self.__get_sub_work_dir(target, "SUBMIT_DIR")
+
+    def get_fetch_dir(self, target: Target) -> Path:
+        return self.__get_sub_work_dir(target, "FETCH_DIR")
 
     def __check_outputs(
         self, build_config, build_out_dir, progress=None
@@ -211,7 +222,6 @@ class CRS:
         progress: MultiTaskProgress,
     ) -> "TaskResult":
         build_out_dir = self.get_build_output_dir(target)
-        build_out_dir.mkdir(parents=True, exist_ok=True)
         build_cache_path = build_work_dir / f".{build_name}.cache"
         docker_compose_output = ""
 
