@@ -59,6 +59,11 @@ def register_fetch_dir(crs_utils, args):
         crs_utils.register_fetch_dir(args.type, args.path)
 
 
+def get_service_domain(crs_utils, args):
+    domain = crs_utils.get_service_domain(args.service_name)
+    print(domain)
+
+
 def main():
     crs_utils = init_crs_utils()
     parser = argparse.ArgumentParser(
@@ -197,6 +202,17 @@ def main():
     fetch_parser.add_argument("path", type=Path, help="Output directory path")
     fetch_parser.set_defaults(
         func=lambda args: print("\n".join(crs_utils.fetch(args.type, args.path)))
+    )
+
+    get_service_domain_parser = subparsers.add_parser(
+        "get-service-domain",
+        help="Get the service domain for accessing CRS services",
+    )
+    get_service_domain_parser.add_argument(
+        "service_name", type=str, help="Service name to get the domain for"
+    )
+    get_service_domain_parser.set_defaults(
+        func=lambda args: get_service_domain(crs_utils, args)
     )
 
     args = parser.parse_args()

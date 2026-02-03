@@ -58,4 +58,9 @@ class CRSUtils(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_service_domain(self, service_name: str) -> str:
+        """Get the service domain for accessing CRS services."""
+        pass
+
     # TODO: Add more utility methods as needed

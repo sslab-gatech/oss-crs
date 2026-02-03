@@ -1,3 +1,4 @@
+import socket
 from pathlib import Path
 
 from .base import CRSUtils, DataType
@@ -45,3 +46,15 @@ class LocalCRSUtils(CRSUtils):
 
     def fetch(self, type: DataType, dst: Path) -> list[str]:
         raise NotImplementedError("TODO: fetch is not yet implemented")
+
+    def get_service_domain(self, service_name: str) -> str:
+        CRS_NAME = get_env("OSS_CRS_NAME")
+        ret = f"{service_name}.{CRS_NAME}"
+
+        # Check if the domain is accessible via DNS resolution
+        try:
+            socket.gethostbyname(ret)
+        except socket.gaierror as e:
+            raise RuntimeError(f"Service domain '{ret}' is not accessible: {e}")
+
+        return ret

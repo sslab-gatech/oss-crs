@@ -6,6 +6,11 @@ networks:
       driver: default
       config:
         - subnet: 172.28.0.0/16
+  {%- for crs in crs_list %}
+  {{ crs.name }}-network:
+    driver: bridge
+    name: {{ crs.name }}-network
+  {%- endfor %}
 
 volumes:
   crs-shared-volume:
@@ -40,7 +45,8 @@ services:
       # OSS_CRS specific environment variables
       ###########################################
       - OSS_CRS_RUN_ENV_TYPE={{ crs_compose_env.type }}
-      - OSS_CRS_NAME={{ crs.name }}_{{ module_name }}
+      - OSS_CRS_NAME={{ crs.name }}
+      - OSS_CRS_SERVICE_NAME={{ crs.name }}_{{ module_name }}
       - OSS_CRS_TARGET={{ target_env.name }}
       - OSS_CRS_TARGET_HARNESS={{ target_env.harness }}
       - OSS_CRS_CPUSET="{{ crs.resource.cpuset }}"
@@ -50,7 +56,7 @@ services:
       - OSS_CRS_FETCH_DIR=/OSS_CRS_FETCH_DIR
       ###########################################
 {%- for env_key, env_value in module_config.additional_env.items() %}
-      - {{ env_key }}="{{ env_value }}"
+      - {{ env_key }}={{ env_value }}
 {%- endfor %}
     cpuset: "{{ crs.resource.cpuset }}"
     # TODO: Check memory limit because it's for all services in a single CRS
@@ -59,10 +65,12 @@ services:
       - {{ crs.get_build_output_dir(target) }}:/OSS_CRS_BUILD_OUT_DIR:ro
       - {{ crs.get_submit_dir(target) }}:/OSS_CRS_SUBMIT_DIR:rw
       - {{ crs.get_fetch_dir(target) }}:/OSS_CRS_FETCH_DIR:ro
+    networks:
+      {{ crs.name }}-network:
+        aliases:
+          - {{module_name}}.{{ crs.name }}
     #  TODO: - crs-shared-volume:/shared
     # TODO: network, volumes, resource limits? 
-    # networks:
-    #  - crs-network
 
 {% endfor %}
 {% endfor %}
