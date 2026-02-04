@@ -120,7 +120,7 @@ class CRSConfig(BaseModel):
     crs_run_phase: CRSRunPhase
     supported_target: SupportedTarget
 
-    allowed_llms: Optional[list[str]] = Field(default=None)
+    required_llms: Optional[list[str]] = Field(default=None)
 
     @field_validator("version")
     @classmethod
@@ -140,9 +140,9 @@ class CRSConfig(BaseModel):
             raise ValueError("docker_registry cannot be empty")
         return v
 
-    @field_validator("allowed_llms")
+    @field_validator("required_llms")
     @classmethod
-    def validate_allowed_llms(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+    def validate_required_llms(cls, v: Optional[list[str]]) -> Optional[list[str]]:
         # TODO: Add specific validation for LLM names if needed
         if v is None:
             return v

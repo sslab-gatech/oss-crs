@@ -33,7 +33,7 @@ The root `CRSConfig` object contains the following fields:
 | `target_build_phase` | `TargetBuildPhase` | Yes | Configuration for the target build phase |
 | `crs_run_phase` | `CRSRunPhase` | Yes | Configuration for the CRS run phase |
 | `supported_target` | `SupportedTarget` | Yes | Defines what targets this CRS supports |
-| `allowed_llms` | `list[string]` | No | List of allowed LLM names (duplicates are automatically removed) |
+| `required_llms` | `list[string]` | No | List of required LLM names (duplicates are automatically removed) |
 
 ### Example
 
@@ -65,7 +65,7 @@ supported_target:
     - address
   architecture:
     - x86_64
-allowed_llms:
+required_llms:
   - gpt-5
 ```
 
