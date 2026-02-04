@@ -203,7 +203,7 @@ class Target:
                 f"--exclude=.git/logs "
                 f"--exclude=.git/refs/remotes "
                 f"--exclude=.git/ORIG_HEAD "
-                f"--from=repo_path . /src/{self.name}\n"
+                f"--from=repo_path . .\n"
             ).encode()
             added_dockerfile += ("COPY . /project_dir\n").encode()
             tmp_dockerfile.write(added_dockerfile)
