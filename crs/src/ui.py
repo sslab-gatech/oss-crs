@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 from rich.console import Console, Group
 from rich.live import Live
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -139,7 +140,7 @@ class MultiTaskProgress:
                     for note in self.task_notes[task_id]:
                         table.add_row(
                             "",
-                            f"{note_indent}[dim cyan]📝 {note}[/dim cyan]",
+                            f"{note_indent}[dim cyan]📝 {escape(note)}[/dim cyan]",
                             "",
                         )
             # Add cleanup tasks for this parent
@@ -163,8 +164,8 @@ class MultiTaskProgress:
         # Add task info if there's an in-progress task with info
         if current_task and current_task in self.task_info:
             info_panel = Panel(
-                f"[dim]{self.task_info[current_task]}[/dim]",
-                title=f"[bold]{current_task}[/bold]",
+                f"[dim]{escape(self.task_info[current_task])}[/dim]",
+                title=f"[bold]{escape(current_task)}[/bold]",
                 border_style="yellow",
             )
             content_parts.append(info_panel)
@@ -174,9 +175,9 @@ class MultiTaskProgress:
             cmd, cwd = self.cmd_info[current_task]
             cmd_header = Text()
             cmd_header.append("Command: ", style="bold")
-            cmd_header.append(f"{cmd}\n", style="dim")
+            cmd_header.append(f"{cmd}\n", style="dim")  # Text.append is safe
             cmd_header.append("CWD: ", style="bold")
-            cmd_header.append(f"{cwd}", style="dim")
+            cmd_header.append(f"{cwd}", style="dim")  # Text.append is safe
 
             if self.current_output_lines:
                 output_text = Text()
@@ -202,8 +203,8 @@ class MultiTaskProgress:
                 if parent in self._cleanup_complete:
                     display_name = self._display_names.get(task_id, task_id)
                     error_panel = Panel(
-                        f"[red]{self.error_info[task_id]}[/red]",
-                        title=f"[bold red]Error: {display_name}[/bold red]",
+                        f"[red]{escape(self.error_info[task_id])}[/red]",
+                        title=f"[bold red]Error: {escape(display_name)}[/bold red]",
                         border_style="red",
                     )
                     content_parts.append(error_panel)
