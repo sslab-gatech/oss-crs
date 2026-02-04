@@ -29,6 +29,7 @@ services:
       additional_contexts:
         libcrs: {{ libCRS_path }}
       args:
+        - target_base_image={{target.get_docker_image_name()}}
         - crs_version={{ crs.version }}
     environment:
       ###########################################
