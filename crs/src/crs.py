@@ -226,27 +226,27 @@ class CRS:
         docker_compose_output = ""
 
         def prepare_docker_compose_file(
-            progress, project_name: str, tmp_docker_compose_path: Path
+            progress, project_name: str, tmp_docker_compose: TmpDockerCompose
         ) -> "TaskResult":
             rendered = renderer.render_build_target_docker_compose(
                 self, target, target_base_image, build_config, build_out_dir
             )
-            tmp_docker_compose_path.write_text(rendered)
+            tmp_docker_compose.docker_compose.write_text(rendered)
             return TaskResult(success=True)
 
         def build_docker_compose(
-            progress, project_name: str, tmp_docker_compose_path
+            progress, project_name: str, tmp_docker_compose
         ) -> TaskResult:
             nonlocal docker_compose_output
             ret = progress.docker_compose_build(
                 project_name,
-                tmp_docker_compose_path,
+                tmp_docker_compose.docker_compose,
             )
             docker_compose_output = ret.output if ret.success else ret.error
             return ret
 
         def run_docker_compose(
-            progress, project_name: str, tmp_docker_compose_path
+            progress, project_name: str, tmp_docker_compose
         ) -> "TaskResult":
             nonlocal docker_compose_output
             image_hash = get_image_content_hash(
@@ -265,7 +265,7 @@ class CRS:
                     )
                     return TaskResult(success=True)
             ret = progress.docker_compose_run(
-                project_name, tmp_docker_compose_path, "target_builder"
+                project_name, tmp_docker_compose.docker_compose, "target_builder"
             )
 
             if ret.success:
@@ -276,23 +276,20 @@ class CRS:
             return ret
 
         with TmpDockerCompose(progress, "crs") as tmp_docker_compose:
-            tmp_docker_compose_path = tmp_docker_compose.path
             project_name = tmp_docker_compose.project_name
             progress.add_task(
                 "Prepare docker compose file",
                 lambda p: prepare_docker_compose_file(
-                    p, project_name, tmp_docker_compose_path
+                    p, project_name, tmp_docker_compose
                 ),
             )
             progress.add_task(
                 "Prepare docker images defined in docker compose file",
-                lambda p: build_docker_compose(
-                    p, project_name, tmp_docker_compose_path
-                ),
+                lambda p: build_docker_compose(p, project_name, tmp_docker_compose),
             )
             progress.add_task(
                 "Build target by executing the docker compose",
-                lambda p: run_docker_compose(p, project_name, tmp_docker_compose_path),
+                lambda p: run_docker_compose(p, project_name, tmp_docker_compose),
             )
             progress.add_task(
                 "Check outputs",
@@ -302,7 +299,7 @@ class CRS:
             result = progress.run_added_tasks()
             if result.success:
                 return TaskResult(success=True)
-            docker_compose_contents = tmp_docker_compose_path.read_text()
+            docker_compose_contents = tmp_docker_compose.docker_compose.read_text()
             error = result.error or ""
             error += "\n"
             if docker_compose_output:

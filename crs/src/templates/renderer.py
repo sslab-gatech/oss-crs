@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from ..config.crs_compose import CRSComposeEnv
     from ..target import Target
     from ..config.crs import BuildConfig
+    from ..utils import TmpDockerCompose
 
 CUR_DIR = Path(__file__).parent
 LIBCRS_PATH = (CUR_DIR / "../../../libCRS").resolve()
@@ -72,6 +73,7 @@ def render_build_target_docker_compose(
 
 
 def render_run_crs_compose_docker_compose(
+    tmp_docker_compose: "TmpDockerCompose",
     crs_compose_name: str,
     crs_compose_env: "CRSComposeEnv",
     crs_list: list["CRS"],

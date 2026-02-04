@@ -72,6 +72,12 @@ class RunEnv(Enum):
     AZURE = "azure"
 
 
+class LLMConfig(BaseModel):
+    """Configuration for LLMs used in CRS."""
+
+    litellm_config: str
+
+
 class CRSComposeConfig(BaseModel):
     """Root configuration for CRS Compose."""
 
@@ -79,6 +85,7 @@ class CRSComposeConfig(BaseModel):
     docker_registry: str
     oss_crs_infra: ResourceConfig
     crs_entries: dict[str, CRSEntry] = Field(default_factory=dict)
+    llm_config: Optional[LLMConfig] = None
 
     @field_validator("docker_registry")
     @classmethod
@@ -115,11 +122,13 @@ class CRSComposeConfig(BaseModel):
         RUN_ENV = "run_env"
         DOCKER_REGISTRY = "docker_registry"
         OSS_CRS_INFRA = "oss_crs_infra"
+        LLM_CONFIG = "llm_config"
         run_env = data.get(RUN_ENV)
         docker_registry = data.get(DOCKER_REGISTRY)
         oss_crs_infra = data.get(OSS_CRS_INFRA)
+        llm_config = data.get(LLM_CONFIG)
 
-        reserved_keys = {RUN_ENV, DOCKER_REGISTRY, OSS_CRS_INFRA}
+        reserved_keys = {RUN_ENV, DOCKER_REGISTRY, OSS_CRS_INFRA, LLM_CONFIG}
         crs_entries = {
             key: value for key, value in data.items() if key not in reserved_keys
         }
@@ -129,6 +138,7 @@ class CRSComposeConfig(BaseModel):
             docker_registry=docker_registry,
             oss_crs_infra=oss_crs_infra,
             crs_entries=crs_entries,
+            llm_config=llm_config,
         )
 
     def md5_hash(self) -> str:
