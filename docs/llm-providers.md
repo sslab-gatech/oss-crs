@@ -74,3 +74,7 @@ uv run oss-bugfind-crs build example_configs/test-local json-c
 # Should say hello from LLM
 uv run oss-bugfind-crs run example_configs/test-local json-c json_array_fuzzer
 ```
+
+# Known Issues with Aliasing Models
+
+Recent LLMs like GPT-5 no longer support the `temperature` parameter. This can cause silent failures if you’re swapping model backends in LiteLLM while keeping the original model name (e.g., model name set to gpt-4o but relay configured to gpt-5). The temperature param gets passed through and the API rejects it.
