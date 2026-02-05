@@ -1,6 +1,7 @@
 import hashlib
 import re
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator, HttpUrl
 import yaml
@@ -76,6 +77,16 @@ class LLMConfig(BaseModel):
     """Configuration for LLMs used in CRS."""
 
     litellm_config: str
+
+    @field_validator("litellm_config")
+    @classmethod
+    def validate_litellm_config(cls, v: str) -> str:
+        path = Path(v).expanduser()
+        if not path.exists():
+            raise ValueError(f"litellm_config path does not exist: '{v}'")
+        if not path.is_file():
+            raise ValueError(f"litellm_config path is not a file: '{v}'")
+        return v
 
 
 class CRSComposeConfig(BaseModel):

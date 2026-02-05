@@ -153,10 +153,9 @@ class CRSCompose:
     ) -> TaskResult:
         def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
             content = renderer.render_run_crs_compose_docker_compose(
+                self,
                 tmp_docker_compose,
                 project_name,
-                self.crs_compose_env,
-                self.crs_list,
                 target,
             )
             tmp_docker_compose.docker_compose.write_text(content)

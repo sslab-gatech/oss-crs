@@ -1,16 +1,29 @@
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+import os
+import re
+import string
+import random
+import yaml
+
+RAND_CHARS = string.ascii_lowercase + string.digits
 
 if TYPE_CHECKING:
     from ..crs import CRS
-    from ..config.crs_compose import CRSComposeEnv
     from ..target import Target
     from ..config.crs import BuildConfig
     from ..utils import TmpDockerCompose
+    from ..crs_compose import CRSComposeConfig
 
 CUR_DIR = Path(__file__).parent
-LIBCRS_PATH = (CUR_DIR / "../../../libCRS").resolve()
+OSS_CRS_ROOT_PATH = (CUR_DIR / "../../../").resolve()
+LIBCRS_PATH = (OSS_CRS_ROOT_PATH / "libCRS").resolve()
+
+
+def _generate_random_key(length: int = 10) -> str:
+    """Generate a random alphanumeric string."""
+    return "".join(random.choice(RAND_CHARS) for _ in range(length))
 
 
 def render_template(template_path: Path, context: dict) -> str:
@@ -72,20 +85,118 @@ def render_build_target_docker_compose(
     return render_template(template_path, context)
 
 
+def extract_envs_from_litellm_config(litellm_config_path: str) -> list[str]:
+    """
+    Parse LiteLLM config file and extract environment variable names.
+
+    Looks for patterns like 'os.environ/VAR_NAME' in model_list[].litellm_params
+    fields (e.g., api_key, api_base).
+
+    Args:
+        litellm_config_path: Path to the LiteLLM config YAML file
+
+    Returns:
+        Sorted list of unique environment variable names
+    """
+    config_path = Path(litellm_config_path).expanduser().resolve()
+
+    with open(config_path) as f:
+        config = yaml.safe_load(f) or {}
+
+    env_vars: set[str] = set()
+    pattern = re.compile(r"os\.environ/(\w+)")
+
+    model_list = config.get("model_list", [])
+    for model in model_list:
+        litellm_params = model.get("litellm_params", {})
+        # Check all string fields in litellm_params for env var references
+        for field, value in litellm_params.items():
+            if isinstance(value, str):
+                match = pattern.search(value)
+                if match:
+                    env_vars.add(match.group(1))
+
+    return sorted(env_vars)
+
+
+def prepare_llm_context(
+    tmp_docker_compose: "TmpDockerCompose", crs_compose: "CRSComposeConfig"
+) -> Optional[dict]:
+    if crs_compose.config.llm_config:
+        # Prepare LiteLLM environment variables
+        litellm_env = {}
+        print("Her")
+        for name in extract_envs_from_litellm_config(
+            crs_compose.config.llm_config.litellm_config
+        ):
+            print(name)
+            tmp = os.environ.get(name)
+            if tmp is None:
+                raise RuntimeError(
+                    f"Environment variable '{name}' required by LiteLLM config is not set."
+                )
+            litellm_env[name] = tmp
+        # Generate keys for each CRS
+        keys = {}
+        key_info = {}
+        for crs in crs_compose.crs_list:
+            key = "sk-" + _generate_random_key(16)
+            keys[crs.name] = key
+            key_info[crs.name] = {
+                "api_key": key,
+                "required_llms": crs.config.required_llms,
+                "llm_budget": crs.resource.llm_budget,
+            }
+        key_gen_request_path = tmp_docker_compose.dir / "key_gen_request.yaml"
+        key_gen_request_path.write_text(
+            yaml.dump(key_info, default_flow_style=False, sort_keys=False)
+        )
+
+        return {
+            "litellm_master_key": "sk-" + _generate_random_key(16),
+            "postgres_password": _generate_random_key(16),
+            "litellm_config_path": crs_compose.config.llm_config.litellm_config,
+            "api_keys": keys,
+            "litellm_env": litellm_env,
+            "key_gen_request_path": str(key_gen_request_path),
+        }
+    return None
+
+
 def render_run_crs_compose_docker_compose(
+    crs_compose: "CRSComposeConfig",
     tmp_docker_compose: "TmpDockerCompose",
     crs_compose_name: str,
-    crs_compose_env: "CRSComposeEnv",
-    crs_list: list["CRS"],
     target: "Target",
 ) -> str:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
     context = {
         "libCRS_path": str(LIBCRS_PATH),
         "crs_compose_name": crs_compose_name,
-        "crs_list": crs_list,
-        "crs_compose_env": crs_compose_env.get_env(),
+        "crs_list": crs_compose.crs_list,
+        "crs_compose_env": crs_compose.crs_compose_env.get_env(),
         "target_env": target.get_target_env(),
         "target": target,
+        "oss_crs_infra_root_path": str(OSS_CRS_ROOT_PATH / "oss-crs-infra"),
     }
-    return render_template(template_path, context)
+
+    llm_context = prepare_llm_context(tmp_docker_compose, crs_compose)
+    if llm_context:
+        context["llm_context"] = llm_context
+
+    rendered = render_template(template_path, context)
+
+    # Load as YAML and add common config for oss-crs-* services
+    compose_data = yaml.safe_load(rendered)
+    oss_crs_infra = crs_compose.config.oss_crs_infra
+    common_config = {
+        "cpuset": oss_crs_infra.cpuset,
+        "mem_limit": oss_crs_infra.memory,
+    }
+
+    if "services" in compose_data:
+        for service_name, service_config in compose_data["services"].items():
+            if service_name.startswith("oss-crs"):
+                service_config.update(common_config)
+
+    return yaml.dump(compose_data, default_flow_style=False, sort_keys=False)

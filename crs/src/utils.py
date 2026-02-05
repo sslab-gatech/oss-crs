@@ -9,7 +9,7 @@ from .ui import MultiTaskProgress
 RAND_CHARS = string.ascii_lowercase + string.digits
 
 
-def _generate_random_name(length: int = 10) -> str:
+def generate_random_name(length: int = 10) -> str:
     """Generate a random alphanumeric string."""
     return "".join(random.choice(RAND_CHARS) for _ in range(length))
 
@@ -24,7 +24,7 @@ class TmpDockerCompose:
 
     def __enter__(self) -> "TmpDockerCompose":
         # Create a temporary docker-compose YAML file
-        name = _generate_random_name(10)
+        name = generate_random_name(10)
         self.dir = Path(f"/tmp/{name}")
         self.dir.mkdir(parents=True, exist_ok=True)
         self.docker_compose = self.dir / "docker-compose.yaml"
