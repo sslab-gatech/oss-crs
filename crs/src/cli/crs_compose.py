@@ -41,7 +41,7 @@ def add_target_arguments(parser):
     )
     parser.add_argument(
         "--no-checkout",
-        type=bool,
+        action="store_true",
         default=False,
         help="Whether to checkout the target repository before building.",
     )
