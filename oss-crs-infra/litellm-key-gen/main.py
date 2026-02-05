@@ -8,13 +8,13 @@ LITELLM_API_URL = os.getenv("LITELLM_API_URL")
 
 
 def create_llm_key(
-    key_alias: str, budget: int, required_models: list[str]
+    key: str, budget: int, required_models: list[str]
 ) -> str | None:
     """
     Create an LLM API key using LiteLLM's key/generate endpoint.
 
     Args:
-        key_alias: Alias/name for the key
+        key: speicifed key
         budget: Max budget for this key (in USD)
         required_models: List of models this key can access
 
@@ -27,7 +27,7 @@ def create_llm_key(
         "Content-Type": "application/json",
     }
     payload = {
-        "key_alias": key_alias,
+        "key": key,
         "max_budget": budget,
         "models": required_models,
     }
@@ -36,7 +36,8 @@ def create_llm_key(
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         data = response.json()
-        return data.get("key")
+        assert data.get("key") == key
+        return key
     except requests.exceptions.RequestException as e:
         print(f"Error creating LLM key: {e}")
         return None
