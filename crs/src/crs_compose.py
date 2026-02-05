@@ -124,19 +124,18 @@ class CRSCompose:
             title="CRS Compose Run",
         ) as progress:
             with TmpDockerCompose(progress, "crs_compose") as tmp_docker_compose:
-                tmp_docker_compose_path = tmp_docker_compose.path
                 project_name = tmp_docker_compose.project_name
                 tasks = [
                     (
                         "Prepare Running Environment",
                         lambda progress: self.__prepare_local_running_env(
-                            project_name, target, tmp_docker_compose_path, progress
+                            project_name, target, tmp_docker_compose, progress
                         ),
                     ),
                     (
                         "Run CRSs!",
                         lambda progress: self.__run_local_running_env(
-                            project_name, tmp_docker_compose_path, progress
+                            project_name, tmp_docker_compose, progress
                         ),
                     ),
                 ]
@@ -149,14 +148,17 @@ class CRSCompose:
         self,
         project_name: str,
         target: Target,
-        tmp_docker_compose_path: Path,
+        tmp_docker_compose: TmpDockerCompose,
         progress: MultiTaskProgress,
     ) -> TaskResult:
         def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
             content = renderer.render_run_crs_compose_docker_compose(
-                project_name, self.crs_compose_env, self.crs_list, target
+                self,
+                tmp_docker_compose,
+                project_name,
+                target,
             )
-            tmp_docker_compose_path.write_text(content)
+            tmp_docker_compose.docker_compose.write_text(content)
             return TaskResult(success=True)
 
         progress.add_task(
@@ -165,7 +167,7 @@ class CRSCompose:
         progress.add_task(
             "Build docker images in the combined docker compose file",
             lambda progress: progress.docker_compose_build(
-                project_name, tmp_docker_compose_path
+                project_name, tmp_docker_compose.docker_compose
             ),
         )
 
@@ -174,10 +176,12 @@ class CRSCompose:
     def __run_local_running_env(
         self,
         project_name: str,
-        tmp_docker_compose_path: Path,
+        tmp_docker_compose: TmpDockerCompose,
         progress: MultiTaskProgress,
     ) -> TaskResult:
-        ret = progress.docker_compose_up(project_name, str(tmp_docker_compose_path))
+        ret = progress.docker_compose_up(
+            project_name, str(tmp_docker_compose.docker_compose)
+        )
         if ret.success:
             return ret
         ret.error += "\n\n📝 Depending on your Dockerfile, You might need to run `uv run crs-compose prepare` to apply your changes."

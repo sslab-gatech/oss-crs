@@ -587,10 +587,54 @@ class MultiTaskProgress:
             "up",
             "--abort-on-container-failure",
         ]
-        return self.run_command_with_streaming_output(
+        result = self.run_command_with_streaming_output(
             cmd=cmd,
             info_text="Bringing up services with docker-compose",
         )
+
+        # If compose returned success, double-check no containers failed
+        if result.success:
+            check_result = self._check_failed_containers(
+                project_name, docker_compose_path
+            )
+            if not check_result.success:
+                check_result.error = result.output + "\n\n" + check_result.error
+                return check_result
+
+        return result
+
+    def _check_failed_containers(
+        self, project_name: str, docker_compose_path: Path
+    ) -> TaskResult:
+        """Check if any containers exited with non-zero exit code."""
+        cmd = [
+            "docker",
+            "compose",
+            "-p",
+            project_name,
+            "-f",
+            str(docker_compose_path),
+            "ps",
+            "-a",
+            "--format",
+            "{{.Name}}:{{.ExitCode}}",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            failed_containers = []
+            for line in result.stdout.strip().split("\n"):
+                if ":" in line:
+                    name, exit_code = line.rsplit(":", 1)
+                    if exit_code.strip() not in ("", "0"):
+                        failed_containers.append(f"{name} (exit {exit_code})")
+            if failed_containers:
+                error_msg = "Containers exited with errors:\n" + "\n".join(
+                    failed_containers
+                )
+                return TaskResult(success=False, error=error_msg)
+        except Exception:
+            pass  # If check fails, assume success
+        return TaskResult(success=True)
 
     def docker_compose_down(
         self, project_name: str, docker_compose_path: Path

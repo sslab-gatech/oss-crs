@@ -1,15 +1,14 @@
 networks:
-  crs-network:
+  {{ crs_compose_name }}-network:
     driver: bridge
     name: {{ crs_compose_name }}-network
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.28.0.0/16
-  {%- for crs in crs_list %}
-  {{ crs.name }}-network:
+  {{ crs_compose_name }}-infra-only-network:
     driver: bridge
-    name: {{ crs.name }}-network
+    name: {{ crs_compose_name }}-infra-only-network
+  {%- for crs in crs_list %}
+  {{ crs_compose_name }}-{{ crs.name }}-network:
+    driver: bridge
+    name: {{ crs_compose_name}}-{{ crs.name }}-network
   {%- endfor %}
 
 volumes:
@@ -59,6 +58,13 @@ services:
 {%- for env_key, env_value in module_config.additional_env.items() %}
       - {{ env_key }}={{ env_value }}
 {%- endfor %}
+{%- if llm_context is defined %}
+      - OSS_CRS_LLM_API_URL=http://litellm.oss-crs:4000
+      - OSS_CRS_LLM_API_KEY={{ llm_context.api_keys[crs.name] }}
+    depends_on:
+      oss-crs-litellm-key-gen:
+        condition: service_completed_successfully
+{%- endif %}
     cpuset: "{{ crs.resource.cpuset }}"
     # TODO: Check memory limit because it's for all services in a single CRS
     mem_limit: "{{ crs.resource.memory }}"
@@ -66,12 +72,76 @@ services:
       - {{ crs.get_build_output_dir(target) }}:/OSS_CRS_BUILD_OUT_DIR:ro
       - {{ crs.get_submit_dir(target) }}:/OSS_CRS_SUBMIT_DIR:rw
       - {{ crs.get_fetch_dir(target) }}:/OSS_CRS_FETCH_DIR:ro
+    #  TODO: - crs-shared-volume:/shared?
     networks:
-      {{ crs.name }}-network:
+      {{ crs_compose_name }}-{{ crs.name }}-network:
         aliases:
           - {{module_name}}.{{ crs.name }}
-    #  TODO: - crs-shared-volume:/shared
-    # TODO: network, volumes, resource limits? 
-
+      {{ crs_compose_name }}-network:
 {% endfor %}
 {% endfor %}
+  ###########################################
+  # OSS-CRS-INFRA-SERVICES
+  # - oss-crs-litellm
+  # - oss-crs-postgres
+{% if llm_context is defined %}
+  ###########################################
+  # OSS-CRS-LITELLM
+  ###########################################
+  oss-crs-litellm:
+    image: ghcr.io/berriai/litellm-database:main-stable 
+    depends_on:
+      oss-crs-postgres:
+        condition: service_healthy
+    environment:
+      - LITELLM_MASTER_KEY={{ llm_context.litellm_master_key }}
+      - DATABASE_URL=postgresql://crs:{{ llm_context.postgres_password }}@postgres.oss-crs-infra-only:5432/crs
+    {%- for key, value in llm_context.litellm_env.items() %}
+      - {{ key }}={{ value }}
+    {%- endfor %}
+    volumes:
+      - {{ llm_context.litellm_config_path }}:/app/config.yaml:ro
+    networks:
+      {{ crs_compose_name }}-infra-only-network:
+      {{ crs_compose_name }}-network:
+        aliases:
+          - litellm.oss-crs
+    command: --config /app/config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+  oss-crs-postgres:
+    image: postgres:16-alpine
+    attach: false
+    environment:
+      - POSTGRES_USER=crs
+      - POSTGRES_PASSWORD={{ llm_context.postgres_password }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crs -h localhost -p 5432"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      {{ crs_compose_name }}-infra-only-network:
+        aliases:
+          - postgres.oss-crs-infra-only
+  oss-crs-litellm-key-gen:
+    image: oss-crs-litellm-key-gen:latest
+    build:
+      context: {{ oss_crs_infra_root_path }}/litellm-key-gen
+      dockerfile: {{ oss_crs_infra_root_path }}/litellm-key-gen/Dockerfile
+    depends_on:
+      oss-crs-litellm:
+        condition: service_healthy
+    environment:
+      - LITELLM_MASTER_KEY={{ llm_context.litellm_master_key }}
+      - LITELLM_API_URL=http://litellm.oss-crs:4000
+    networks:
+      {{ crs_compose_name }}-network:
+    volumes:
+      - {{ llm_context.key_gen_request_path }}:/key_gen_request.yaml:ro
+  ###########################################
+{% endif %}
