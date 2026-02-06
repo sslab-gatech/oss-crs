@@ -24,6 +24,7 @@ class PreparePhase(BaseModel):
 class BuildConfig(BaseModel):
     """Configuration for a single build step."""
 
+    name: str
     dockerfile: str
     outputs: list[str]
     additional_env: dict[str, str] = Field(default_factory=dict)
@@ -47,13 +48,13 @@ class BuildConfig(BaseModel):
 class TargetBuildPhase(BaseModel):
     """Configuration for the target build phase."""
 
-    builds: dict[str, BuildConfig] = Field(default_factory=dict)
+    builds: list[BuildConfig] = Field(default_factory=[])
 
     @model_validator(mode="before")
     @classmethod
-    def parse_builds(cls, data: dict) -> dict:
+    def parse_builds(cls, data: list) -> "TargetBuildPhase":
         """Parse builds from raw dictionary data."""
-        return {"builds": {k: v for k, v in data.items()}}
+        return {"builds": [BuildConfig(**item) for item in data]}
 
 
 class CRSRunPhaseModule(BaseModel):

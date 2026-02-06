@@ -143,7 +143,8 @@ class CRS:
                 error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
         build_work_dir = self.work_dir / (target_base_image.replace(":", "_"))
-        for build_name, build_config in self.config.target_build_phase.builds.items():
+        for build_config in self.config.target_build_phase.builds:
+            build_name = build_config.name
             progress.add_task(
                 build_name,
                 lambda p, build_name=build_name, build_config=build_config: (

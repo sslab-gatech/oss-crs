@@ -46,7 +46,7 @@ docker_registry: "ghcr.io/my-org/my-crs"
 prepare_phase:
   hcl: oss-crs/build.hcl
 target_build_phase:
-  build-step-1:
+  - name: build-step-1
     dockerfile: oss-crs/Build.Dockerfile
     outputs:
       - fuzzer
@@ -94,12 +94,13 @@ The `target_build_phase` defines one or more build steps for the target.
 
 ### Structure
 
-The target build phase is a dictionary where each key is a build step name and each value is a `BuildConfig` object.
+The target build phase is a list of `BuildConfig` objects, each defining a named build step.
 
 ### BuildConfig
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `name` | `string` | Yes | - | The name of the build step |
 | `dockerfile` | `string` | Yes | - | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`) |
 | `outputs` | `list[string]` | Yes | - | List of output paths |
 | `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass during the build |
@@ -108,13 +109,13 @@ The target build phase is a dictionary where each key is a build step name and e
 
 ```yaml
 target_build_phase:
-  asan:
+  - name: asan
     dockerfile: oss-crs/asan-builder.Dockerfile
     additional_env:
       RUNNING_TIME_ENV: "value"
     outputs:
       - asan.tar.gz
-  cov-builder:
+  - name: cov-builder
     dockerfile: oss-crs/cov-builder.Dockerfile
     outputs:
       - cov-builder.tar.gz
