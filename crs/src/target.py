@@ -41,7 +41,7 @@ class Target:
         return f"{self.name}:{repo_hash}"
 
     def build_docker_image(self) -> str:
-        if not self.__init_repo(self.no_checkout):
+        if not self.init_repo():
             return None
         repo_hash = self.__get_repo_hash()
         image_tag = self.get_docker_image_name()
@@ -74,7 +74,8 @@ class Target:
                 return image_tag
         return None
 
-    def __init_repo(self, no_checkout: bool) -> bool:
+    def init_repo(self) -> bool:
+        no_checkout = self.no_checkout
         title = f"Setting up Target {self.name}"
         head = [
             ui.bold(f"Init {self.name} repo into {self.repo_path}"),

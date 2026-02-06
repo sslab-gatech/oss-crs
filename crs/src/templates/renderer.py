@@ -125,11 +125,9 @@ def prepare_llm_context(
     if crs_compose.config.llm_config:
         # Prepare LiteLLM environment variables
         litellm_env = {}
-        print("Her")
         for name in extract_envs_from_litellm_config(
             crs_compose.config.llm_config.litellm_config
         ):
-            print(name)
             tmp = os.environ.get(name)
             if tmp is None:
                 raise RuntimeError(

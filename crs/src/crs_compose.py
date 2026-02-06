@@ -86,6 +86,7 @@ class CRSCompose:
         return True
 
     def run(self, target: Target) -> bool:
+        target.init_repo()
         if not self.__check_target_built(target):
             if not self.build_target(target):
                 return False
