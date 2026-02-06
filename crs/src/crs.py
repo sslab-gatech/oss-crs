@@ -146,15 +146,15 @@ class CRS:
         for build_name, build_config in self.config.target_build_phase.builds.items():
             progress.add_task(
                 build_name,
-                lambda p,
-                build_name=build_name,
-                build_config=build_config: self.__build_target_one(
-                    target,
-                    target_base_image,
-                    build_name,
-                    build_config,
-                    build_work_dir,
-                    p,
+                lambda p, build_name=build_name, build_config=build_config: (
+                    self.__build_target_one(
+                        target,
+                        target_base_image,
+                        build_name,
+                        build_config,
+                        build_work_dir,
+                        p,
+                    )
                 ),
             )
         return progress.run_added_tasks()
@@ -329,5 +329,4 @@ def get_image_content_hash(
     if not ret.success:
         return None
     layers_json = ret.output.strip()
-    image_hash = hashlib.sha256(layers_json.encode()).hexdigest()
-    return image_hash
+    return hashlib.sha256(layers_json.encode()).hexdigest()[:12]

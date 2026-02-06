@@ -142,8 +142,8 @@ class Target:
 
         # Check if working directory is clean
         if not repo.is_dirty(untracked_files=True):
-            self.repo_hash = commit_hash
-            return commit_hash
+            self.repo_hash = commit_hash[:12]
+            return self.repo_hash
 
         # Dirty working directory - combine commit hash with changes
         hasher = hashlib.sha256()
