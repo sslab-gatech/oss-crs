@@ -1,5 +1,6 @@
 from pathlib import Path
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
+from .llm import LLM
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
@@ -16,6 +17,7 @@ class CRSCompose:
     def __init__(self, config: CRSComposeConfig, work_dir: Path):
         hash = config.md5_hash()
         self.config = config
+        self.llm = LLM(self.config.llm_config)
         self.work_dir = work_dir / f"crs_compose/{hash}"
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.crs_compose_env = CRSComposeEnv(self.config.run_env)
@@ -86,11 +88,32 @@ class CRSCompose:
         return True
 
     def run(self, target: Target) -> bool:
+        if not self.__validate_before_run(target):
+            return False
         target.init_repo()
         if not self.__check_target_built(target):
             if not self.build_target(target):
                 return False
         return self.__run(target)
+
+    def __validate_before_run(self, target: Target) -> bool:
+        tasks = [
+            (
+                "Validate required LLMs for CRS targets",
+                lambda _: self.llm.validate_required_llms(self.crs_list),
+            ),
+            (
+                "Validate required environment variables for LiteLLM",
+                lambda _: self.llm.validate_required_envs(),
+            ),
+        ]
+        with MultiTaskProgress(
+            tasks=tasks,
+            title="Validate Configuration for Running",
+        ) as progress:
+            return progress.run_added_tasks().success
+
+        return True
 
     def __check_target_built(self, target: Target) -> bool:
         target_base_image = target.get_docker_image_name()

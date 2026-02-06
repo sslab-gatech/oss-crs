@@ -2,7 +2,6 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from typing import TYPE_CHECKING, Optional
 import os
-import re
 import string
 import random
 import yaml
@@ -85,49 +84,13 @@ def render_build_target_docker_compose(
     return render_template(template_path, context)
 
 
-def extract_envs_from_litellm_config(litellm_config_path: str) -> list[str]:
-    """
-    Parse LiteLLM config file and extract environment variable names.
-
-    Looks for patterns like 'os.environ/VAR_NAME' in model_list[].litellm_params
-    fields (e.g., api_key, api_base).
-
-    Args:
-        litellm_config_path: Path to the LiteLLM config YAML file
-
-    Returns:
-        Sorted list of unique environment variable names
-    """
-    config_path = Path(litellm_config_path).expanduser().resolve()
-
-    with open(config_path) as f:
-        config = yaml.safe_load(f) or {}
-
-    env_vars: set[str] = set()
-    pattern = re.compile(r"os\.environ/(\w+)")
-
-    model_list = config.get("model_list", [])
-    for model in model_list:
-        litellm_params = model.get("litellm_params", {})
-        # Check all string fields in litellm_params for env var references
-        for field, value in litellm_params.items():
-            if isinstance(value, str):
-                match = pattern.search(value)
-                if match:
-                    env_vars.add(match.group(1))
-
-    return sorted(env_vars)
-
-
 def prepare_llm_context(
     tmp_docker_compose: "TmpDockerCompose", crs_compose: "CRSComposeConfig"
 ) -> Optional[dict]:
-    if crs_compose.config.llm_config:
+    if crs_compose.llm.exists():
         # Prepare LiteLLM environment variables
         litellm_env = {}
-        for name in extract_envs_from_litellm_config(
-            crs_compose.config.llm_config.litellm_config
-        ):
+        for name in crs_compose.llm.extract_envs():
             tmp = os.environ.get(name)
             if tmp is None:
                 raise RuntimeError(
