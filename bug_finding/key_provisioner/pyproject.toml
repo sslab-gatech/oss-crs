@@ -1,7 +1,0 @@
-[project]
-name = "key-provisioner"
-version = "0.1.0"
-dependencies = [
-    "requests>=2.31.0",
-    "PyYAML>=6.0.3",
-]

@@ -1,6 +1,0 @@
-recursive-include crs_registry *.yaml
-include bug_finding/templates/*.j2
-include bug_finding/key_provisioner/*.py
-include bug_finding/key_provisioner/Dockerfile
-include bug_finding/key_provisioner/*.toml
-recursive-include bug_fixing/base_images *
