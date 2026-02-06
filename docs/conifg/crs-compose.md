@@ -4,11 +4,13 @@ This document describes the configuration file format for CRS Compose, which is 
 
 ## Configuration File Format
 
-The configuration file is written in YAML format and consists of three main sections:
+The configuration file is written in YAML format and consists of the following sections:
 
 1. `run_env` - The runtime environment
-2. `oss_crs_infra` - Infrastructure resource configuration
-3. CRS entries - One or more named CRS configurations
+2. `docker_registry` - Docker registry URL
+3. `oss_crs_infra` - Infrastructure resource configuration
+4. `llm_config` - LLM configuration (required if CRS uses LLMs, see [llm.md](llm.md))
+5. CRS entries - One or more named CRS configurations
 
 ## Schema Overview
 
@@ -19,6 +21,8 @@ oss_crs_infra:
   cpuset: <cpu-set>
   memory: <memory-limit>
   llm_budget: <optional-integer>
+llm_config:                    # required if CRS uses LLMs
+  litellm_config: <path-to-litellm-config>
 <crs-name>:
   cpuset: <cpu-set>
   memory: <memory-limit>
@@ -168,19 +172,22 @@ oss_crs_infra:
   cpuset: "0-1"
   memory: "4G"
 
+llm_config:
+  litellm_config: /home/crs-compose/litellm-config.yaml
+
 atlantis-crs:
   cpuset: "2-5"
   memory: "16G"
   llm_budget: 5000
   source:
-    url: https://github.com/example/atlantis-crs.git
+    url: https://github.com/example/crs.git
     ref: v1.2.0
 
 local-path-crs:
   cpuset: "6-7"
   memory: "8GB"
   source:
-    local_path: /home/my-crs/my-crs
+    local_path: /home/crs-compose/my-crs
 ```
 
 ---
@@ -211,8 +218,3 @@ The configuration is validated using Pydantic with the following rules:
    - Valid examples: `"my-crs"`, `"atlantis"`, `"my-local-crs"`
 
 ---
-
-## Validate via CMD
-```bash
-uv run common/config/crs_compose.py </path/to/crs-compose.yaml>
-```
