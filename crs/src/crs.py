@@ -181,9 +181,19 @@ class CRS:
             )
         return progress.run_added_tasks()
 
-    def __get_sub_work_dir(self, target: Target, sub_dir_name: str) -> Path:
+    def __get_sub_work_dir(
+        self, target: Target, sub_dir_name: str, per_harness=False
+    ) -> Path:
         target_image_name = target.get_docker_image_name().replace(":", "_")
-        sub_work_dir = self.work_dir / target_image_name / sub_dir_name
+        if per_harness:
+            assert target.target_harness, (
+                "target_harness must be set for per_harness sub work dir"
+            )
+            sub_work_dir = (
+                self.work_dir / target_image_name / sub_dir_name / target.target_harness
+            )
+        else:
+            sub_work_dir = self.work_dir / target_image_name / sub_dir_name
         sub_work_dir.mkdir(parents=True, exist_ok=True)
         return sub_work_dir
 
@@ -191,10 +201,10 @@ class CRS:
         return self.__get_sub_work_dir(target, "BUILD_OUT_DIR")
 
     def get_submit_dir(self, target: Target) -> Path:
-        return self.__get_sub_work_dir(target, "SUBMIT_DIR")
+        return self.__get_sub_work_dir(target, "SUBMIT_DIR", per_harness=True)
 
     def get_fetch_dir(self, target: Target) -> Path:
-        return self.__get_sub_work_dir(target, "FETCH_DIR")
+        return self.__get_sub_work_dir(target, "FETCH_DIR", per_harness=True)
 
     def __check_outputs(
         self, build_config, build_out_dir, progress=None
