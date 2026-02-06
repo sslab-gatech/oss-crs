@@ -169,7 +169,8 @@ class CRS:
                 error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
         build_out_dir = self.get_build_output_dir(target)
-        for build_name, build_config in self.config.target_build_phase.builds.items():
+        for build_config in self.config.target_build_phase.builds:
+            build_name = build_config.name
             progress.add_task(
                 f"Check build outputs for {build_name}",
                 lambda p, build_config=build_config: self.__check_outputs(
