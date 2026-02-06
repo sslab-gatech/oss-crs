@@ -238,10 +238,3 @@ Supported CPU architectures (based on [OSS-Fuzz architecture support](https://go
 |-------|-------------|
 | `x86_64` | 64-bit x86 architecture |
 | `i386` | 32-bit x86 architecture |
-
----
-
-## Validate via CMD
-```bash
-uv run common/config/crs.py </path/to/crs.yaml>
-```
