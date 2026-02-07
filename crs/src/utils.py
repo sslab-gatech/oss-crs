@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import random
 import string
@@ -42,7 +43,7 @@ class TmpDockerCompose:
             return
         # Clean up the temporary dir
         if self.dir is not None and self.dir.exists():
-            self.dir.rmdir
+            shutil.rmtree(self.dir, ignore_errors=True)
 
 
 def rm_with_docker(path: Path) -> None:
