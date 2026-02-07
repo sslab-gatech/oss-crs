@@ -1,6 +1,7 @@
 import sys
 import argparse
 from pathlib import Path
+from dotenv import load_dotenv
 from ..crs_compose import CRSCompose
 from ..target import Target
 
@@ -98,6 +99,7 @@ def init_target_from_args(args) -> Target:
 
 
 def main() -> bool:
+    load_dotenv()
     parser = argparse.ArgumentParser(
         description="CRS (Cyber Reasoning System) Compose CLI"
     )
