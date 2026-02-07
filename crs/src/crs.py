@@ -8,7 +8,7 @@ from .config.crs_compose import CRSEntry, CRSComposeEnv
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target
 from .templates import renderer
-from .utils import TmpDockerCompose
+from .utils import TmpDockerCompose, rm_with_docker
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
@@ -205,6 +205,14 @@ class CRS:
 
     def get_fetch_dir(self, target: Target) -> Path:
         return self.__get_sub_work_dir(target, "FETCH_DIR", per_harness=True)
+
+    def get_shared_dir(self, target: Target) -> Path:
+        return self.__get_sub_work_dir(target, "SHARED_DIR", per_harness=True)
+
+    def cleanup_shared_dir(self, target: Target) -> bool:
+        dir_path = self.__get_sub_work_dir(target, "SHARED_DIR", per_harness=True)
+        rm_with_docker(dir_path)
+        return True
 
     def __check_outputs(
         self, build_config, build_out_dir, progress=None

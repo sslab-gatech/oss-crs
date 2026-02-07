@@ -185,6 +185,18 @@ class CRSCompose:
             tmp_docker_compose.docker_compose.write_text(content)
             return TaskResult(success=True)
 
+        def cleanup_shared_dirs(progress: MultiTaskProgress) -> TaskResult:
+            for crs in self.crs_list:
+                progress.add_task(
+                    f"Clean up shared directory for {crs.name}",
+                    lambda progress, crs=crs: TaskResult(
+                        success=crs.cleanup_shared_dir(target)
+                    ),
+                )
+            return progress.run_added_tasks()
+
+        progress.add_task("Clean up shared directories", cleanup_shared_dirs)
+
         progress.add_task(
             "Prepare combined docker compose file", prepare_docker_compose
         )

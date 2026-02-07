@@ -40,6 +40,11 @@ class CRSUtils(ABC):
         pass
 
     @abstractmethod
+    def register_shared_dir(self, local_path: Path, shared_path: str) -> None:
+        """Register a directory for sharing data between containers in a CRS."""
+        pass
+
+    @abstractmethod
     def register_fetch_dir(self, type: DataType, path: Path) -> None:
         """Register a directory for automatic fetching of shared data from oss-crs-infra."""
         pass

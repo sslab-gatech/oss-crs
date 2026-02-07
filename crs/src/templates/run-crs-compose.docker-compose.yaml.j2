@@ -54,6 +54,7 @@ services:
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
       - OSS_CRS_SUBMIT_DIR=/OSS_CRS_SUBMIT_DIR
       - OSS_CRS_FETCH_DIR=/OSS_CRS_FETCH_DIR
+      - OSS_CRS_SHARED_DIR=/OSS_CRS_SHARED_DIR
       ###########################################
 {%- for env_key, env_value in module_config.additional_env.items() %}
       - {{ env_key }}={{ env_value }}
@@ -72,7 +73,7 @@ services:
       - {{ crs.get_build_output_dir(target) }}:/OSS_CRS_BUILD_OUT_DIR:ro
       - {{ crs.get_submit_dir(target) }}:/OSS_CRS_SUBMIT_DIR:rw
       - {{ crs.get_fetch_dir(target) }}:/OSS_CRS_FETCH_DIR:ro
-    #  TODO: - crs-shared-volume:/shared?
+      - {{ crs.get_shared_dir(target) }}:/OSS_CRS_SHARED_DIR:rw
     networks:
       {{ crs_compose_name }}-{{ crs.name }}-network:
         aliases:

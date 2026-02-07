@@ -42,6 +42,16 @@ class LocalCRSUtils(CRSUtils):
         helper = self.__init_submit_helper(data_type)
         helper.register_dir(path, batch_time=10, batch_size=100)
 
+    def register_shared_dir(self, local_path: Path, shared_path: str) -> None:
+        if local_path.exists():
+            raise FileExistsError(f"Local path '{local_path}' already exists")
+
+        OSS_CRS_SHARED_DIR = Path(get_env("OSS_CRS_SHARED_DIR"))
+        shared_path = OSS_CRS_SHARED_DIR / shared_path
+        shared_path.mkdir(parents=True, exist_ok=True)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.symlink_to(shared_path)
+
     def register_fetch_dir(self, type: DataType, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
         raise NotImplementedError("TODO: register_fetch_dir is not yet implemented")
