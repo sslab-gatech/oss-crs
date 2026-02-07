@@ -143,6 +143,25 @@ def main():
         func=lambda args: register_submit_dir(crs_utils, args)
     )
 
+    # register-shared-dir command (share a directory between containers in a CRS)
+    register_shared_dir_parser = subparsers.add_parser(
+        "register-shared-dir",
+        help="Register a shared directory for sharing data between containers in a CRS",
+    )
+    register_shared_dir_parser.add_argument(
+        "local_path", type=Path, help="Local directory path inside the container"
+    )
+    register_shared_dir_parser.add_argument(
+        "shared_path",
+        type=str,
+        help="Path on the shared filesystem accessible by all containers in the CRS",
+    )
+    register_shared_dir_parser.set_defaults(
+        func=lambda args: crs_utils.register_shared_dir(
+            args.local_path, args.shared_path
+        )
+    )
+
     # register-fetch-dir command (auto-fetch shared data from other CRS)
     register_fetch_dir_parser = subparsers.add_parser(
         "register-fetch-dir",

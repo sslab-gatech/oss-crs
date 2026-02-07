@@ -1,9 +1,8 @@
+import subprocess
 import random
 import string
 from pathlib import Path
 from typing import Optional
-
-from .ui import MultiTaskProgress
 
 
 RAND_CHARS = string.ascii_lowercase + string.digits
@@ -44,3 +43,25 @@ class TmpDockerCompose:
         # Clean up the temporary dir
         if self.dir is not None and self.dir.exists():
             self.dir.rmdir
+
+
+def rm_with_docker(path: Path) -> None:
+    try:
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{path.parent}:/data",
+                "alpine",
+                "rm",
+                "-rf",
+                f"/data/{path.name}",
+            ],
+            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Error removing {path} with Docker: {e}")
