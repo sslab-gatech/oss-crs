@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
 from .llm import LLM
 from .crs import CRS
@@ -27,6 +28,10 @@ class CRSCompose:
             )
             for name, crs_cfg in self.config.crs_entries.items()
         ]
+        self.deadline: Optional[float] = None
+
+    def set_deadline(self, deadline: float) -> None:
+        self.deadline = deadline
 
     def __prepare_oss_crs_infra(
         self, publish: bool = False, docker_registry: str = None
@@ -146,6 +151,7 @@ class CRSCompose:
         with MultiTaskProgress(
             tasks=[],
             title="CRS Compose Run",
+            deadline=self.deadline,
         ) as progress:
             with TmpDockerCompose(progress, "crs_compose") as tmp_docker_compose:
                 project_name = tmp_docker_compose.project_name

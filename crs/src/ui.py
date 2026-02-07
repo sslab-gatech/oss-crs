@@ -1,4 +1,6 @@
 import subprocess
+import time
+import threading
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
@@ -45,11 +47,13 @@ class MultiTaskProgress:
         tasks: list[tuple[str, Callable[["MultiTaskProgress"], TaskResult]]],
         title: str = "Task Progress",
         console: Optional[Console] = None,
+        deadline: Optional[float] = None,
     ):
         self.tasks = tasks
         self.task_names = [name for name, _ in tasks]
         self.title = title
         self.console = console or Console()
+        self.deadline: Optional[float] = deadline
         self.statuses: dict[str, TaskStatus] = {
             name: TaskStatus.PENDING for name in self.task_names
         }
@@ -387,12 +391,17 @@ class MultiTaskProgress:
         """
         Run cleanup tasks for a given parent task.
         All cleanup tasks are attempted even if some fail.
+        Cleanup tasks always ignore the deadline so they can tear down resources.
 
         Returns:
             TaskResult indicating overall cleanup success.
         """
         if parent not in self._cleanup_tasks:
             return TaskResult(success=True)
+
+        # Suspend deadline during cleanup so docker compose down can finish
+        saved_deadline = self.deadline
+        self.deadline = None
 
         first_error = None
         all_success = True
@@ -424,6 +433,7 @@ class MultiTaskProgress:
                 # Continue running other cleanup tasks even on failure
             self._current_task = prev_task
 
+        self.deadline = saved_deadline
         return TaskResult(success=all_success, error=first_error)
 
     def add_output_line(self, line: str) -> None:
@@ -486,11 +496,57 @@ class MultiTaskProgress:
                 bufsize=1,
             )
 
-            for line in iter(process.stdout.readline, ""):
-                line = line.rstrip()
-                if line:
-                    process_output(line)
-            process.wait()
+            timed_out = threading.Event()
+            timer = None
+
+            if self.deadline is not None:
+                remaining = self.deadline - time.monotonic()
+                if remaining <= 0:
+                    process.terminate()
+                    process.wait()
+                    error_msg = f"Deadline already exceeded before running:\n{' '.join(cmd)}"
+                    if task_name:
+                        self.set_error_info(task_name, error_msg)
+                    return TaskResult(success=False, error=error_msg)
+
+                def _on_timeout():
+                    timed_out.set()
+                    process.terminate()
+                    try:
+                        process.wait(timeout=20)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+
+                timer = threading.Timer(remaining, _on_timeout)
+                timer.daemon = True
+                timer.start()
+
+            try:
+                for line in iter(process.stdout.readline, ""):
+                    line = line.rstrip()
+                    if line:
+                        process_output(line)
+                process.wait()
+            except KeyboardInterrupt:
+                process.terminate()
+                try:
+                    process.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                error = "\n".join(output_lines)
+                error += "\n\n📝 Process interrupted by user"
+                return TaskResult(success=False, error=error)
+            finally:
+                if timer is not None:
+                    timer.cancel()
+
+            if timed_out.is_set():
+                error_msg = f"Timed out. Containers were gracefully stopped.\n{' '.join(cmd)}\n\n"
+                error_msg += "\n".join(output_lines)
+                if task_name:
+                    self.set_error_info(task_name, error_msg)
+                return TaskResult(success=False, error=error_msg)
 
             if process.returncode == 0:
                 return TaskResult(success=True, output="\n".join(output_lines))
@@ -519,10 +575,6 @@ class MultiTaskProgress:
             else:
                 Console().print(f"[bold red]Error:[/bold red] {error_msg}")
             return TaskResult(success=False, error=error_msg)
-        except KeyboardInterrupt as e:
-            error = "\n".join(output_lines)
-            error += "\n\n📝 Process interrupted by user"
-            return TaskResult(success=False, error=error)
 
     def add_items_to_head(self, items) -> None:
         self._head += items

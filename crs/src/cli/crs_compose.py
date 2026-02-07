@@ -1,4 +1,5 @@
 import sys
+import time
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
@@ -81,6 +82,12 @@ def add_run_command(subparsers):
         required=True,
         help="Specify the target harness to use for the run",
     )
+    run.add_argument(
+        "--timeout",
+        type=int,
+        default=None,
+        help="Maximum run duration in seconds. Gracefully stops all containers when exceeded.",
+    )
 
 
 def add_check_command(subparsers):
@@ -130,6 +137,8 @@ def main() -> bool:
             return False
     elif args.command == "run":
         target = init_target_from_args(args)
+        if args.timeout is not None:
+            crs_compose.set_deadline(time.monotonic() + args.timeout)
         if not crs_compose.run(target):
             return False
     elif args.command == "check":
