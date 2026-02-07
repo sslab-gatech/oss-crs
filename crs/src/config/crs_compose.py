@@ -1,5 +1,6 @@
 import hashlib
 import re
+import json
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -154,8 +155,17 @@ class CRSComposeConfig(BaseModel):
 
     def md5_hash(self) -> str:
         """Compute MD5 hash of the configuration."""
-        config_json = self.model_dump_json(exclude_none=True)
+        config_json = self.model_dump(exclude_none=True, mode="json")
+        config_json = remove_keys(config_json, ["cpuset", "llm_budget", "memory"])
+        config_json = json.dumps(config_json)
         return hashlib.md5(config_json.encode()).hexdigest()[:12]
+
+def remove_keys(d, keys_to_remove):
+    if isinstance(d, dict):
+        return {k: remove_keys(v, keys_to_remove) for k, v in d.items() if k not in keys_to_remove}
+    elif isinstance(d, list):
+        return [remove_keys(item, keys_to_remove) for item in d]
+    return d
 
 
 class CRSComposeEnv:
