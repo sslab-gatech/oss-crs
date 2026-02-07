@@ -113,6 +113,12 @@ def main() -> bool:
 
     args = parser.parse_args()
 
+    # Resolve all Path arguments to absolute paths so that relative paths
+    # (e.g., --target-proj-path ../ghostscript) work regardless of cwd.
+    for key, value in vars(args).items():
+        if isinstance(value, Path):
+            setattr(args, key, value.expanduser().resolve())
+
     crs_compose = CRSCompose.from_yaml_file(args.compose_file, args.work_dir)
 
     if args.command == "prepare":
