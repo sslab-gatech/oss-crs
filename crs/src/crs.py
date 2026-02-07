@@ -213,11 +213,23 @@ class CRS:
         for output in build_config.outputs:
             output_path = build_out_dir / output
             output_paths.append(output_path)
+
+        def check_output(progress, output_path):
+            if output_path.exists():
+                return TaskResult(success=True)
+            else:
+                skip_file = output_path.parent / f".{output_path.name}.skip"
+                if skip_file.exists():
+                    progress.add_note(f"Output is skipped as {skip_file.name} exists.")
+                    return TaskResult(
+                        success=True,
+                    )
+                return TaskResult(success=False)
+
         if progress:
             for output_path in output_paths:
                 progress.add_task(
-                    f"{output_path}",
-                    lambda p, o=output_path: TaskResult(success=o.exists()),
+                    f"{output_path}", lambda p, o=output_path: check_output(p, o)
                 )
             return progress.run_added_tasks()
         else:

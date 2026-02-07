@@ -1,4 +1,5 @@
 import socket
+import tempfile
 from pathlib import Path
 
 from .base import CRSUtils, DataType
@@ -29,7 +30,12 @@ class LocalCRSUtils(CRSUtils):
         rsync_copy(src, dst)
 
     def skip_build_output(self, dst_path: str) -> None:
-        raise NotImplementedError("TODO: skip_build_output is not yet implemented")
+        with tempfile.NamedTemporaryFile() as tmp_file:
+            tmp_file.write(b"skip")
+            tmp_file.flush()
+            dst = Path(dst_path)
+            skip_file_path = dst.parent / f".{dst.name}.skip"
+            self.submit_build_output(tmp_file.name, skip_file_path)
 
     def register_submit_dir(self, data_type: DataType, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
