@@ -1,5 +1,6 @@
 import sys
 import time
+import signal
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
@@ -105,7 +106,13 @@ def init_target_from_args(args) -> Target:
     )
 
 
+def _sigterm_handler(signum, frame):
+    """Convert SIGTERM into KeyboardInterrupt so cleanup tasks can run."""
+    raise KeyboardInterrupt("SIGTERM received")
+
+
 def main() -> bool:
+    signal.signal(signal.SIGTERM, _sigterm_handler)
     load_dotenv()
     parser = argparse.ArgumentParser(
         description="CRS (Cyber Reasoning System) Compose CLI"
