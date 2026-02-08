@@ -71,8 +71,6 @@ class SubmitHelper:
                 len(self.queue) > 0
                 and (time.time() - self._last_flush_time) >= batch_time
             )
-            print("batch_time:", batch_time, "batch_size:", batch_size)
-            print("should_flush:", should_flush, "queue size:", len(self.queue))
             if not should_flush:
                 return False
             cur_queue, self.queue = self.queue, cur_queue
@@ -81,7 +79,12 @@ class SubmitHelper:
             if self.shared_fs_dir is not None:
                 for item in cur_queue:
                     dst_path = self.shared_fs_dir / item.hash
-                    rsync_copy(item.file_path, dst_path)
+                    item_path = item.file_path
+                    rsync_copy(item_path, dst_path)
+                    for ext in ["callstack", "crash_log", "metadata"]:
+                        ext_path = item_path.parent / f".{item_path.name}.{ext}"
+                        if ext_path.exists():
+                            rsync_copy(ext_path, self.shared_fs_dir / f".{item.hash}.{ext}")
             self.client.submit_batch(self.data_type, cur_queue, False)
         self._last_flush_time = time.time()
         return True
