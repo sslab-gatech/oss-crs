@@ -13,6 +13,37 @@ from .utils import TmpDockerCompose, rm_with_docker
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
 
+def init_crs_repo(repo_url: str, branch: str, dest_path: Path) -> bool:
+    tasks = []
+    if dest_path.exists():
+        tasks = [
+            (
+                "Git Fetch",
+                lambda progress: progress.run_command_with_streaming_output(
+                    cmd=["git", "fetch", "origin", branch], cwd=dest_path
+                ),
+            ),
+            (
+                "Git Reset",
+                lambda progress: progress.run_command_with_streaming_output(
+                    cmd=["git", "reset", "--hard", f"origin/{branch}"],
+                    cwd=dest_path,
+                ),
+            ),
+        ]
+    else:
+        tasks = [
+            (
+                "Cloning CRS repository",
+                lambda progress: progress.run_command_with_streaming_output(
+                    cmd=["git", "clone", "--branch", branch, repo_url, str(dest_path)]
+                ),
+            ),
+        ]
+    with MultiTaskProgress(tasks, title="Init CRS") as progress:
+        return progress.run_added_tasks().success
+
+
 class CRS:
     @classmethod
     def from_yaml_file(cls, crs_path: Path, work_dir: Path) -> "CRS":
@@ -31,8 +62,11 @@ class CRS:
             return cls(
                 name, Path(entry.source.local_path), work_dir, entry, crs_compose_env
             )
-        # TODO: implement other source types
-        raise NotImplementedError("Only local_path source is implemented yet.")
+        else:
+            path = work_dir / "crs_src" / name
+            if init_crs_repo(entry.source.url, entry.source.ref, path):
+                return cls(name, path, work_dir, entry, crs_compose_env)
+        raise ValueError(f"Failed to initialize CRS from entry: {name}")
 
     def __init__(
         self,
