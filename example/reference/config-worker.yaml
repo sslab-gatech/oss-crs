@@ -1,4 +1,0 @@
-server1:
-  node: fuzz-user@farm1.gatech.edu
-  private-key:
-    - key/sudo
