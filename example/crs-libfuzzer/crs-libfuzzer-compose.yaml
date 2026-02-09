@@ -6,11 +6,11 @@ oss_crs_infra:
   cpuset: "0-3" 
   memory:  "16G"
 
-multilang:
+crs-libfuzzer:
   source:
     url: git@github.com:Team-Atlanta/crs-libfuzzer.git
     ref: refined-oss-crs
-  cpuset: "4-8" 
+  cpuset: "4-7" 
   memory:  "16G"
   # crs-libfuzzer does not use llm.
   #llm_budget: 100 
