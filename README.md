@@ -117,12 +117,13 @@ OSS-CRS is designed to make CRS development simple. Follow the [Integration Guid
 
 ## Documentation
 
-- [Integration Guide](docs/INTEGRATION.md): How to build and register your own CRS
+- [CRS Development Guide](docs/crs-development-guide.md): How to build or integrate your own CRS
 - [Architecture](docs/design/architecture.md): System design and component overview
+- [Target Project](docs/config/target-project.md): Target project setup and OSS-Fuzz compatibility
 - [CRS Configuration](docs/config/crs.md): CRS config reference
 - [CRS-Compose Configuration](docs/config/crs-compose.md): Compose file reference
 - [LLM Configuration](docs/config/llm.md): LLM provider setup
-- [TODO](docs/TODO.md): Upcoming features and planned improvements
+- [TODO](TODO.md): Upcoming features and planned improvements
 
 ## Contributing
 
