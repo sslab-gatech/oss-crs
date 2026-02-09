@@ -4,7 +4,7 @@
 
 ## Why OSS-CRS?
 
-- **Standard CRS Interface** — OSS-CRS defines a unified interface for CRS development. Build your CRS once following the [integration guideline](docs/INTEGRATION.md), and run it across different environments (local, Azure, ...) **without any modification**.
+- **Standard CRS Interface** — OSS-CRS defines a unified interface for CRS development. Build your CRS once following the [development guide](docs/crs-development-guide.md), and run it across different environments (local, Azure, ...) **without any modification**.
 - **Effortless Targeting** — Run any CRS against projects in [OSS-Fuzz](https://github.com/google/oss-fuzz) format. If your project is compatible with OSS-Fuzz, OSS-CRS can orchestrate CRSs against it out of the box.
 - **Ensemble Multiple CRSs** — Compose and run multiple CRSs together in a single campaign to combine their strengths and maximize bug-finding and bug-fixing coverage.
 - **Resource Control** — Manage CPU limits and LLM budgets per CRS to keep costs and resources in check.
@@ -109,7 +109,7 @@ Each CRS runs independently with its own resource allocation, and results are ag
 
 ## Build Your Own CRS
 
-OSS-CRS is designed to make CRS development simple. Follow the [Integration Guide](docs/INTEGRATION.md) to package your bug-finding or bug-fixing tool as a CRS. Once integrated, your CRS will:
+OSS-CRS is designed to make CRS development simple. Follow the [CRS Development Guide](docs/crs-development-guide.md) to package your bug-finding or bug-fixing tool as a CRS. Once integrated, your CRS will:
 
 - Work with any OSS-Fuzz-compatible target
 - Run in any supported environment (local, Azure, ...) without modification
