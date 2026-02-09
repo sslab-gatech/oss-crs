@@ -1,5 +1,0 @@
-name: mock-crs
-type: bug-finding
-source:
-  url: https://github.com/Team-Atlanta/mock-crs
-  ref: main

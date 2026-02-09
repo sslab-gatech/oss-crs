@@ -1,5 +1,0 @@
-name: 42-patch-agent
-type: bug-fixing
-source:
-  url: git@github.com:sslab-gatech/42-PatchAgent.git
-  ref: main
