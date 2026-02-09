@@ -13,7 +13,7 @@ from .utils import TmpDockerCompose, rm_with_docker
 CRS_YAML_PATH = "oss-crs/crs.yaml"
 
 
-def init_crs_repo(repo_url: str, branch: str, dest_path: Path) -> bool:
+def init_crs_repo(name, repo_url: str, branch: str, dest_path: Path) -> bool:
     tasks = []
     if dest_path.exists():
         tasks = [
@@ -40,7 +40,7 @@ def init_crs_repo(repo_url: str, branch: str, dest_path: Path) -> bool:
                 ),
             ),
         ]
-    with MultiTaskProgress(tasks, title="Init CRS") as progress:
+    with MultiTaskProgress(tasks, title=f"Init CRS: {name}") as progress:
         return progress.run_added_tasks().success
 
 
@@ -64,7 +64,7 @@ class CRS:
             )
         else:
             path = work_dir / "../crs_src" / name
-            if init_crs_repo(entry.source.url, entry.source.ref, path):
+            if init_crs_repo(name, entry.source.url, entry.source.ref, path):
                 return cls(name, path, work_dir, entry, crs_compose_env)
         raise ValueError(f"Failed to initialize CRS from entry: {name}")
 
