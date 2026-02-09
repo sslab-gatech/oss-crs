@@ -92,10 +92,10 @@ class Target:
             else:
                 head.append(ui.green("Fetching latest changes..."))
                 tasks += [
-                    ("Git fetch", lambda progress: self.__fetch_main_repo(progress)),
+                    ("Git fetch", lambda progress: self.__fetch_repo(progress)),
                     (
-                        "Git checkout main",
-                        lambda progress: self.__checkout_main_repo(progress),
+                        "Git checkout HEAD",
+                        lambda progress: self.__checkout_HEAD(progress),
                     ),
                 ]
         else:
@@ -107,15 +107,15 @@ class Target:
             progress.add_items_to_head(head)
             return progress.run_added_tasks().success
 
-    def __fetch_main_repo(self, progress: MultiTaskProgress) -> "TaskResult":
+    def __fetch_repo(self, progress: MultiTaskProgress) -> "TaskResult":
         cmd = ["git", "fetch", "origin"]
         return progress.run_command_with_streaming_output(
             cmd=cmd,
             cwd=self.repo_path,
         )
 
-    def __checkout_main_repo(self, progress: MultiTaskProgress) -> "TaskResult":
-        cmd = ["git", "checkout", "-f", "main"]
+    def __checkout_HEAD(self, progress: MultiTaskProgress) -> "TaskResult":
+        cmd = ["git", "reset", "--hard", "origin/HEAD"]
         return progress.run_command_with_streaming_output(
             cmd=cmd,
             cwd=self.repo_path,
