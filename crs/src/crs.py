@@ -63,7 +63,7 @@ class CRS:
                 name, Path(entry.source.local_path), work_dir, entry, crs_compose_env
             )
         else:
-            path = work_dir / "crs_src" / name
+            path = work_dir / "../crs_src" / name
             if init_crs_repo(entry.source.url, entry.source.ref, path):
                 return cls(name, path, work_dir, entry, crs_compose_env)
         raise ValueError(f"Failed to initialize CRS from entry: {name}")
