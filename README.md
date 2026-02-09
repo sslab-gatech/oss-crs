@@ -123,7 +123,7 @@ OSS-CRS is designed to make CRS development simple. Follow the [CRS Development 
 - [CRS Configuration](docs/config/crs.md): CRS config reference
 - [CRS-Compose Configuration](docs/config/crs-compose.md): Compose file reference
 - [LLM Configuration](docs/config/llm.md): LLM provider setup
-- [TODO](TODO.md): Upcoming features and planned improvements
+- [Plan](PLAN.md): Upcoming features and planned improvements
 
 ## Contributing
 
