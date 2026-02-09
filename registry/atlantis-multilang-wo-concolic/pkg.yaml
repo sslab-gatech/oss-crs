@@ -1,5 +1,6 @@
 name: atlantis-multilang-wo-concolic
-type: bug-finding
+type:
+  - bug-finding
 source:
   url: git@github.com:Team-Atlanta/atlantis-multilang-wo-concolic.git 
   ref: refined-oss-crs

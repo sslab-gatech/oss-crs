@@ -1,5 +1,6 @@
 name: crs-libfuzzer
-type: bug-finding
+type:
+  - bug-finding
 source:
   url: git@github.com:Team-Atlanta/crs-libfuzzer.git 
   ref: refined-oss-crs
