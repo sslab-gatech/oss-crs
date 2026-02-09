@@ -124,6 +124,10 @@ OSS-CRS is designed to make CRS development simple. Follow the [Integration Guid
 - [LLM Configuration](docs/config/llm.md): LLM provider setup
 - [TODO](docs/TODO.md): Upcoming features and planned improvements
 
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
 ## License
 
 See [LICENSE](LICENSE) for details.
