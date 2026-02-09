@@ -95,12 +95,13 @@ def get_litellm_config_path(config_dir: Path) -> Path:
 from bug_finding.src.render_compose.config import (
     ComposeEnvironment,
     clone_crs_if_needed,
+    format_memory,
     get_crs_for_worker,
     get_project_language,
     load_config,
+    parse_memory_mb,
 )
 from bug_finding.src.render_compose.helpers import (
-    check_image_exists,
     expand_volume_vars,
     get_dockerfile_workdir,
     get_dot_env_vars,
@@ -113,6 +114,69 @@ KEY_PROVISIONER_DIR = files("bug_finding.src").joinpath("..").joinpath("key_prov
 SEED_WATCHER_DIR = files("bug_finding.src").joinpath("..").joinpath("seed_watcher")
 
 logger = logging.getLogger(__name__)
+
+
+def load_crs_compose_services(
+    crs_path: Path,
+    compose_path: str,
+    crs_memory_limit: str,
+    crs_cpuset: str,
+) -> list[dict[str, Any]]:
+    """
+    Load services from a CRS docker-compose file and apply resource constraints.
+
+    Args:
+        crs_path: Path to the CRS repository
+        compose_path: Relative path to the docker-compose.yaml within the CRS repo
+        crs_memory_limit: Total memory limit for the CRS (e.g., '4G')
+        crs_cpuset: CPU set for the CRS (e.g., '0,1,2,3')
+
+    Returns:
+        List of service dictionaries with resource constraints applied.
+        Each dict has 'name', 'config', 'memory_limit', 'cpuset' keys.
+    """
+    compose_file = Path(crs_path) / compose_path
+    if not compose_file.exists():
+        logger.warning(f"CRS compose file not found: {compose_file}")
+        return []
+
+    try:
+        with open(compose_file) as f:
+            compose_data = yaml.safe_load(f) or {}
+    except yaml.YAMLError as e:
+        logger.warning(f"Failed to parse CRS compose file {compose_file}: {e}")
+        return []
+
+    services = compose_data.get("services", {})
+    if not services:
+        logger.warning(f"No services found in CRS compose file: {compose_file}")
+        return []
+
+    # Calculate memory per service (split evenly)
+    total_memory_mb = parse_memory_mb(crs_memory_limit)
+    num_services = len(services)
+    memory_per_service_mb = total_memory_mb // num_services
+
+    result = []
+    for idx, (service_name, service_config) in enumerate(services.items()):
+        # Last service gets any remaining memory from integer division
+        if idx == num_services - 1:
+            service_memory_mb = total_memory_mb - (memory_per_service_mb * (num_services - 1))
+        else:
+            service_memory_mb = memory_per_service_mb
+
+        result.append({
+            "name": service_name,
+            "config": service_config,
+            "memory_limit": format_memory(service_memory_mb),
+            "cpuset": crs_cpuset,  # Same CPU set for all services from this CRS
+        })
+
+    logger.info(
+        f"Loaded {len(result)} services from CRS compose file {compose_file}, "
+        f"memory per service: {format_memory(memory_per_service_mb)}"
+    )
+    return result
 
 
 def _setup_compose_environment(
@@ -207,6 +271,14 @@ def _setup_compose_environment(
                 crs_data["run_env"] = crs_config_data.get("run_env", {})
                 crs_data["build_env"] = crs_config_data.get("build_env", {})
 
+                # Extract run.docker_compose path if specified
+                run_config = crs_config_data.get("run", {})
+                crs_data["run_docker_compose"] = run_config.get("docker_compose")
+
+                # Extract build.dockerfiles list if specified
+                build_config = crs_config_data.get("build", {})
+                crs_data["build_dockerfiles"] = build_config.get("dockerfiles", [])
+
                 # Extract CRS-specific config (dependencies, volumes, etc.)
                 if crs_name in crs_config_data:
                     crs_specific = crs_config_data[crs_name]
@@ -231,6 +303,8 @@ def _setup_compose_environment(
                     "build_env": {},
                     "dependencies": [],
                     "volumes": [],
+                    "run_docker_compose": None,
+                    "build_dockerfiles": [],
                 }
         else:
             logging.warning(
@@ -241,6 +315,8 @@ def _setup_compose_environment(
                 "build_env": {},
                 "dependencies": [],
                 "volumes": [],
+                "run_docker_compose": None,
+                "build_dockerfiles": [],
             }
 
     # Check for .env file in config-dir if no explicit env-file was provided
@@ -326,6 +402,17 @@ def render_compose_for_worker(
         # Expand ${VAR} in volumes using merged run_env (for vars like HOST_CACHE_DIR)
         if crs.get("volumes"):
             crs["volumes"] = expand_volume_vars(crs["volumes"], crs["run_env"])
+
+        # Load CRS compose services if run_docker_compose is specified (run mode only)
+        if mode == "run" and crs.get("run_docker_compose"):
+            crs["compose_services"] = load_crs_compose_services(
+                crs_path=Path(crs["path"]),
+                compose_path=crs["run_docker_compose"],
+                crs_memory_limit=crs["memory_limit"],
+                crs_cpuset=crs["cpuset"],
+            )
+        else:
+            crs["compose_services"] = []
 
     # Get workdir from project Dockerfile
     project_path = oss_fuzz_path / "projects" / project
@@ -505,16 +592,6 @@ def render_run_compose(
 
     if not crs_list:
         raise ValueError(f"No CRS instances configured for worker '{worker}'")
-
-    # Validate that CRS builder images exist (validates build was run)
-    for crs in crs_list:
-        crs_name = crs["name"]
-        builder_image = f"{project}_{crs_name}_builder"
-        if not check_image_exists(builder_image):
-            raise FileNotFoundError(
-                f"CRS builder image not found: {builder_image}. "
-                f"Please run 'oss-crs build' first to build the CRS."
-            )
 
     # Generate random secrets and get LiteLLM config (for internal LiteLLM mode)
     postgres_password = None

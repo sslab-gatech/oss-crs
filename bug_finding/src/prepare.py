@@ -205,6 +205,106 @@ def build_runner_image(crs_path: Path, crs_name: str) -> bool:
         return False
 
 
+def build_compose_images(crs_path: Path, crs_name: str, compose_path: str) -> bool:
+    """Build all images from a CRS docker-compose file.
+
+    Args:
+        crs_path: Path to CRS directory
+        crs_name: Name of the CRS (used for image tag prefix)
+        compose_path: Relative path to docker-compose.yaml within CRS
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    compose_file = crs_path / compose_path
+    if not compose_file.exists():
+        logger.error("Compose file not found: %s", compose_file)
+        return False
+
+    logger.info("Building compose images from %s", compose_file)
+
+    # Use docker compose build with bake to build all services
+    # Tag images with crs_name prefix: {crs_name}_{service_name}
+    try:
+        # First, get the list of services that have build definitions
+        import yaml
+        with open(compose_file) as f:
+            compose_data = yaml.safe_load(f) or {}
+
+        services = compose_data.get("services", {})
+        if not services:
+            logger.warning("No services found in compose file: %s", compose_file)
+            return True
+
+        # Build each service that has a build definition
+        for service_name, service_config in services.items():
+            if "build" not in service_config:
+                logger.info("Service %s has no build definition, skipping", service_name)
+                continue
+
+            image_name = f"{crs_name}_{service_name}"
+            logger.info("Building image %s for service %s", image_name, service_name)
+
+            # Get build context and dockerfile from service config
+            build_config = service_config["build"]
+            if isinstance(build_config, str):
+                context = build_config
+                dockerfile = "Dockerfile"
+            else:
+                context = build_config.get("context", ".")
+                dockerfile = build_config.get("dockerfile", "Dockerfile")
+
+            build_context = crs_path / context
+
+            subprocess.check_call(
+                [
+                    "docker",
+                    "build",
+                    "-t",
+                    image_name,
+                    "-f",
+                    dockerfile,
+                    ".",
+                ],
+                cwd=build_context,
+                stdin=subprocess.DEVNULL,
+            )
+
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error("Failed to build compose images: %s", e)
+        return False
+    except Exception as e:
+        logger.error("Error building compose images: %s", e)
+        return False
+
+
+def get_crs_run_docker_compose(crs_name: str, registry_dir: Path) -> str | None:
+    """Get run.docker_compose path from CRS config-crs.yaml.
+
+    Args:
+        crs_name: Name of the CRS
+        registry_dir: Path to crs_registry
+
+    Returns:
+        Relative path to docker-compose.yaml if specified, None otherwise
+    """
+    import yaml
+
+    config_path = registry_dir / crs_name / "config-crs.yaml"
+    if not config_path.exists():
+        return None
+
+    try:
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+        run_config = config.get("run", {})
+        return run_config.get("docker_compose")
+    except Exception as e:
+        logger.warning("Failed to read config-crs.yaml for %s: %s", crs_name, e)
+        return None
+
+
 # TODO (do not remove this comment) consolidate w/ oss-patch
 def load_images_to_docker_data(images: list[str], docker_data_path: Path) -> bool:
     """Save images to tarballs and load into docker-data directory via ubuntu-dind.
@@ -362,10 +462,20 @@ def prepare_crs(
     else:
         logger.info("No docker-bake.hcl found for CRS '%s', skipping bake", crs_name)
 
-    # Build runner image
-    if not build_runner_image(crs_path, crs_name):
-        logger.error("Failed to build runner image for CRS '%s'", crs_name)
-        return False
+    # Check if CRS uses docker-compose for run phase
+    run_docker_compose = get_crs_run_docker_compose(crs_name, registry_dir)
+
+    if run_docker_compose:
+        # Build all images from the compose file
+        logger.info("CRS '%s' uses docker-compose, building compose images", crs_name)
+        if not build_compose_images(crs_path, crs_name, run_docker_compose):
+            logger.error("Failed to build compose images for CRS '%s'", crs_name)
+            return False
+    else:
+        # Build runner image (traditional single-container mode)
+        if not build_runner_image(crs_path, crs_name):
+            logger.error("Failed to build runner image for CRS '%s'", crs_name)
+            return False
 
     # Fix ownership of build directory (containers run as root)
     fix_build_dir_permissions(build_dir)
