@@ -72,6 +72,7 @@ class MultiTaskProgress:
         self._live: Optional[Live] = None
         self._current_task: Optional[str] = None  # Current task ID (full path)
         self._head = []
+        self._tail = []
         # Subtask hierarchy: parent_id -> list of child task IDs
         self._subtasks: dict[Optional[str], list[str]] = {None: list(self.task_names)}
         self._task_funcs: dict[str, Callable[["MultiTaskProgress"], TaskResult]] = {
@@ -230,6 +231,10 @@ class MultiTaskProgress:
                             border_style="red",
                         )
                     content_parts.append(panel)
+
+        # Add tail panels at the end
+        for t in self._tail:
+            content_parts.append(t)
 
         return Panel(
             Group(*content_parts),
@@ -571,7 +576,7 @@ class MultiTaskProgress:
                     timer.cancel()
 
             if timed_out.is_set():
-                error_msg = f"■ Timed out. ■\nContainers were gracefully stopped.\n{' '.join(cmd)}\n\n"
+                error_msg = f"■ Timed out.\nContainers were gracefully stopped.\n{' '.join(cmd)}\n\n"
                 error_msg += "\n".join(output_lines)
                 if task_name:
                     self.set_error_info(task_name, error_msg)
@@ -607,6 +612,46 @@ class MultiTaskProgress:
 
     def add_items_to_head(self, items) -> None:
         self._head += items
+
+    def show_run_result(self, crs_results: list[dict]) -> None:
+        """
+        Display a summary of CRS run results in a dedicated panel.
+
+        Args:
+            crs_results: List of dicts with keys:
+                - name: CRS name
+                - submit_dir: Path to the CRS submit directory
+        """
+        lines = Text()
+        for i, entry in enumerate(crs_results):
+            submit_dir = entry["submit_dir"]
+            pov_dir = submit_dir / "pov"
+            seed_dir = submit_dir / "seed"
+
+            pov_count = _count_files(pov_dir)
+            seed_count = _count_files(seed_dir)
+
+            lines.append(f"{entry['name']}:\n", style="bold cyan")
+            lines.append("  - POVs: ", style="bold")
+            lines.append(f"{pov_count}\n", style="red")
+            lines.append("       - Directory: ", style="dim")
+            lines.append(f"{pov_dir}\n" if pov_dir.exists() else "-\n", style="dim")
+            lines.append("  - Seeds: ", style="bold")
+            lines.append(f"{seed_count}\n", style="green")
+            lines.append("       - Directory: ", style="dim")
+            lines.append(f"{seed_dir}\n" if seed_dir.exists() else "-\n", style="dim")
+
+            if i < len(crs_results) - 1:
+                lines.append("\n")
+
+        result_panel = Panel(
+            lines,
+            title="[bold]CRS Run Results[/bold]",
+            border_style="green",
+        )
+        self._tail.append(result_panel)
+        if self._live:
+            self._live.update(self._build_display())
 
     def docker_compose_build(
         self,
@@ -748,3 +793,12 @@ def yellow(text: str, bold=False) -> Text:
 
 def green(text: str, bold=False) -> Text:
     return Text(text, style="bold green" if bold else "green")
+
+
+def _count_files(dir_path: Path) -> int:
+    """Count non-hidden files in a directory."""
+    if not dir_path.exists():
+        return 0
+    return len(
+        [f for f in dir_path.iterdir() if f.is_file() and not f.name.startswith(".")]
+    )

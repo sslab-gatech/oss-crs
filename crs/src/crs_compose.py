@@ -170,9 +170,20 @@ class CRSCompose:
                     ),
                 ]
                 progress.add_tasks(tasks)
-                return progress.run_added_tasks()
+                ret = progress.run_added_tasks()
+                if ret.success or ret.interrupted:
+                    self.__show_result_local(target, progress)
+                    return ret.success
+                return False
 
         return False
+
+    def __show_result_local(self, target: Target, progress: MultiTaskProgress) -> None:
+        crs_results = [
+            {"name": crs.name, "submit_dir": crs.get_submit_dir(target)}
+            for crs in self.crs_list
+        ]
+        return progress.show_run_result(crs_results)
 
     def __prepare_local_running_env(
         self,
