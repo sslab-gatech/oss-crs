@@ -18,15 +18,21 @@ class TaskStatus(Enum):
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"
     FAILED = "failed"
+    STOPPED = "stopped"
 
 
 class TaskResult:
     def __init__(
-        self, success: bool, output: Optional[str] = None, error: Optional[str] = None
+        self,
+        success: bool,
+        output: Optional[str] = None,
+        error: Optional[str] = None,
+        interrupted: bool = False,
     ):
         self.success = success
         self.output = output
         self.error = error
+        self.interrupted = interrupted
 
 
 class MultiTaskProgress:
@@ -94,6 +100,7 @@ class MultiTaskProgress:
             TaskStatus.IN_PROGRESS: "[yellow]●[/yellow]",
             TaskStatus.SUCCESS: "[green]✓[/green]",
             TaskStatus.FAILED: "[red]✗[/red]",
+            TaskStatus.STOPPED: "[yellow]■[/yellow]",
         }
         return icons[status]
 
@@ -103,6 +110,7 @@ class MultiTaskProgress:
             TaskStatus.IN_PROGRESS: "[yellow]In Progress[/yellow]",
             TaskStatus.SUCCESS: "[green]Success[/green]",
             TaskStatus.FAILED: "[red]Failed[/red]",
+            TaskStatus.STOPPED: "[yellow]Stopped[/yellow]",
         }
         return texts[status]
 
@@ -201,17 +209,27 @@ class MultiTaskProgress:
 
         # Add error panels for all failed tasks (only after their parent's cleanup is complete)
         for task_id, status in self.statuses.items():
-            if status == TaskStatus.FAILED and task_id in self.error_info:
+            if (
+                status in (TaskStatus.FAILED, TaskStatus.STOPPED)
+                and task_id in self.error_info
+            ):
                 # Find the parent of this task and check if cleanup is complete
                 parent = self._get_task_parent(task_id)
                 if parent in self._cleanup_complete:
                     display_name = self._display_names.get(task_id, task_id)
-                    error_panel = Panel(
-                        f"[red]{escape(self.error_info[task_id])}[/red]",
-                        title=f"[bold red]Error: {escape(display_name)}[/bold red]",
-                        border_style="red",
-                    )
-                    content_parts.append(error_panel)
+                    if status == TaskStatus.STOPPED:
+                        panel = Panel(
+                            f"[yellow]{escape(self.error_info[task_id])}[/yellow]",
+                            title=f"[bold yellow]Stopped: {escape(display_name)}[/bold yellow]",
+                            border_style="yellow",
+                        )
+                    else:
+                        panel = Panel(
+                            f"[red]{escape(self.error_info[task_id])}[/red]",
+                            title=f"[bold red]Error: {escape(display_name)}[/bold red]",
+                            border_style="red",
+                        )
+                    content_parts.append(panel)
 
         return Panel(
             Group(*content_parts),
@@ -356,15 +374,21 @@ class MultiTaskProgress:
                 self.set_status(task_id, TaskStatus.IN_PROGRESS)
                 try:
                     result = self._task_funcs[task_id](self)
-                    self.set_status(
-                        task_id,
-                        TaskStatus.SUCCESS if result.success else TaskStatus.FAILED,
-                    )
+                    if result.success:
+                        self.set_status(task_id, TaskStatus.SUCCESS)
+                    elif result.interrupted:
+                        self.set_status(task_id, TaskStatus.STOPPED)
+                    else:
+                        self.set_status(task_id, TaskStatus.FAILED)
                     if not result.success:
                         if result.error:
                             self.set_error_info(task_id, result.error)
                         self._current_task = prev_task
-                        main_result = TaskResult(success=False, error=result.error)
+                        main_result = TaskResult(
+                            success=False,
+                            error=result.error,
+                            interrupted=result.interrupted,
+                        )
                         break  # Stop regular tasks on failure, but continue to cleanup
                 except Exception as e:
                     self.set_error_info(task_id, str(e))
@@ -414,9 +438,12 @@ class MultiTaskProgress:
             self.set_status(task_id, TaskStatus.IN_PROGRESS)
             try:
                 result = self._task_funcs[task_id](self)
-                self.set_status(
-                    task_id, TaskStatus.SUCCESS if result.success else TaskStatus.FAILED
-                )
+                if result.success:
+                    self.set_status(task_id, TaskStatus.SUCCESS)
+                elif result.interrupted:
+                    self.set_status(task_id, TaskStatus.STOPPED)
+                else:
+                    self.set_status(task_id, TaskStatus.FAILED)
                 if not result.success:
                     if result.error:
                         self.set_error_info(task_id, result.error)
@@ -504,7 +531,9 @@ class MultiTaskProgress:
                 if remaining <= 0:
                     process.terminate()
                     process.wait()
-                    error_msg = f"Deadline already exceeded before running:\n{' '.join(cmd)}"
+                    error_msg = (
+                        f"Deadline already exceeded before running:\n{' '.join(cmd)}"
+                    )
                     if task_name:
                         self.set_error_info(task_name, error_msg)
                     return TaskResult(success=False, error=error_msg)
@@ -536,17 +565,17 @@ class MultiTaskProgress:
                     process.wait()
                 error = "\n".join(output_lines)
                 error += "\n\n📝 Process interrupted by user"
-                return TaskResult(success=False, error=error)
+                return TaskResult(success=False, error=error, interrupted=True)
             finally:
                 if timer is not None:
                     timer.cancel()
 
             if timed_out.is_set():
-                error_msg = f"Timed out. Containers were gracefully stopped.\n{' '.join(cmd)}\n\n"
+                error_msg = f"■ Timed out. ■\nContainers were gracefully stopped.\n{' '.join(cmd)}\n\n"
                 error_msg += "\n".join(output_lines)
                 if task_name:
                     self.set_error_info(task_name, error_msg)
-                return TaskResult(success=False, error=error_msg)
+                return TaskResult(success=False, error=error_msg, interrupted=True)
 
             if process.returncode == 0:
                 return TaskResult(success=True, output="\n".join(output_lines))

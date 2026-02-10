@@ -43,7 +43,7 @@ class CRSCompose:
         # Collect task names (infra + all CRS)
         tasks = [
             (
-                "TODO: oss-crs-infra",
+                "oss-crs-infra",
                 lambda progress: self.__prepare_oss_crs_infra(
                     publish=publish, docker_registry=self.config.docker_registry
                 ),
