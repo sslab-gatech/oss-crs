@@ -82,12 +82,12 @@ class LLMConfig(BaseModel):
     @field_validator("litellm_config")
     @classmethod
     def validate_litellm_config(cls, v: str) -> str:
-        path = Path(v).expanduser()
+        path = Path(v).expanduser().resolve()
         if not path.exists():
             raise ValueError(f"litellm_config path does not exist: '{v}'")
         if not path.is_file():
             raise ValueError(f"litellm_config path is not a file: '{v}'")
-        return v
+        return str(path)
 
 
 class CRSComposeConfig(BaseModel):

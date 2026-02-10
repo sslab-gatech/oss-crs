@@ -7,9 +7,7 @@ LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY")
 LITELLM_API_URL = os.getenv("LITELLM_API_URL")
 
 
-def create_llm_key(
-    key: str, budget: int, required_models: list[str]
-) -> str | None:
+def create_llm_key(key: str, budget: int, required_models: list[str]) -> str | None:
     """
     Create an LLM API key using LiteLLM's key/generate endpoint.
 
@@ -78,6 +76,8 @@ def main():
 
     for crs_name, info in key_requests.items():
         required_models = info["required_llms"]
+        if required_models is None:
+            continue
         for model in required_models:
             if model not in available_models:
                 print(
