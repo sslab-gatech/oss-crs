@@ -23,6 +23,14 @@ All jobs are processed sequentially through a single worker thread to prevent ra
 
 Build jobs are deduplicated by patch content — submitting the same patch twice returns the existing result if the build is in-flight or succeeded. Failed builds are not cached, allowing retry with the same patch.
 
+## Prerequisites
+
+The builder snapshot requires oss-fuzz scripts (`compile`, `reproduce`, etc.). Fetch them once before first use:
+
+```bash
+bash scripts/setup-third-party.sh
+```
+
 ## Usage
 
 Only one builder CRS is allowed per compose file. Add the builder as a CRS entry in your compose file:

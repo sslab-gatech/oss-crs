@@ -84,7 +84,13 @@ uv run crs-compose run \
 
 For CRSs that generate source patches (bug-fixing), the **Builder CRS** provides fast incremental builds. Instead of rebuilding the target from scratch for each patch, the builder creates a snapshot of the compiled project and applies patches on top of it.
 
-Add the builder as a separate CRS entry in your compose file alongside your patcher CRS:
+First, fetch the required oss-fuzz scripts (one-time setup):
+
+```bash
+bash scripts/setup-third-party.sh
+```
+
+Then add the builder as a separate CRS entry in your compose file alongside your patcher CRS:
 
 ```yaml
 oss-crs-builder:
