@@ -26,7 +26,21 @@ OSS_FUZZ_SCRIPTS = {
 }
 
 # Custom scripts from our templates directory.
-CUSTOM_SCRIPTS = {"oss_crs_handler.sh", "oss_crs_builder_server.py"}
+CUSTOM_SCRIPTS = ["oss_crs_handler.sh", "oss_crs_builder_server.py"]
+
+
+def _ensure_third_party_oss_fuzz() -> bool:
+    """Auto-fetch oss-fuzz third-party scripts if not present."""
+    if (THIRD_PARTY_OSS_FUZZ / ".git").is_dir():
+        return True
+    setup_script = THIRD_PARTY_OSS_FUZZ.parent.parent / "scripts" / "setup-third-party.sh"
+    if not setup_script.exists():
+        return False
+    result = subprocess.run(
+        ["bash", str(setup_script)],
+        cwd=str(setup_script.parent.parent),
+    )
+    return result.returncode == 0
 
 
 def extract_name_from_proj_path(proj_path: str) -> str:
@@ -354,14 +368,19 @@ class Target:
 
             # Step 2: Copy scripts into stopped container.
             # oss-fuzz scripts come from third_party/; custom scripts from templates/.
+            if not _ensure_third_party_oss_fuzz():
+                return TaskResult(
+                    success=False,
+                    output="Failed to fetch oss-fuzz third-party scripts. "
+                    "Try manually: bash scripts/setup-third-party.sh",
+                )
             all_scripts = list(CUSTOM_SCRIPTS) + list(OSS_FUZZ_SCRIPTS)
             for dst_name in all_scripts:
                 script_src = self._resolve_script_path(dst_name)
                 if script_src is None:
                     return TaskResult(
                         success=False,
-                        output=f"Cannot find source for script: {dst_name}. "
-                        "Run: bash scripts/setup-third-party.sh",
+                        output=f"Cannot find source for script: {dst_name}.",
                     )
                 cp_cmd = [
                     "docker", "cp",
@@ -410,6 +429,11 @@ class Target:
             # - install pip dependencies
             # - install libCRS
             setup_container_name = f"{container_name}-setup"
+            # Build chmod targets programmatically from script constants
+            chmod_targets = " ".join(
+                f"/usr/local/bin/{s}" for s in all_scripts
+            )
+            chmod_cmd = f"chmod +x {chmod_targets}"
             setup_cmd = [
                 "docker", "run",
                 f"--name={setup_container_name}",
@@ -417,13 +441,7 @@ class Target:
                 intermediate_tag,
                 "bash", "-c",
                 # chmod all scripts in /usr/local/bin/ that we copied
-                "chmod +x /usr/local/bin/oss_crs_handler.sh "
-                "/usr/local/bin/compile "
-                "/usr/local/bin/reproduce "
-                "/usr/local/bin/run_fuzzer "
-                "/usr/local/bin/parse_options.py "
-                "/usr/local/bin/replay_build.sh "
-                "/usr/local/bin/make_build_replayable.py && "
+                f"{chmod_cmd} && "
                 # Place replay_build.sh where compile looks for it ($SRC/)
                 "cp /usr/local/bin/replay_build.sh $SRC/replay_build.sh && "
                 # Install Python dependencies for builder server
