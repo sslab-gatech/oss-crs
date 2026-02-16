@@ -101,6 +101,18 @@ def add_run_command(subparsers):
         default=None,
         help="Directory containing POV files to copy into CRS FETCH_DIR",
     )
+    run.add_argument(
+        "--diff",
+        type=Path,
+        default=None,
+        help="Path to a diff file for delta-mode analysis. Accessible via: libCRS register-fetch-dir diff <local_path>",
+    )
+    run.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="Directory containing initial corpus/seed files. Accessible via: libCRS register-fetch-dir seed <local_path>",
+    )
 
 
 def add_check_command(subparsers):
@@ -158,7 +170,7 @@ def main() -> bool:
         target = init_target_from_args(args)
         if args.timeout is not None:
             crs_compose.set_deadline(time.monotonic() + args.timeout)
-        if not crs_compose.run(target, pov=args.pov, pov_dir=args.pov_dir):
+        if not crs_compose.run(target, pov=args.pov, pov_dir=args.pov_dir, diff=args.diff, corpus_dir=args.corpus):
             return False
     elif args.command == "check":
         pass

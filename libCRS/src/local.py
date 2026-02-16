@@ -61,8 +61,14 @@ class LocalCRSUtils(CRSUtils):
         local_path.symlink_to(shared_path)
 
     def register_fetch_dir(self, type: DataType, path: Path) -> None:
-        path.mkdir(parents=True, exist_ok=True)
-        raise NotImplementedError("TODO: register_fetch_dir is not yet implemented")
+        if path.exists():
+            raise FileExistsError(f"Local path '{path}' already exists")
+
+        OSS_CRS_FETCH_DIR = Path(get_env("OSS_CRS_FETCH_DIR"))
+        fetch_type_dir = OSS_CRS_FETCH_DIR / type.value
+        fetch_type_dir.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.symlink_to(fetch_type_dir)
 
     def submit(self, data_type: DataType, src: Path) -> None:
         helper = self.__init_submit_helper(data_type)

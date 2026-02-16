@@ -143,7 +143,15 @@ class CRSCompose:
         target: Target,
         pov: Optional[Path] = None,
         pov_dir: Optional[Path] = None,
+        diff: Optional[Path] = None,
+        corpus_dir: Optional[Path] = None,
     ) -> bool:
+        if diff is not None and not diff.is_file():
+            print(f"Error: Diff file does not exist: {diff}")
+            return False
+        if corpus_dir is not None and not corpus_dir.is_dir():
+            print(f"Error: Corpus directory does not exist: {corpus_dir}")
+            return False
         if not self.__validate_before_run(target):
             return False
         target.init_repo()
@@ -177,7 +185,7 @@ class CRSCompose:
         if pov_dir is not None:
             pov_files.extend(f for f in pov_dir.iterdir() if f.is_file())
 
-        return self.__run(target, pov_files)
+        return self.__run(target, pov_files, diff_path=diff, corpus_dir=corpus_dir)
 
     def __validate_before_run(self, target: Target) -> bool:
         tasks = [
@@ -214,14 +222,14 @@ class CRSCompose:
         ) as progress:
             return progress.run_added_tasks().success
 
-    def __run(self, target: Target, pov_files: list[Path] = None) -> bool:
+    def __run(self, target: Target, pov_files: list[Path] = None, diff_path: Optional[Path] = None, corpus_dir: Optional[Path] = None) -> bool:
         if self.crs_compose_env.run_env == RunEnv.LOCAL:
-            return self.__run_local(target, pov_files or [])
+            return self.__run_local(target, pov_files or [], diff_path=diff_path, corpus_dir=corpus_dir)
         else:
             print(f"TODO: Support run env {self.crs_compose_env.run_env}")
             return False
 
-    def __run_local(self, target: Target, pov_files: list[Path] = None) -> bool:
+    def __run_local(self, target: Target, pov_files: list[Path] = None, diff_path: Optional[Path] = None, corpus_dir: Optional[Path] = None) -> bool:
         with MultiTaskProgress(
             tasks=[],
             title="CRS Compose Run",
@@ -235,6 +243,8 @@ class CRSCompose:
                         lambda progress: self.__prepare_local_running_env(
                             project_name, target, tmp_docker_compose, progress,
                             pov_files=pov_files or [],
+                            diff_path=diff_path,
+                            corpus_dir=corpus_dir,
                         ),
                     ),
                     (
@@ -265,6 +275,8 @@ class CRSCompose:
         tmp_docker_compose: TmpDockerCompose,
         progress: MultiTaskProgress,
         pov_files: list[Path] = None,
+        diff_path: Optional[Path] = None,
+        corpus_dir: Optional[Path] = None,
     ) -> TaskResult:
         def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
             content = renderer.render_run_crs_compose_docker_compose(
@@ -288,16 +300,44 @@ class CRSCompose:
 
         def copy_povs(progress: MultiTaskProgress) -> TaskResult:
             for crs in self.crs_list:
-                fetch_dir = crs.get_fetch_dir(target)
-                fetch_dir.mkdir(parents=True, exist_ok=True)
+                if crs.config.is_builder:
+                    continue
+                pov_subdir = crs.get_fetch_dir(target) / "pov"
+                pov_subdir.mkdir(parents=True, exist_ok=True)
                 for f in pov_files:
-                    shutil.copy2(f, fetch_dir / f.name)
+                    shutil.copy2(f, pov_subdir / f.name)
+            return TaskResult(success=True)
+
+        def copy_diff(progress: MultiTaskProgress) -> TaskResult:
+            for crs in self.crs_list:
+                if crs.config.is_builder:
+                    continue
+                diff_subdir = crs.get_fetch_dir(target) / "diff"
+                diff_subdir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(diff_path, diff_subdir / "ref.diff")
+            return TaskResult(success=True)
+
+        def copy_corpus(progress: MultiTaskProgress) -> TaskResult:
+            for crs in self.crs_list:
+                if crs.config.is_builder:
+                    continue
+                seed_subdir = crs.get_fetch_dir(target) / "seed"
+                seed_subdir.mkdir(parents=True, exist_ok=True)
+                for f in corpus_dir.iterdir():
+                    if f.is_file():
+                        shutil.copy2(f, seed_subdir / f.name)
             return TaskResult(success=True)
 
         progress.add_task("Clean up shared directories", cleanup_shared_dirs)
 
         if pov_files:
-            progress.add_task("Copy POV files to FETCH_DIR", copy_povs)
+            progress.add_task("Copy POV files to FETCH_DIR/pov/", copy_povs)
+
+        if diff_path:
+            progress.add_task("Copy diff file to FETCH_DIR/diff/", copy_diff)
+
+        if corpus_dir:
+            progress.add_task("Copy corpus files to FETCH_DIR/seed/", copy_corpus)
 
         progress.add_task(
             "Prepare combined docker compose file", prepare_docker_compose

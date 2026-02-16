@@ -10,6 +10,7 @@ class DataType(str, Enum):
     SEED = "seed"
     BUG_CANDIDATE = "bug-candidate"
     PATCH = "patch"
+    DIFF = "diff"
 
     def __str__(self) -> str:
         return self.value
