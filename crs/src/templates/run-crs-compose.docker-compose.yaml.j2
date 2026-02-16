@@ -29,8 +29,8 @@ services:
         libcrs: {{ libCRS_path }}
       args:
         - target_base_image={{target.get_docker_image_name()}}
-        - crs_version={{ crs.version }}
-{%- if snapshot_image_tag %}
+        - crs_version={{ crs.config.version }}
+{%- if snapshot_image_tag and crs.config.is_builder %}
         - snapshot_image={{ snapshot_image_tag }}
 {%- endif %}
     environment:
@@ -69,7 +69,7 @@ services:
 {%- for env_key, env_value in crs.resource.additional_env.items() %}
       - {{ env_key }}={{ env_value }}
 {%- endfor %}
-{%- if llm_context is defined %}
+{%- if llm_context is defined and not crs.config.is_builder %}
       - OSS_CRS_LLM_API_URL=http://litellm.oss-crs:4000
       - OSS_CRS_LLM_API_KEY={{ llm_context.api_keys[crs.name] }}
     depends_on:

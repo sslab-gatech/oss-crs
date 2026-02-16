@@ -13,9 +13,7 @@ if TYPE_CHECKING:
     from ..target import Target
     from ..config.crs import BuildConfig
     from ..utils import TmpDockerCompose
-    from ..crs_compose import CRSComposeConfig
-
-from ..config.crs import CRSType
+    from ..crs_compose import CRSCompose
 
 CUR_DIR = Path(__file__).parent
 OSS_CRS_ROOT_PATH = (CUR_DIR / "../../../").resolve()
@@ -28,14 +26,14 @@ def _generate_random_key(length: int = 10) -> str:
 
 
 def render_template(template_path: Path, context: dict) -> str:
-    """Render a Jinja1 template with the given context.
+    """Render a Jinja2 template with the given context.
 
     Args:
-        template_path (str | Path): Path to the Jinja1 template file.
+        template_path (str | Path): Path to the Jinja2 template file.
         context (dict): Context variables for rendering the template.
 
     Returns:
-        bytes: Rendered template content as bytes.
+        str: Rendered template content.
     """
     template_dir = Path(template_path).parent
     template_file = Path(template_path).name
@@ -87,7 +85,7 @@ def render_build_target_docker_compose(
 
 
 def prepare_llm_context(
-    tmp_docker_compose: "TmpDockerCompose", crs_compose: "CRSComposeConfig"
+    tmp_docker_compose: "TmpDockerCompose", crs_compose: "CRSCompose"
 ) -> Optional[dict]:
     if crs_compose.llm.exists():
         # Prepare LiteLLM environment variables
@@ -103,6 +101,8 @@ def prepare_llm_context(
         keys = {}
         key_info = {}
         for crs in crs_compose.crs_list:
+            if crs.config.is_builder:
+                continue
             key = "sk-" + _generate_random_key(16)
             keys[crs.name] = key
             key_info[crs.name] = {
@@ -127,18 +127,12 @@ def prepare_llm_context(
 
 
 def render_run_crs_compose_docker_compose(
-    crs_compose: "CRSComposeConfig",
+    crs_compose: "CRSCompose",
     tmp_docker_compose: "TmpDockerCompose",
     crs_compose_name: str,
     target: "Target",
 ) -> str:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
-    builder_url = ""
-    for crs in crs_compose.crs_list:
-        if CRSType.BUILDER in crs.config.type:
-            module_name = next(iter(crs.config.crs_run_phase.modules.keys()))
-            builder_url = f"http://{crs.name}_{module_name}:8080"
-            break
 
     context = {
         "libCRS_path": str(LIBCRS_PATH),
@@ -149,7 +143,7 @@ def render_run_crs_compose_docker_compose(
         "target": target,
         "oss_crs_infra_root_path": str(OSS_CRS_ROOT_PATH / "oss-crs-infra"),
         "snapshot_image_tag": target.snapshot_image_tag or "",
-        "builder_url": builder_url,
+        "builder_url": crs_compose.builder_url,
     }
 
     llm_context = prepare_llm_context(tmp_docker_compose, crs_compose)

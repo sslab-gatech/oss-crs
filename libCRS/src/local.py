@@ -1,5 +1,6 @@
 import logging
 import socket
+import tempfile
 import time
 from pathlib import Path
 
@@ -82,6 +83,8 @@ class LocalCRSUtils(CRSUtils):
 
         return ret
 
+    _builder_healthy = False
+
     def _get_builder_url(self) -> str:
         url = get_env("OSS_CRS_BUILDER_URL", allow_none=True)
         if not url:
@@ -91,6 +94,42 @@ class LocalCRSUtils(CRSUtils):
             )
         return url
 
+    def _wait_for_builder_health(
+        self, max_wait: int = 120, initial_interval: float = 1.0,
+    ) -> bool:
+        """Poll GET /health until the builder sidecar is reachable.
+
+        Uses exponential backoff (1s, 2s, 4s, ..., capped at 10s).
+        Returns True when healthy, False if max_wait exceeded.
+        """
+        if self._builder_healthy:
+            return True
+
+        builder_url = self._get_builder_url()
+        interval = initial_interval
+        start = time.monotonic()
+        while time.monotonic() - start < max_wait:
+            try:
+                resp = http_requests.get(
+                    f"{builder_url}/health", timeout=5,
+                )
+                if resp.status_code == 200:
+                    logger.info("Builder sidecar is healthy")
+                    self._builder_healthy = True
+                    return True
+            except (http_requests.ConnectionError, http_requests.Timeout):
+                pass
+            elapsed = time.monotonic() - start
+            logger.debug(
+                "Builder not ready (%.0fs elapsed), retrying in %.1fs...",
+                elapsed, interval,
+            )
+            time.sleep(interval)
+            interval = min(interval * 2, 10.0)
+
+        logger.error("Builder sidecar not healthy after %ds", max_wait)
+        return False
+
     def _submit_and_poll(
         self, endpoint: str, files: dict | None = None,
         data: dict | None = None,
@@ -98,8 +137,15 @@ class LocalCRSUtils(CRSUtils):
     ) -> dict | None:
         """Submit a job to the builder sidecar and poll until done.
 
-        Returns the result dict, or None on timeout/404.
+        Waits for the builder to be healthy before submitting.
+        Returns the result dict, or None on timeout/connection error.
         """
+        if not self._wait_for_builder_health():
+            if files:
+                for f in files.values():
+                    f.close()
+            return None
+
         builder_url = self._get_builder_url()
         try:
             resp = http_requests.post(
@@ -107,6 +153,9 @@ class LocalCRSUtils(CRSUtils):
                 files=files, data=data or {}, timeout=30,
             )
             resp.raise_for_status()
+        except (http_requests.ConnectionError, http_requests.Timeout, http_requests.HTTPError) as e:
+            logger.error("Failed to submit job to %s: %s", endpoint, e)
+            return None
         finally:
             if files:
                 for f in files.values():
@@ -117,9 +166,14 @@ class LocalCRSUtils(CRSUtils):
 
         start = time.monotonic()
         while time.monotonic() - start < timeout:
-            resp = http_requests.get(
-                f"{builder_url}/status/{job_id}", timeout=10,
-            )
+            try:
+                resp = http_requests.get(
+                    f"{builder_url}/status/{job_id}", timeout=10,
+                )
+            except (http_requests.ConnectionError, http_requests.Timeout) as e:
+                logger.warning("Connection error polling %s: %s", job_id, e)
+                time.sleep(poll_interval)
+                continue
             if resp.status_code == 404:
                 logger.error("Job %s not found (builder may have restarted)", job_id)
                 return None

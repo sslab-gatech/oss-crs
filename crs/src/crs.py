@@ -48,7 +48,7 @@ class CRS:
     @classmethod
     def from_yaml_file(cls, crs_path: Path, work_dir: Path) -> "CRS":
         config = CRSConfig.from_yaml_file(crs_path / CRS_YAML_PATH)
-        return cls(config.name, crs_path, work_dir, None)
+        return cls(config.name, crs_path, work_dir, None, None)
 
     @classmethod
     def from_crs_compose_entry(

@@ -3,7 +3,6 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
-from .config.crs import CRSType
 from .llm import LLM
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
@@ -31,14 +30,29 @@ class CRSCompose:
             )
             for name, crs_cfg in self.config.crs_entries.items()
         ]
+        builder_count = sum(1 for crs in self.crs_list if crs.config.is_builder)
+        if builder_count > 1:
+            raise ValueError("At most one CRS entry with type 'builder' is allowed")
         self.deadline: Optional[float] = None
 
     @property
     def _builder_crs(self) -> Optional[CRS]:
         for crs in self.crs_list:
-            if CRSType.BUILDER in crs.config.type:
+            if crs.config.is_builder:
                 return crs
         return None
+
+    @property
+    def builder_url(self) -> str:
+        crs = self._builder_crs
+        if crs is None:
+            return ""
+        module_name = next(iter(crs.config.crs_run_phase.modules.keys()))
+        return f"http://{crs.name}_{module_name}:8080"
+
+    @staticmethod
+    def _get_sanitizer(target: Target) -> str:
+        return target.get_target_env().get("sanitizer", "address")
 
     def set_deadline(self, deadline: float) -> None:
         self.deadline = deadline
@@ -77,8 +91,6 @@ class CRSCompose:
         ) as progress:
             return progress.run_added_tasks().success
 
-        return True
-
     def build_target(self, target: Target) -> bool:
         target_base_image = target.build_docker_image()
         if target_base_image is None:
@@ -88,7 +100,7 @@ class CRSCompose:
 
         # Create snapshot if a builder CRS exists
         if self._builder_crs is not None:
-            sanitizer = target.get_target_env().get("sanitizer", "address")
+            sanitizer = self._get_sanitizer(target)
             tasks.append(
                 (
                     "Create snapshot",
@@ -111,8 +123,6 @@ class CRSCompose:
         ) as progress:
             return progress.run_added_tasks().success
 
-        return True
-
     def run(
         self,
         target: Target,
@@ -126,8 +136,7 @@ class CRSCompose:
 
         # Also check if snapshot image exists when builder CRS is present
         if not need_build and self._builder_crs is not None:
-            sanitizer = target.get_target_env().get("sanitizer", "address")
-            snapshot_tag = target.get_snapshot_image_name(sanitizer)
+            snapshot_tag = target.get_snapshot_image_name(self._get_sanitizer(target))
             check = subprocess.run(
                 ["docker", "image", "inspect", snapshot_tag],
                 capture_output=True, text=True,
@@ -142,8 +151,9 @@ class CRSCompose:
         # Ensure snapshot_image_tag is set for the run phase, even if
         # build_target() was skipped because the target was already built.
         if self._builder_crs is not None and target.snapshot_image_tag is None:
-            sanitizer = target.get_target_env().get("sanitizer", "address")
-            target.snapshot_image_tag = target.get_snapshot_image_name(sanitizer)
+            target.snapshot_image_tag = target.get_snapshot_image_name(
+                self._get_sanitizer(target)
+            )
 
         # Collect POV files from --pov and --pov-dir
         pov_files: list[Path] = []
@@ -171,8 +181,6 @@ class CRSCompose:
         ) as progress:
             return progress.run_added_tasks().success
 
-        return True
-
     def __check_target_built(self, target: Target) -> bool:
         target_base_image = target.get_docker_image_name()
         tasks = []
@@ -190,8 +198,6 @@ class CRSCompose:
             title="CRS Compose Check Target Built",
         ) as progress:
             return progress.run_added_tasks().success
-
-        return True
 
     def __run(self, target: Target, pov_files: list[Path] = None) -> bool:
         if self.crs_compose_env.run_env == RunEnv.LOCAL:
@@ -229,8 +235,6 @@ class CRSCompose:
                     self.__show_result_local(target, progress)
                     return ret.success
                 return False
-
-        return False
 
     def __show_result_local(self, target: Target, progress: MultiTaskProgress) -> None:
         crs_results = [

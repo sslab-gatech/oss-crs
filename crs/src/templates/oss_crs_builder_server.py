@@ -43,6 +43,16 @@ class JobSubmitResponse(BaseModel):
     status: str
 
 
+def _make_job_dirs(job_id: str) -> tuple[Path, Path]:
+    """Create and return (req_dir, resp_dir) for a job."""
+    work_dir = Path(f"/tmp/jobs/{job_id}")
+    req_dir = work_dir / "request"
+    resp_dir = work_dir / "response"
+    req_dir.mkdir(parents=True, exist_ok=True)
+    resp_dir.mkdir(parents=True, exist_ok=True)
+    return req_dir, resp_dir
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -66,15 +76,16 @@ async def submit_build(patch: UploadFile = File(...)):
     patch_content = await patch.read()
     job_id = _make_build_id(patch_content)
 
-    # Dedup: if same build is already in-flight, return existing job
-    if job_id in job_results and job_results[job_id]["status"] in ("queued", "running"):
-        return JobSubmitResponse(id=job_id, status=job_results[job_id]["status"])
+    # Dedup: return existing result if this build is in-flight or succeeded.
+    # Failed builds are NOT cached — allow retry with the same patch.
+    if job_id in job_results:
+        existing = job_results[job_id]
+        if existing["status"] in ("queued", "running"):
+            return JobSubmitResponse(id=job_id, status=existing["status"])
+        if existing["status"] == "done" and existing.get("build_exit_code") == 0:
+            return JobSubmitResponse(id=job_id, status="done")
 
-    work_dir = Path(f"/tmp/jobs/{job_id}")
-    req_dir = work_dir / "request"
-    resp_dir = work_dir / "response"
-    req_dir.mkdir(parents=True, exist_ok=True)
-    resp_dir.mkdir(parents=True, exist_ok=True)
+    req_dir, resp_dir = _make_job_dirs(job_id)
 
     (req_dir / "patch.diff").write_bytes(patch_content)
 
@@ -87,6 +98,7 @@ async def submit_build(patch: UploadFile = File(...)):
 # POST /run-pov — run POV via oss-fuzz reproduce script
 # ---------------------------------------------------------------------------
 _HARNESS_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+_BUILD_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
 @app.post("/run-pov", response_model=JobSubmitResponse)
@@ -100,6 +112,11 @@ async def submit_run_pov(
             status_code=400,
             content={"error": "Invalid harness_name: must be alphanumeric, hyphens, underscores, or dots only"},
         )
+    if not _BUILD_ID_RE.match(build_id):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid build_id: must be alphanumeric, hyphens, or underscores only"},
+        )
     build_out = BUILDS_DIR / build_id / "out"
     if not build_out.exists():
         return JSONResponse(
@@ -108,11 +125,7 @@ async def submit_run_pov(
         )
 
     job_id = uuid.uuid4().hex[:12]
-    work_dir = Path(f"/tmp/jobs/{job_id}")
-    req_dir = work_dir / "request"
-    resp_dir = work_dir / "response"
-    req_dir.mkdir(parents=True, exist_ok=True)
-    resp_dir.mkdir(parents=True, exist_ok=True)
+    req_dir, resp_dir = _make_job_dirs(job_id)
 
     (req_dir / "pov.bin").write_bytes(await pov.read())
     (req_dir / "harness_name").write_text(harness_name)
@@ -130,6 +143,11 @@ async def submit_run_pov(
 async def submit_run_test(
     build_id: str = Form(...),
 ):
+    if not _BUILD_ID_RE.match(build_id):
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid build_id: must be alphanumeric, hyphens, or underscores only"},
+        )
     build_out = BUILDS_DIR / build_id / "out"
     if not build_out.exists():
         return JSONResponse(
@@ -138,11 +156,7 @@ async def submit_run_test(
         )
 
     job_id = uuid.uuid4().hex[:12]
-    work_dir = Path(f"/tmp/jobs/{job_id}")
-    req_dir = work_dir / "request"
-    resp_dir = work_dir / "response"
-    req_dir.mkdir(parents=True, exist_ok=True)
-    resp_dir.mkdir(parents=True, exist_ok=True)
+    req_dir, resp_dir = _make_job_dirs(job_id)
 
     (req_dir / "build_id").write_text(build_id)
 
@@ -237,21 +251,13 @@ def _handle_run_pov(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
         }
 
 
-def _find_test_sh() -> Path | None:
-    """Find test.sh in the oss-fuzz project directory (/project_dir/)."""
-    candidate = Path("/project_dir/test.sh")
-    if candidate.exists():
-        return candidate
-    return None
-
-
 def _handle_run_test(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
     """Run the project's bundled test.sh against a specific build's artifacts."""
     build_id = (req_dir / "build_id").read_text().strip()
     test_timeout = int(os.environ.get("TEST_TIMEOUT", "120"))
 
-    test_path = _find_test_sh()
-    if test_path is None:
+    test_path = Path("/project_dir/test.sh")
+    if not test_path.exists():
         return {
             "test_exit_code": 0,
             "test_stderr": "skipped: no test.sh found in /project_dir/",
