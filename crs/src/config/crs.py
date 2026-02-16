@@ -106,6 +106,7 @@ class SupportedTarget(BaseModel):
 class CRSType(Enum):
     BUG_FINDING = "bug-finding"
     BUG_FIXING = "bug-fixing"
+    BUILDER = "builder"
 
 
 class CRSConfig(BaseModel):
@@ -114,14 +115,18 @@ class CRSConfig(BaseModel):
     name: str
     type: Set[CRSType]
     version: str
-    docker_registry: str
-    prepare_phase: PreparePhase
-    target_build_phase: TargetBuildPhase
+    docker_registry: str = ""
+    prepare_phase: Optional[PreparePhase] = None
+    target_build_phase: Optional[TargetBuildPhase] = None
 
     crs_run_phase: CRSRunPhase
     supported_target: SupportedTarget
 
     required_llms: Optional[list[str]] = Field(default=None)
+
+    @property
+    def is_builder(self) -> bool:
+        return CRSType.BUILDER in self.type
 
     @field_validator("version")
     @classmethod
@@ -136,10 +141,7 @@ class CRSConfig(BaseModel):
     @classmethod
     def validate_docker_registry(cls, v: str) -> str:
         # TODO: Improve docker_registry validation if needed
-        v = v.strip()  # Remove leading/trailing whitespace
-        if not v:
-            raise ValueError("docker_registry cannot be empty")
-        return v
+        return v.strip()
 
     @field_validator("required_llms")
     @classmethod

@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
+from .config.crs import CRSType
 from .llm import LLM
 from .crs import CRS
 from .ui import MultiTaskProgress, TaskResult
@@ -31,6 +32,13 @@ class CRSCompose:
             for name, crs_cfg in self.config.crs_entries.items()
         ]
         self.deadline: Optional[float] = None
+
+    @property
+    def _builder_crs(self) -> Optional[CRS]:
+        for crs in self.crs_list:
+            if CRSType.BUILDER in crs.config.type:
+                return crs
+        return None
 
     def set_deadline(self, deadline: float) -> None:
         self.deadline = deadline
@@ -78,8 +86,8 @@ class CRSCompose:
 
         tasks = []
 
-        # Create snapshot if incremental_build is enabled
-        if self.config.incremental_build:
+        # Create snapshot if a builder CRS exists
+        if self._builder_crs is not None:
             sanitizer = target.get_target_env().get("sanitizer", "address")
             tasks.append(
                 (
@@ -116,8 +124,8 @@ class CRSCompose:
         target.init_repo()
         need_build = not self.__check_target_built(target)
 
-        # Also check if snapshot image exists when incremental_build is enabled
-        if not need_build and self.config.incremental_build:
+        # Also check if snapshot image exists when builder CRS is present
+        if not need_build and self._builder_crs is not None:
             sanitizer = target.get_target_env().get("sanitizer", "address")
             snapshot_tag = target.get_snapshot_image_name(sanitizer)
             check = subprocess.run(
@@ -133,7 +141,7 @@ class CRSCompose:
 
         # Ensure snapshot_image_tag is set for the run phase, even if
         # build_target() was skipped because the target was already built.
-        if self.config.incremental_build and target.snapshot_image_tag is None:
+        if self._builder_crs is not None and target.snapshot_image_tag is None:
             sanitizer = target.get_target_env().get("sanitizer", "address")
             target.snapshot_image_tag = target.get_snapshot_image_name(sanitizer)
 

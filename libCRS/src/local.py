@@ -87,12 +87,13 @@ class LocalCRSUtils(CRSUtils):
         if not url:
             raise RuntimeError(
                 "OSS_CRS_BUILDER_URL not set. "
-                "Set 'incremental_build: true' in crs-compose.yaml."
+                "Add a builder CRS entry (type: builder) to crs-compose.yaml."
             )
         return url
 
     def _submit_and_poll(
-        self, endpoint: str, files: dict, data: dict | None = None,
+        self, endpoint: str, files: dict | None = None,
+        data: dict | None = None,
         timeout: int = 600, poll_interval: int = 5,
     ) -> dict | None:
         """Submit a job to the builder sidecar and poll until done.
@@ -107,8 +108,9 @@ class LocalCRSUtils(CRSUtils):
             )
             resp.raise_for_status()
         finally:
-            for f in files.values():
-                f.close()
+            if files:
+                for f in files.values():
+                    f.close()
 
         job_id = resp.json()["id"]
         logger.info("Submitted job %s to %s", job_id, endpoint)
@@ -180,14 +182,12 @@ class LocalCRSUtils(CRSUtils):
 
     def run_test(
         self,
-        test_script: Path,
         build_id: str,
         response_dir: Path,
     ) -> int:
-        """Run a test script via the builder sidecar."""
-        files = {"test_script": open(test_script, "rb")}
+        """Run the project's bundled test.sh via the builder sidecar."""
         data = {"build_id": build_id}
-        result = self._submit_and_poll("/run-test", files, data, timeout=600)
+        result = self._submit_and_poll("/run-test", data=data, timeout=600)
 
         response_dir.mkdir(parents=True, exist_ok=True)
         if result is None:

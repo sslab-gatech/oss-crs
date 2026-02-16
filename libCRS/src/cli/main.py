@@ -278,10 +278,7 @@ def main():
     # run-test command
     run_test_parser = subparsers.add_parser(
         "run-test",
-        help="Run a test script against a specific build's output",
-    )
-    run_test_parser.add_argument(
-        "test_script", type=Path, help="Path to the test script"
+        help="Run the project's bundled test.sh against a specific build's output",
     )
     run_test_parser.add_argument(
         "response_dir", type=Path, help="Directory to receive test results"
@@ -293,7 +290,7 @@ def main():
 
     def _run_test(args):
         exit_code = crs_utils.run_test(
-            args.test_script, args.build_id, args.response_dir,
+            args.build_id, args.response_dir,
         )
         sys.exit(exit_code)
 

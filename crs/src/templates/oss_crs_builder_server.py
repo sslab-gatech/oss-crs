@@ -4,7 +4,7 @@
 Endpoints:
     POST /build       - Apply patch and compile (calls oss_crs_handler.sh)
     POST /run-pov     - Run POV binary via oss-fuzz reproduce script
-    POST /run-test    - Run test script against a specific build
+    POST /run-test    - Run project's bundled test.sh against a specific build
     GET  /status/<id> - Poll job status
     GET  /health      - Healthcheck
 
@@ -34,14 +34,8 @@ BUILDS_DIR = Path("/builds")
 
 
 def _ignore_build_junk(directory, contents):
-    """Skip source/git directories when copying build artifacts — only binaries are needed.
-
-    Filters .git at all levels, but only filters src at the /out root level.
-    """
-    ignored = [c for c in contents if c == ".git"]
-    if os.path.basename(directory) == "out" or directory == "/out":
-        ignored.extend(c for c in contents if c == "src")
-    return ignored
+    """Skip source/git directories when copying build artifacts — only binaries needed."""
+    return [c for c in contents if c in (".git", "src")]
 
 
 class JobSubmitResponse(BaseModel):
@@ -130,11 +124,10 @@ async def submit_run_pov(
 
 
 # ---------------------------------------------------------------------------
-# POST /run-test — run a test script
+# POST /run-test — run the project's bundled test.sh
 # ---------------------------------------------------------------------------
 @app.post("/run-test", response_model=JobSubmitResponse)
 async def submit_run_test(
-    test_script: UploadFile = File(...),
     build_id: str = Form(...),
 ):
     build_out = BUILDS_DIR / build_id / "out"
@@ -151,7 +144,6 @@ async def submit_run_test(
     req_dir.mkdir(parents=True, exist_ok=True)
     resp_dir.mkdir(parents=True, exist_ok=True)
 
-    (req_dir / "test.sh").write_bytes(await test_script.read())
     (req_dir / "build_id").write_text(build_id)
 
     job_results[job_id] = {"id": job_id, "status": "queued"}
@@ -245,12 +237,25 @@ def _handle_run_pov(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
         }
 
 
+def _find_test_sh() -> Path | None:
+    """Find test.sh in the oss-fuzz project directory (/project_dir/)."""
+    candidate = Path("/project_dir/test.sh")
+    if candidate.exists():
+        return candidate
+    return None
+
+
 def _handle_run_test(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
-    """Run test script against a specific build's artifacts."""
-    test_path = req_dir / "test.sh"
-    test_path.chmod(0o755)
+    """Run the project's bundled test.sh against a specific build's artifacts."""
     build_id = (req_dir / "build_id").read_text().strip()
     test_timeout = int(os.environ.get("TEST_TIMEOUT", "120"))
+
+    test_path = _find_test_sh()
+    if test_path is None:
+        return {
+            "test_exit_code": 0,
+            "test_stderr": "skipped: no test.sh found in /project_dir/",
+        }
 
     build_out = BUILDS_DIR / build_id / "out"
     env = os.environ.copy()
@@ -258,11 +263,12 @@ def _handle_run_test(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
 
     try:
         result = subprocess.run(
-            [str(test_path)],
+            ["bash", str(test_path)],
             capture_output=True,
             text=True,
             timeout=test_timeout,
             env=env,
+            cwd=str(build_out),
         )
         return {
             "test_exit_code": result.returncode,

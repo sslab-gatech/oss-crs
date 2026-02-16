@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from ..utils import TmpDockerCompose
     from ..crs_compose import CRSComposeConfig
 
+from ..config.crs import CRSType
+
 CUR_DIR = Path(__file__).parent
 OSS_CRS_ROOT_PATH = (CUR_DIR / "../../../").resolve()
 LIBCRS_PATH = (OSS_CRS_ROOT_PATH / "libCRS").resolve()
@@ -131,6 +133,13 @@ def render_run_crs_compose_docker_compose(
     target: "Target",
 ) -> str:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
+    builder_url = ""
+    for crs in crs_compose.crs_list:
+        if CRSType.BUILDER in crs.config.type:
+            module_name = next(iter(crs.config.crs_run_phase.modules.keys()))
+            builder_url = f"http://{crs.name}_{module_name}:8080"
+            break
+
     context = {
         "libCRS_path": str(LIBCRS_PATH),
         "crs_compose_name": crs_compose_name,
@@ -140,6 +149,7 @@ def render_run_crs_compose_docker_compose(
         "target": target,
         "oss_crs_infra_root_path": str(OSS_CRS_ROOT_PATH / "oss-crs-infra"),
         "snapshot_image_tag": target.snapshot_image_tag or "",
+        "builder_url": builder_url,
     }
 
     llm_context = prepare_llm_context(tmp_docker_compose, crs_compose)

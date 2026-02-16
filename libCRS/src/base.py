@@ -111,19 +111,17 @@ class CRSUtils(ABC):
     @abstractmethod
     def run_test(
         self,
-        test_script: Path,
         build_id: str,
         response_dir: Path,
     ) -> int:
-        """Run a test script against a specific build's output.
+        """Run the project's bundled test.sh against a specific build's output.
 
         Args:
-            test_script: Path to the test script.
             build_id: Build ID from a prior apply_patch_build call.
             response_dir: Directory to receive results:
                 - test_exit_code, test_stderr.log
 
         Returns:
-            Test exit code (0 = tests pass).
+            Test exit code (0 = tests pass, 0 with skipped=true if no test.sh).
         """
         pass

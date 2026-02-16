@@ -1,0 +1,17 @@
+name: oss-crs-builder
+type:
+  - builder
+version: 1.0.0
+docker_registry: local
+
+crs_run_phase:
+  server:
+    dockerfile: oss-crs/server.Dockerfile
+    additional_env:
+      FUZZER_ARGS: "-rss_limit_mb=2560 -timeout=25"
+
+supported_target:
+  mode: [full, delta]
+  language: [c, c++, jvm, go, rust, python, swift, javascript, lua]
+  sanitizer: [address]
+  architecture: [x86_64]

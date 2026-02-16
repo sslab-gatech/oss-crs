@@ -101,6 +101,9 @@ class CRS:
         Returns:
             True if bake succeeded, False otherwise.
         """
+        if self.config.prepare_phase is None:
+            return TaskResult(success=True)
+
         # Create a single-task progress if not provided
         standalone = multi_task_progress is None
         # Determine the registry to use (parameter overrides config)
@@ -170,6 +173,8 @@ class CRS:
     def build_target(
         self, target: Target, target_base_image: str, progress: MultiTaskProgress
     ) -> "TaskResult":
+        if self.config.target_build_phase is None or not self.config.target_build_phase.builds:
+            return TaskResult(success=True)
         if not self.__is_supported_target(target):
             # TODO: warn instead of error?
             return TaskResult(
@@ -197,6 +202,8 @@ class CRS:
     def is_target_built(
         self, target: Target, target_base_image: str, progress: MultiTaskProgress
     ) -> TaskResult:
+        if self.config.target_build_phase is None or not self.config.target_build_phase.builds:
+            return TaskResult(success=True)
         if not self.__is_supported_target(target):
             return TaskResult(
                 success=False,
