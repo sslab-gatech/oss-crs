@@ -2,6 +2,7 @@ import shutil
 import subprocess
 import random
 import string
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -14,21 +15,47 @@ def generate_random_name(length: int = 10) -> str:
     return "".join(random.choice(RAND_CHARS) for _ in range(length))
 
 
+def generate_run_id() -> str:
+    return generate_random_name(10)
+
+
+def normalize_run_id(run_id: str) -> str:
+    normalized = run_id.strip().lower()
+    normalized = re.sub(r"[^a-z0-9_-]+", "-", normalized)
+    normalized = re.sub(r"-{2,}", "-", normalized).strip("-_")
+    if not normalized:
+        raise ValueError("run_id must contain at least one alphanumeric character")
+    return normalized
+
+
 class TmpDockerCompose:
-    def __init__(self, progress, project_name_prefix: str = "proj"):
+    def __init__(
+        self,
+        progress,
+        project_name_prefix: str = "proj",
+        run_id: str | None = None,
+    ):
         self.progress = progress
         self._project_name_prefix = project_name_prefix
+        self._requested_run_id = run_id
         self.dir: Optional[Path] = None
         self.docker_compose: Optional[Path] = None
         self.project_name: Optional[str] = None
+        self.run_id: Optional[str] = None
 
     def __enter__(self) -> "TmpDockerCompose":
         # Create a temporary docker-compose YAML file
-        name = generate_random_name(10)
-        self.dir = Path(f"/tmp/{name}")
+        run_id = (
+            normalize_run_id(self._requested_run_id)
+            if self._requested_run_id
+            else generate_random_name(10)
+        )
+        tmp_name = generate_random_name(10)
+        self.dir = Path(f"/tmp/{tmp_name}")
         self.dir.mkdir(parents=True, exist_ok=True)
         self.docker_compose = self.dir / "docker-compose.yaml"
-        self.project_name = f"{self._project_name_prefix}_{name}"
+        self.project_name = f"{self._project_name_prefix}_{run_id}"
+        self.run_id = run_id
         self.docker_compose.touch()
         self.progress.add_cleanup_task(
             "Cleanup Docker Compose",

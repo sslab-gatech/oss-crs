@@ -6,7 +6,7 @@ import os
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry, CRSComposeEnv
 from .ui import MultiTaskProgress, TaskResult
-from .target import Target
+from .target import Target, file_lock
 from .templates import renderer
 from .utils import TmpDockerCompose, rm_with_docker
 
@@ -14,34 +14,37 @@ CRS_YAML_PATH = "oss-crs/crs.yaml"
 
 
 def init_crs_repo(name, repo_url: str, branch: str, dest_path: Path) -> bool:
-    tasks = []
-    if dest_path.exists():
-        tasks = [
-            (
-                "Git Fetch",
-                lambda progress: progress.run_command_with_streaming_output(
-                    cmd=["git", "fetch", "origin", branch], cwd=dest_path
+    # Use file lock to prevent race conditions when multiple runs access same CRS repo
+    lock_path = dest_path.parent / f".{name}.lock"
+    with file_lock(lock_path):
+        tasks = []
+        if dest_path.exists():
+            tasks = [
+                (
+                    "Git Fetch",
+                    lambda progress: progress.run_command_with_streaming_output(
+                        cmd=["git", "fetch", "origin", branch], cwd=dest_path
+                    ),
                 ),
-            ),
-            (
-                "Git Reset",
-                lambda progress: progress.run_command_with_streaming_output(
-                    cmd=["git", "reset", "--hard", f"origin/{branch}"],
-                    cwd=dest_path,
+                (
+                    "Git Reset",
+                    lambda progress: progress.run_command_with_streaming_output(
+                        cmd=["git", "reset", "--hard", f"origin/{branch}"],
+                        cwd=dest_path,
+                    ),
                 ),
-            ),
-        ]
-    else:
-        tasks = [
-            (
-                "Cloning CRS repository",
-                lambda progress: progress.run_command_with_streaming_output(
-                    cmd=["git", "clone", "--branch", branch, repo_url, str(dest_path)]
+            ]
+        else:
+            tasks = [
+                (
+                    "Cloning CRS repository",
+                    lambda progress: progress.run_command_with_streaming_output(
+                        cmd=["git", "clone", "--branch", branch, repo_url, str(dest_path)]
+                    ),
                 ),
-            ),
-        ]
-    with MultiTaskProgress(tasks, title=f"Init CRS: {name}") as progress:
-        return progress.run_added_tasks().success
+            ]
+        with MultiTaskProgress(tasks, title=f"Init CRS: {name}") as progress:
+            return progress.run_added_tasks().success
 
 
 class CRS:
@@ -168,7 +171,11 @@ class CRS:
         return True
 
     def build_target(
-        self, target: Target, target_base_image: str, progress: MultiTaskProgress
+        self,
+        target: Target,
+        target_base_image: str,
+        progress: MultiTaskProgress,
+        run_id: str,
     ) -> "TaskResult":
         if not self.__is_supported_target(target):
             # TODO: warn instead of error?
@@ -176,7 +183,7 @@ class CRS:
                 success=False,
                 error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
-        build_work_dir = self.work_dir / (target_base_image.replace(":", "_"))
+        build_work_dir = self.work_dir / (target_base_image.replace(":", "_")) / run_id
         for build_config in self.config.target_build_phase.builds:
             build_name = build_config.name
             progress.add_task(
@@ -188,6 +195,7 @@ class CRS:
                         build_name,
                         build_config,
                         build_work_dir,
+                        run_id,
                         p,
                     )
                 ),
@@ -195,14 +203,18 @@ class CRS:
         return progress.run_added_tasks()
 
     def is_target_built(
-        self, target: Target, target_base_image: str, progress: MultiTaskProgress
+        self,
+        target: Target,
+        target_base_image: str,
+        progress: MultiTaskProgress,
+        run_id: str,
     ) -> TaskResult:
         if not self.__is_supported_target(target):
             return TaskResult(
                 success=False,
                 error=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
-        build_out_dir = self.get_build_output_dir(target)
+        build_out_dir = self.get_build_output_dir(target, run_id=run_id)
         for build_config in self.config.target_build_phase.builds:
             build_name = build_config.name
             progress.add_task(
@@ -216,35 +228,46 @@ class CRS:
         return progress.run_added_tasks()
 
     def __get_sub_work_dir(
-        self, target: Target, sub_dir_name: str, per_harness=False
+        self,
+        target: Target,
+        sub_dir_name: str,
+        per_harness: bool = False,
+        run_id: str | None = None,
     ) -> Path:
         target_image_name = target.get_docker_image_name().replace(":", "_")
+        sub_work_dir = self.work_dir / target_image_name / sub_dir_name
         if per_harness:
             assert target.target_harness, (
                 "target_harness must be set for per_harness sub work dir"
             )
-            sub_work_dir = (
-                self.work_dir / target_image_name / sub_dir_name / target.target_harness
-            )
-        else:
-            sub_work_dir = self.work_dir / target_image_name / sub_dir_name
+            sub_work_dir = sub_work_dir / target.target_harness
+        if run_id:
+            sub_work_dir = sub_work_dir / run_id
         sub_work_dir.mkdir(parents=True, exist_ok=True)
         return sub_work_dir
 
-    def get_build_output_dir(self, target: Target) -> Path:
-        return self.__get_sub_work_dir(target, "BUILD_OUT_DIR")
+    def get_build_output_dir(self, target: Target, run_id: str | None = None) -> Path:
+        return self.__get_sub_work_dir(target, "BUILD_OUT_DIR", run_id=run_id)
 
-    def get_submit_dir(self, target: Target) -> Path:
-        return self.__get_sub_work_dir(target, "SUBMIT_DIR", per_harness=True)
+    def get_submit_dir(self, target: Target, run_id: str | None = None) -> Path:
+        return self.__get_sub_work_dir(
+            target, "SUBMIT_DIR", per_harness=True, run_id=run_id
+        )
 
-    def get_fetch_dir(self, target: Target) -> Path:
-        return self.__get_sub_work_dir(target, "FETCH_DIR", per_harness=True)
+    def get_fetch_dir(self, target: Target, run_id: str | None = None) -> Path:
+        return self.__get_sub_work_dir(
+            target, "FETCH_DIR", per_harness=True, run_id=run_id
+        )
 
-    def get_shared_dir(self, target: Target) -> Path:
-        return self.__get_sub_work_dir(target, "SHARED_DIR", per_harness=True)
+    def get_shared_dir(self, target: Target, run_id: str | None = None) -> Path:
+        return self.__get_sub_work_dir(
+            target, "SHARED_DIR", per_harness=True, run_id=run_id
+        )
 
-    def cleanup_shared_dir(self, target: Target) -> bool:
-        dir_path = self.__get_sub_work_dir(target, "SHARED_DIR", per_harness=True)
+    def cleanup_shared_dir(self, target: Target, run_id: str | None = None) -> bool:
+        dir_path = self.__get_sub_work_dir(
+            target, "SHARED_DIR", per_harness=True, run_id=run_id
+        )
         rm_with_docker(dir_path)
         return True
 
@@ -285,9 +308,10 @@ class CRS:
         build_name: str,
         build_config,
         build_work_dir: Path,
+        run_id: str,
         progress: MultiTaskProgress,
     ) -> "TaskResult":
-        build_out_dir = self.get_build_output_dir(target)
+        build_out_dir = self.get_build_output_dir(target, run_id=run_id)
         build_cache_path = build_work_dir / f".{build_name}.cache"
         docker_compose_output = ""
 
@@ -295,7 +319,12 @@ class CRS:
             progress, project_name: str, tmp_docker_compose: TmpDockerCompose
         ) -> "TaskResult":
             rendered = renderer.render_build_target_docker_compose(
-                self, target, target_base_image, build_config, build_out_dir
+                self,
+                target,
+                target_base_image,
+                build_config,
+                build_out_dir,
+                run_id,
             )
             tmp_docker_compose.docker_compose.write_text(rendered)
             return TaskResult(success=True)

@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from ..crs_compose import CRSCompose
 from ..target import Target
+from ..utils import generate_run_id, normalize_run_id
 
 
 DEFAULT_WORK_DIR = (Path(__file__) / "../../../../.oss-crs-workdir").resolve()
@@ -69,6 +70,12 @@ def add_build_target_command(subparsers):
     )
     add_common_arguments(build_target)
     add_target_arguments(build_target)
+    build_target.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Run identifier used to isolate parallel builds (default: random).",
+    )
 
 
 def add_run_command(subparsers):
@@ -88,6 +95,12 @@ def add_run_command(subparsers):
         type=int,
         default=None,
         help="Maximum run duration in seconds. Gracefully stops all containers when exceeded.",
+    )
+    run.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Run identifier used to isolate parallel runs (default: random).",
     )
 
 
@@ -133,20 +146,28 @@ def main() -> bool:
         if isinstance(value, Path):
             setattr(args, key, value.expanduser().resolve())
 
+    resolved_run_id = None
+    if hasattr(args, "run_id"):
+        resolved_run_id = (
+            normalize_run_id(args.run_id) if args.run_id else generate_run_id()
+        )
+
     crs_compose = CRSCompose.from_yaml_file(args.compose_file, args.work_dir)
 
     if args.command == "prepare":
         if not crs_compose.prepare(publish=args.publish):
             return False
     elif args.command == "build-target":
+        assert resolved_run_id is not None
         target = init_target_from_args(args)
-        if not crs_compose.build_target(target):
+        if not crs_compose.build_target(target, run_id=resolved_run_id):
             return False
     elif args.command == "run":
+        assert resolved_run_id is not None
         target = init_target_from_args(args)
         if args.timeout is not None:
             crs_compose.set_deadline(time.monotonic() + args.timeout)
-        if not crs_compose.run(target):
+        if not crs_compose.run(target, run_id=resolved_run_id):
             return False
     elif args.command == "check":
         pass

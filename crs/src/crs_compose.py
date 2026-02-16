@@ -69,7 +69,7 @@ class CRSCompose:
 
         return True
 
-    def build_target(self, target: Target) -> bool:
+    def build_target(self, target: Target, run_id: str) -> bool:
         target_base_image = target.build_docker_image()
         if target_base_image is None:
             return False
@@ -80,7 +80,7 @@ class CRSCompose:
                 (
                     crs.name,
                     lambda progress, crs=crs: crs.build_target(
-                        target, target_base_image, progress
+                        target, target_base_image, progress, run_id
                     ),
                 )
             )
@@ -92,14 +92,14 @@ class CRSCompose:
 
         return True
 
-    def run(self, target: Target) -> bool:
+    def run(self, target: Target, run_id: str) -> bool:
         if not self.__validate_before_run(target):
             return False
         target.init_repo()
-        if not self.__check_target_built(target):
-            if not self.build_target(target):
+        if not self.__check_target_built(target, run_id):
+            if not self.build_target(target, run_id):
                 return False
-        return self.__run(target)
+        return self.__run(target, run_id=run_id)
 
     def __validate_before_run(self, target: Target) -> bool:
         tasks = [
@@ -120,7 +120,7 @@ class CRSCompose:
 
         return True
 
-    def __check_target_built(self, target: Target) -> bool:
+    def __check_target_built(self, target: Target, run_id: str) -> bool:
         target_base_image = target.get_docker_image_name()
         tasks = []
         for crs in self.crs_list:
@@ -128,7 +128,7 @@ class CRSCompose:
                 (
                     crs.name,
                     lambda progress, crs=crs: crs.is_target_built(
-                        target, target_base_image, progress
+                        target, target_base_image, progress, run_id
                     ),
                 )
             )
@@ -140,26 +140,35 @@ class CRSCompose:
 
         return True
 
-    def __run(self, target: Target) -> bool:
+    def __run(self, target: Target, run_id: str) -> bool:
         if self.crs_compose_env.run_env == RunEnv.LOCAL:
-            return self.__run_local(target)
+            return self.__run_local(target, run_id=run_id)
         else:
             print(f"TODO: Support run env {self.crs_compose_env.run_env}")
             return False
 
-    def __run_local(self, target: Target) -> bool:
+    def __run_local(self, target: Target, run_id: str) -> bool:
         with MultiTaskProgress(
             tasks=[],
             title="CRS Compose Run",
             deadline=self.deadline,
         ) as progress:
-            with TmpDockerCompose(progress, "crs_compose") as tmp_docker_compose:
+            with TmpDockerCompose(
+                progress, "crs_compose", run_id=run_id
+            ) as tmp_docker_compose:
                 project_name = tmp_docker_compose.project_name
+                actual_run_id = tmp_docker_compose.run_id
+                assert project_name is not None
+                assert actual_run_id is not None
                 tasks = [
                     (
                         "Prepare Running Environment",
                         lambda progress: self.__prepare_local_running_env(
-                            project_name, target, tmp_docker_compose, progress
+                            project_name,
+                            target,
+                            tmp_docker_compose,
+                            actual_run_id,
+                            progress,
                         ),
                     ),
                     (
@@ -190,6 +199,7 @@ class CRSCompose:
         project_name: str,
         target: Target,
         tmp_docker_compose: TmpDockerCompose,
+        run_id: str,
         progress: MultiTaskProgress,
     ) -> TaskResult:
         def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
@@ -198,6 +208,7 @@ class CRSCompose:
                 tmp_docker_compose,
                 project_name,
                 target,
+                run_id,
             )
             tmp_docker_compose.docker_compose.write_text(content)
             return TaskResult(success=True)
@@ -207,7 +218,7 @@ class CRSCompose:
                 progress.add_task(
                     f"Clean up shared directory for {crs.name}",
                     lambda progress, crs=crs: TaskResult(
-                        success=crs.cleanup_shared_dir(target)
+                        success=crs.cleanup_shared_dir(target, run_id=run_id)
                     ),
                 )
             return progress.run_added_tasks()

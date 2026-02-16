@@ -49,6 +49,7 @@ services:
       - OSS_CRS_SERVICE_NAME={{ crs.name }}_{{ module_name }}
       - OSS_CRS_TARGET={{ target_env.name }}
       - OSS_CRS_TARGET_HARNESS={{ target_env.harness }}
+      - OSS_CRS_RUN_ID={{ run_id }}
       - OSS_CRS_CPUSET="{{ crs.resource.cpuset }}"
       - OSS_CRS_MEMORY_LIMIT="{{ crs.resource.memory }}"
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
@@ -70,10 +71,10 @@ services:
     # TODO: Check memory limit because it's for all services in a single CRS
     mem_limit: "{{ crs.resource.memory }}"
     volumes:
-      - {{ crs.get_build_output_dir(target) }}:/OSS_CRS_BUILD_OUT_DIR:ro
-      - {{ crs.get_submit_dir(target) }}:/OSS_CRS_SUBMIT_DIR:rw
-      - {{ crs.get_fetch_dir(target) }}:/OSS_CRS_FETCH_DIR:ro
-      - {{ crs.get_shared_dir(target) }}:/OSS_CRS_SHARED_DIR:rw
+      - {{ crs.get_build_output_dir(target, run_id) }}:/OSS_CRS_BUILD_OUT_DIR:ro
+      - {{ crs.get_submit_dir(target, run_id) }}:/OSS_CRS_SUBMIT_DIR:rw
+      - {{ crs.get_fetch_dir(target, run_id) }}:/OSS_CRS_FETCH_DIR:ro
+      - {{ crs.get_shared_dir(target, run_id) }}:/OSS_CRS_SHARED_DIR:rw
     networks:
       {{ crs_compose_name }}-{{ crs.name }}-network:
         aliases:

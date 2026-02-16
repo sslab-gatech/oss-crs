@@ -3,10 +3,32 @@ from typing import Optional
 import hashlib
 import tempfile
 import git
+import fcntl
+from contextlib import contextmanager
 
 from .config.target import TargetConfig
 from .ui import MultiTaskProgress, TaskResult
 from . import ui
+
+
+@contextmanager
+def file_lock(lock_path: Path):
+    """
+    Context manager for file-based locking to prevent race conditions.
+
+    Args:
+        lock_path: Path to the lock file
+    """
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = None
+    try:
+        lock_file = open(lock_path, 'w')
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        if lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
 
 
 def extract_name_from_proj_path(proj_path: str) -> str:
@@ -75,37 +97,40 @@ class Target:
         return None
 
     def init_repo(self) -> bool:
-        no_checkout = self.no_checkout
-        title = f"Setting up Target {self.name}"
-        head = [
-            ui.bold(f"Init {self.name} repo into {self.repo_path}"),
-            ui.yellow(
-                "Please make sure the repo is accessible without typing your credentials.",
-                True,
-            ),
-        ]
-        tasks = []
-        if self.repo_path.exists():
-            head.append(ui.bold(f"--no-checkout: {no_checkout}, repo exists: True"))
-            if no_checkout:
-                head.append(ui.yellow("Skipping repository initialization."))
-            else:
-                head.append(ui.green("Fetching latest changes..."))
-                tasks += [
-                    ("Git fetch", lambda progress: self.__fetch_repo(progress)),
-                    (
-                        "Git checkout HEAD",
-                        lambda progress: self.__checkout_HEAD(progress),
-                    ),
-                ]
-        else:
-            head.append(ui.green("Cloning repository..."))
-            tasks += [
-                ("Git clone", lambda progress: self.__clone(progress)),
+        # Use file lock to prevent race conditions when multiple runs access same repo
+        lock_path = self.repo_path.parent / ".repo.lock"
+        with file_lock(lock_path):
+            no_checkout = self.no_checkout
+            title = f"Setting up Target {self.name}"
+            head = [
+                ui.bold(f"Init {self.name} repo into {self.repo_path}"),
+                ui.yellow(
+                    "Please make sure the repo is accessible without typing your credentials.",
+                    True,
+                ),
             ]
-        with MultiTaskProgress(tasks=tasks, title=title) as progress:
-            progress.add_items_to_head(head)
-            return progress.run_added_tasks().success
+            tasks = []
+            if self.repo_path.exists():
+                head.append(ui.bold(f"--no-checkout: {no_checkout}, repo exists: True"))
+                if no_checkout:
+                    head.append(ui.yellow("Skipping repository initialization."))
+                else:
+                    head.append(ui.green("Fetching latest changes..."))
+                    tasks += [
+                        ("Git fetch", lambda progress: self.__fetch_repo(progress)),
+                        (
+                            "Git checkout HEAD",
+                            lambda progress: self.__checkout_HEAD(progress),
+                        ),
+                    ]
+            else:
+                head.append(ui.green("Cloning repository..."))
+                tasks += [
+                    ("Git clone", lambda progress: self.__clone(progress)),
+                ]
+            with MultiTaskProgress(tasks=tasks, title=title) as progress:
+                progress.add_items_to_head(head)
+                return progress.run_added_tasks().success
 
     def __fetch_repo(self, progress: MultiTaskProgress) -> "TaskResult":
         cmd = ["git", "fetch", "origin"]

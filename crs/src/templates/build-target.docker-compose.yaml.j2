@@ -11,6 +11,7 @@ services:
       - PROJECT_NAME={{ target.name }}
       - FUZZING_LANGUAGE={{ target.language }}
       - OSS_CRS_RUN_ENV_TYPE={{ crs_compose_env.type }}
+      - OSS_CRS_RUN_ID={{ run_id }}
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
       - OSS_CRS_TARGET={{ target.name }}
       - OSS_CRS_TARGET_PROJ_DIR=/project_dir

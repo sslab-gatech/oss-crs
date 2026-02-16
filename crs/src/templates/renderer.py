@@ -53,6 +53,7 @@ def render_build_target_docker_compose(
     target_base_image: str,
     build_config: "BuildConfig",
     build_out_dir: Path,
+    run_id: str,
 ) -> str:
     """Render the docker-compose file for building a target.
 
@@ -78,6 +79,7 @@ def render_build_target_docker_compose(
         "additional_env": build_config.additional_env,
         "target": target_env,
         "build_out_dir": str(build_out_dir),
+        "run_id": run_id,
         "crs_compose_env": crs.crs_compose_env.get_env(),
         "libCRS_path": str(LIBCRS_PATH),
     }
@@ -129,6 +131,7 @@ def render_run_crs_compose_docker_compose(
     tmp_docker_compose: "TmpDockerCompose",
     crs_compose_name: str,
     target: "Target",
+    run_id: str,
 ) -> str:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
     context = {
@@ -138,6 +141,7 @@ def render_run_crs_compose_docker_compose(
         "crs_compose_env": crs_compose.crs_compose_env.get_env(),
         "target_env": target.get_target_env(),
         "target": target,
+        "run_id": run_id,
         "oss_crs_infra_root_path": str(OSS_CRS_ROOT_PATH / "oss-crs-infra"),
     }
 
