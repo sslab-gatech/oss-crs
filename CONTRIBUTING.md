@@ -65,7 +65,7 @@ Ideally if you are the only developer of said branch, please [rebase](https://gi
 For commit messages, we use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) as our standard.
 `fix:`, `feat:`, `chore:`, `docs:`, and `refactor:` are types commonly used.
 
-When you create a PR, assign a reviewer. Assign @azchin for the bug-finding component, and @grill66 for the bug-fixing component.
+When you create a PR, assign a reviewer (typically @azchin).
 
 ### Developer Certificate of Origin (DCO)
 
