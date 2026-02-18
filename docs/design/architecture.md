@@ -150,16 +150,17 @@ $ libCRS register-shared-dir <local_dir_path> <shared_fs_path>
 
 #### ✅ Fetching Functions
 ```
-# Register a daemon to poll EXCHANGE_DIR/<type>/ for new files
+# Register a daemon to poll FETCH_DIR/<type>/ for new files
 $ libCRS register-fetch-dir pov /shared-povs
 $ libCRS register-fetch-dir diff /shared-diffs
 $ libCRS register-fetch-dir seed /shared-seeds
 
-# One-shot fetch from EXCHANGE_DIR
+# One-shot fetch from FETCH_DIR
 $ libCRS fetch pov /shared-povs
 $ libCRS fetch diff /shared-diffs
 
-# EXCHANGE_DIR is pre-populated by crs-compose via --pov/--pov-dir, --diff, --corpus flags
+# FETCH_DIR is a read-only mount of EXCHANGE_DIR, populated by crs-compose via --pov/--pov-dir, --diff, --corpus flags
+# An exchange sidecar copies submissions from SUBMIT_DIR to EXCHANGE_DIR (CRS containers do not write to EXCHANGE_DIR directly)
 ```
 
 #### ✅ Builder Sidecar Functions

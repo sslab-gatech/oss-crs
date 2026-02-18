@@ -93,25 +93,25 @@ def add_run_command(subparsers):
         "--pov",
         type=Path,
         default=None,
-        help="Single POV file to copy into EXCHANGE_DIR",
+        help="Single POV file to pre-populate into FETCH_DIR before containers start",
     )
     run.add_argument(
         "--pov-dir",
         type=Path,
         default=None,
-        help="Directory containing POV files to copy into EXCHANGE_DIR",
+        help="Directory containing POV files to pre-populate into FETCH_DIR before containers start",
     )
     run.add_argument(
         "--diff",
         type=Path,
         default=None,
-        help="Path to a diff file for delta-mode analysis. Accessible via: libCRS register-fetch-dir diff <local_path>",
+        help="Diff file for delta-mode analysis, pre-populated into FETCH_DIR before containers start. Accessible via: libCRS fetch diff <local_path>",
     )
     run.add_argument(
         "--corpus",
         type=Path,
         default=None,
-        help="Directory containing initial corpus/seed files. Accessible via: libCRS register-fetch-dir seed <local_path>",
+        help="Directory of initial corpus/seed files, pre-populated into FETCH_DIR before containers start. Accessible via: libCRS fetch seed <local_path>",
     )
 
 

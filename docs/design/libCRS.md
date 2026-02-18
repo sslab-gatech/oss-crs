@@ -39,7 +39,7 @@ libCRS relies on several environment variables injected by CRS Compose at contai
 | `OSS_CRS_BUILD_OUT_DIR` | Shared filesystem path for build outputs |
 | `OSS_CRS_SUBMIT_DIR` | Shared filesystem path for submitted artifacts (seeds, PoVs, etc.) |
 | `OSS_CRS_SHARED_DIR` | Shared filesystem path for inter-container file sharing within a CRS |
-| `OSS_CRS_EXCHANGE_DIR` | Shared filesystem path for inter-CRS data exchange and bootup data (not set on builder sidecars) |
+| `OSS_CRS_FETCH_DIR` | Read-only filesystem path for fetching inter-CRS data and bootup data (not set on builder sidecars) |
 | `OSS_CRS_SNAPSHOT_IMAGE` | Docker image tag of the snapshot (set on non-builder modules when the CRS has builder sidecars) |
 
 ## Architecture
@@ -161,7 +161,7 @@ $ libCRS register-submit-dir [--log <log_path>] <type> <path>
 2. The daemon uses `watchdog` to monitor the directory for new data files (dotfiles are ignored).
 3. New files are deduplicated by MD5 hash and queued for submission.
 4. Queued files are flushed in batches (every 10 seconds or when 100 files accumulate).
-5. Flushed files are copied to SUBMIT_DIR (host-visible, per-CRS) and EXCHANGE_DIR (shared across all CRSs via InfraClient).
+5. Flushed files are copied to SUBMIT_DIR (host-visible, per-CRS). The exchange sidecar handles copying to EXCHANGE_DIR.
 
 **Example:**
 ```bash
@@ -198,7 +198,7 @@ $ libCRS register-shared-dir /shared-corpus corpus
 
 #### `register-fetch-dir` ✅
 
-Register a local directory for automatic fetching of shared data from other CRSs. A background daemon watches for new files in the exchange directory and copies them to the registered path.
+Register a local directory for automatic fetching of shared data from other CRSs. A background daemon polls the fetch directory periodically for new files and copies them to the registered path.
 
 ```bash
 $ libCRS register-fetch-dir [--log <log_path>] <type> <path>
@@ -212,8 +212,8 @@ $ libCRS register-fetch-dir [--log <log_path>] <type> <path>
 
 **How it works:**
 1. A daemon process is forked into the background.
-2. The daemon performs an initial sync: copies existing files from `EXCHANGE_DIR/<type>/` (bootup data + inter-CRS data) into the local path.
-3. The daemon periodically polls `EXCHANGE_DIR/<type>/` for new files via `InfraClient.fetch_new()`.
+2. The daemon performs an initial sync: copies existing files from `FETCH_DIR/<type>/` (bootup data + inter-CRS data) into the local path.
+3. The daemon periodically polls `FETCH_DIR/<type>/` for new files via `InfraClient.fetch_new()`.
 4. Files are deduplicated by name (hash-based names from `submit` provide natural content dedup).
 
 **Example:**
@@ -260,7 +260,7 @@ $ libCRS fetch <type> <dst_dir_path>
 | `dst_dir_path` | Local directory to download files into |
 
 **How it works:**
-1. Scans `EXCHANGE_DIR/<type>/` for all available data (bootup data + inter-CRS data).
+1. Scans `FETCH_DIR/<type>/` for all available data (bootup data + inter-CRS data).
 2. Copies only files not already present in the destination directory.
 3. Returns the list of newly copied file names.
 
@@ -444,10 +444,10 @@ libCRS submit patch /tmp/patch.diff
 | `register-shared-dir` | ✅ Implemented | Symlink-based sharing |
 | `submit` | ✅ Implemented | Single-file submission |
 | `get-service-domain` | ✅ Implemented | DNS-verified domain resolution |
-| `register-fetch-dir` | ✅ Implemented | Daemon with periodic polling of EXCHANGE_DIR via InfraClient |
-| `fetch` | ✅ Implemented | One-shot fetch from EXCHANGE_DIR via InfraClient |
+| `register-fetch-dir` | ✅ Implemented | Daemon with periodic polling of FETCH_DIR via InfraClient |
+| `fetch` | ✅ Implemented | One-shot fetch from FETCH_DIR via InfraClient |
 | `apply-patch-build` | ✅ Implemented | Sends patch to builder sidecar `/build` endpoint |
 | `run-pov` | ✅ Implemented | Sends PoV to builder sidecar `/run-pov` endpoint |
 | `run-test` | ✅ Implemented | Sends test request to builder sidecar `/run-test` endpoint |
 | `AzureCRSUtils` | 📝 Planned | Azure deployment backend for `CRSUtils` |
-| InfraClient integration | ✅ Implemented | `submit_batch` copies files to EXCHANGE_DIR for inter-CRS sharing |
+| InfraClient integration | ✅ Implemented | Exchange sidecar copies from SUBMIT_DIR to EXCHANGE_DIR; InfraClient fetches from FETCH_DIR |

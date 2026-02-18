@@ -297,7 +297,7 @@ Your containers receive these environment variables automatically:
 | `OSS_CRS_BUILD_OUT_DIR` | Build output directory (read-only at run time) | `/OSS_CRS_BUILD_OUT_DIR` |
 | `OSS_CRS_SUBMIT_DIR` | Submission directory | `/OSS_CRS_SUBMIT_DIR` |
 | `OSS_CRS_SHARED_DIR` | Shared directory (between containers in this CRS) | `/OSS_CRS_SHARED_DIR` |
-| `OSS_CRS_EXCHANGE_DIR` | Inter-CRS data exchange + bootup data (shared across all CRSs) | `/OSS_CRS_EXCHANGE_DIR` |
+| `OSS_CRS_FETCH_DIR` | Inter-CRS data exchange + bootup data (read-only, shared across all CRSs) | `/OSS_CRS_FETCH_DIR` |
 | `FUZZING_ENGINE` | OSS-Fuzz fuzzing engine | `libfuzzer` |
 | `SANITIZER` | OSS-Fuzz sanitizer | `address` |
 | `ARCHITECTURE` | Target architecture | `x86_64` |
@@ -325,10 +325,10 @@ libCRS skip-build-output <dst_path>
 libCRS register-submit-dir <type> <path>      # type: pov, seed, bug-candidate, patch
 libCRS register-shared-dir <local_path> <shared_path>
 
-# Fetch directory registration (daemon watcher for EXCHANGE_DIR)
+# Fetch directory registration (daemon poller for FETCH_DIR)
 libCRS register-fetch-dir <type> <path>       # type: pov, seed, bug-candidate, patch, diff
 
-# One-shot fetch (copies from EXCHANGE_DIR)
+# One-shot fetch (copies from FETCH_DIR)
 libCRS fetch <type> <path>                    # type: pov, seed, bug-candidate, patch, diff
 
 # Manual submission
@@ -733,21 +733,21 @@ Your CRS should submit findings through libCRS:
 
 ## Fetching Data
 
-CRS containers receive data through `EXCHANGE_DIR`, a shared volume mounted to all non-builder containers. Data arrives from two sources:
+CRS containers receive data through `FETCH_DIR`, a read-only volume mounted to all non-builder containers. Data arrives from two sources:
 
-1. **Bootup data** — Files passed via `crs-compose run` flags (`--pov-dir`, `--diff`, `--corpus`), pre-populated into `EXCHANGE_DIR` before containers start.
-2. **Inter-CRS data** — Files submitted by other CRSs at runtime via `register-submit-dir` or `submit`.
+1. **Bootup data** — Files passed via `crs-compose run` flags (`--pov-dir`, `--diff`, `--corpus`), pre-populated by the host before containers start.
+2. **Inter-CRS data** — Files submitted by other CRSs at runtime via `register-submit-dir` or `submit`, delivered by the exchange sidecar which polls `SUBMIT_DIR` and copies artifacts into the shared exchange volume.
 
 ### Bootup Data (crs-compose run flags)
 
 The operator passes data via `crs-compose run`:
-- `--pov <file>` or `--pov-dir <dir>` — PoV files → `EXCHANGE_DIR/pov/`
-- `--diff <file>` — Reference diff → `EXCHANGE_DIR/diff/ref.diff`
-- `--corpus <dir>` — Seed corpus files → `EXCHANGE_DIR/seed/`
+- `--pov <file>` or `--pov-dir <dir>` — PoV files → `FETCH_DIR/pov/`
+- `--diff <file>` — Reference diff → `FETCH_DIR/diff/ref.diff`
+- `--corpus <dir>` — Seed corpus files → `FETCH_DIR/seed/`
 
-### Using register-fetch-dir (Daemon Watcher)
+### Using register-fetch-dir (Daemon Poller)
 
-For continuous data fetching, use `register-fetch-dir`. It forks a daemon that performs an initial sync and then watches `EXCHANGE_DIR` for new files:
+For continuous data fetching, use `register-fetch-dir`. It forks a daemon that performs an initial sync and then polls `FETCH_DIR` for new files:
 
 ```bash
 # In your entry script:
@@ -756,8 +756,8 @@ libCRS register-fetch-dir seed /my-seeds &
 ```
 
 The daemon:
-1. Copies existing files from `EXCHANGE_DIR/<type>/` into the local directory.
-2. Watches `EXCHANGE_DIR/<type>/` for new files and copies them as they arrive.
+1. Copies existing files from `FETCH_DIR/<type>/` into the local directory.
+2. Polls `FETCH_DIR/<type>/` periodically for new files and copies them as they arrive.
 
 ### Using fetch (One-Shot)
 
@@ -774,11 +774,11 @@ NEW_FILES=$(libCRS fetch pov /my-povs)
 
 ### Available Data Types
 
-| CLI Flag | Data Type | EXCHANGE_DIR Subdirectory |
+| CLI Flag | Data Type | FETCH_DIR Subdirectory |
 |---|---|---|
-| `--pov`, `--pov-dir` | `pov` | `EXCHANGE_DIR/pov/` |
-| `--diff` | `diff` | `EXCHANGE_DIR/diff/` |
-| `--corpus` | `seed` | `EXCHANGE_DIR/seed/` |
+| `--pov`, `--pov-dir` | `pov` | `FETCH_DIR/pov/` |
+| `--diff` | `diff` | `FETCH_DIR/diff/` |
+| `--corpus` | `seed` | `FETCH_DIR/seed/` |
 
 ---
 

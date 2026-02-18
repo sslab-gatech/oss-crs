@@ -266,6 +266,9 @@ class CRS:
 
         Navigates up from per-CRS work_dir (work_dir/crs/<name>) to compose
         work_dir (work_dir), then into EXCHANGE_DIR/<target>/<harness>/.
+
+        CRS containers mount this as FETCH_DIR (read-only). The exchange
+        sidecar and host-side pre-population are the only writers.
         """
         target_image_name = target.get_docker_image_name().replace(":", "_")
         assert target.target_harness, (

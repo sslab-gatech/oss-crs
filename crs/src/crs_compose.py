@@ -337,13 +337,13 @@ class CRSCompose:
         progress.add_task("Clean up shared directories", cleanup_shared_dirs)
 
         if pov_files:
-            progress.add_task("Copy POV files to EXCHANGE_DIR/pov/", copy_povs)
+            progress.add_task("Copy POV files to exchange dir", copy_povs)
 
         if diff_path:
-            progress.add_task("Copy diff file to EXCHANGE_DIR/diff/", copy_diff)
+            progress.add_task("Copy diff file to exchange dir", copy_diff)
 
         if corpus_dir:
-            progress.add_task("Copy corpus files to EXCHANGE_DIR/seed/", copy_corpus)
+            progress.add_task("Copy corpus files to exchange dir", copy_corpus)
 
         progress.add_task(
             "Prepare combined docker compose file", prepare_docker_compose
