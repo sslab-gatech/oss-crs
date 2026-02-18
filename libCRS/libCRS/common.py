@@ -36,10 +36,10 @@ def rsync_copy(src: Path, dst: Path) -> None:
 
     if src.is_dir():
         # Directory: copy everything recursively
-        subprocess.run(["rsync", "-a", f"{src}/", f"{dst}/"], check=True)
+        subprocess.run(["rsync", "-a", "--", f"{src}/", f"{dst}/"], check=True)
     else:
-        # File: just copy it
-        subprocess.run(["rsync", "-a", str(src), str(dst)], check=True)
+        # File: just copy it (rsync uses temp-file + atomic rename internally)
+        subprocess.run(["rsync", "-a", "--", str(src), str(dst)], check=True)
 
 
 def is_data_file(path: Path) -> bool:
