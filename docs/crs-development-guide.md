@@ -376,6 +376,13 @@ uv run crs-compose build-target \
 uv run crs-compose run \
   --compose-file ./my-crs-compose.yaml \
   --target-proj-path ~/oss-fuzz/projects/libxml2 \
+  --target-harness xml \
+  --timeout 3600
+
+# 4. Query artifacts — find PoVs and seeds
+uv run crs-compose artifacts \
+  --compose-file ./my-crs-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 \
   --target-harness xml
 ```
 

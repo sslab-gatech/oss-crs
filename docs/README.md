@@ -28,6 +28,7 @@ For a quick introduction and setup instructions, see the [project README](../REA
 | Document | Description |
 |---|---|
 | [Architecture Overview](design/architecture.md) | System design, component diagram, and lifecycle walkthrough |
+| [Parallel Builds and Runs](design/parallel.md) | Build/run isolation with `--build-id` and `--run-id` |
 | [libCRS](design/libCRS.md) | CRS communication library — submit/fetch seeds, PoVs, and patches |
 | [LiteLLM Integration](design/oss-crs-infra/litellm.md) | LLM proxy, per-CRS API keys, and budget enforcement |
 | [Seed Deduplication](design/oss-crs-infra/seed-dedup.md) | Cross-CRS seed deduplication service (planned) |
