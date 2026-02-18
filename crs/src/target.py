@@ -46,17 +46,29 @@ class Target:
         target_harness: Optional[str] = None,
     ):
         self.name = extract_name_from_proj_path(str(proj_path))
+        self.proj_path = proj_path
+        self.config = TargetConfig.from_yaml_file(proj_path / "project.yaml")
+
         self.work_dir = work_dir / "targets" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.proj_path = proj_path
+
         if repo_path:
             self.repo_path = repo_path
         else:
-            self.repo_path = self.work_dir / "repo"
-        self.config = TargetConfig.from_yaml_file(proj_path / "project.yaml")
+            # Default repo path includes hash of repo URL to isolate parallel builds
+            # of different repo sources (e.g., different forks or refs)
+            repo_key = self._compute_repo_key()
+            self.repo_path = work_dir / "targets" / f"{self.name}_{repo_key}" / "repo"
+
         self.repo_hash: Optional[str] = None
         self.no_checkout = no_checkout
         self.target_harness = target_harness
+
+    def _compute_repo_key(self) -> str:
+        """Compute a short hash key from repo URL (and ref if specified)."""
+        # TODO: Include ref when we add ref support to TargetConfig
+        key_source = self.config.main_repo
+        return hashlib.sha256(key_source.encode()).hexdigest()[:12]
 
     def get_docker_image_name(self) -> str:
         repo_hash = self.__get_repo_hash()
@@ -101,7 +113,7 @@ class Target:
                     ),
                     ui.bold(f"Image tag: {image_tag}"),
                     ui.yellow(
-                        f"Note: /src/ will have contents in {self.repo_path}",
+                        f"Note: /src/ will have contents from {self.repo_path}",
                         True,
                     ),
                 ]
