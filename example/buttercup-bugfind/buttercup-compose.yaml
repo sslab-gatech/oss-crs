@@ -1,0 +1,19 @@
+run_env: local
+docker_registry: ghcr.io/trailofbits/buttercup
+
+# Infrastructure resources
+oss_crs_infra:
+  cpuset: "0-3"
+  memory: "8G"
+
+# Buttercup CRS entry
+buttercup-scan:
+  source:
+    url: git@github.com:sslab-gatech/buttercup-bugfind.git
+    ref: feat/oss-crs-port
+    # local_path: .../buttercup
+  cpuset: "4-15"
+  memory: "24G"
+
+llm_config:
+  litellm_config: ./example/buttercup-bugfind/litellm-config.yaml
