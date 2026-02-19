@@ -1,0 +1,46 @@
+# 42-bugfind LiteLLM Config
+# Routes all requests through external LiteLLM proxy at goldbug.gtisc.gatech.edu
+#
+# Required environment variables (set in oss-crs/.env):
+#   LITELLM_URL - External proxy URL (https://goldbug.gtisc.gatech.edu:41414)
+#   LITELLM_KEY - API key for external proxy
+#
+# The external proxy already has the actual API keys configured, so we just
+# forward requests to it using the openai/ prefix with custom api_base.
+
+model_list:
+  #########################################
+  # GPT-4 VARIANTS (via external proxy)
+  #########################################
+  - model_name: gpt-4.1
+    litellm_params:
+      model: openai/gpt-4.1
+      api_base: os.environ/LITELLM_URL
+      api_key: os.environ/LITELLM_KEY
+
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_base: os.environ/LITELLM_URL
+      api_key: os.environ/LITELLM_KEY
+
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: os.environ/LITELLM_URL
+      api_key: os.environ/LITELLM_KEY
+
+  - model_name: o4-mini
+    litellm_params:
+      model: openai/o4-mini
+      api_base: os.environ/LITELLM_URL
+      api_key: os.environ/LITELLM_KEY
+
+  #########################################
+  # ANTHROPIC CLAUDE (via external proxy)
+  #########################################
+  - model_name: claude-3.7-sonnet
+    litellm_params:
+      model: anthropic/claude-3-7-sonnet-20250219
+      api_base: os.environ/LITELLM_URL
+      api_key: os.environ/LITELLM_KEY

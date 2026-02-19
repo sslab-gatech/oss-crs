@@ -1,0 +1,21 @@
+run_env: local
+docker_registry: ghcr.io/oss-crs/test
+
+# `oss-crs-infra` must be required
+oss_crs_infra:
+  cpuset: "0-3"
+  memory: "16G"
+
+42-bugfind:
+  source:
+    url: git@github.com:sslab-gatech/42-afc-crs.git
+    ref: feat/oss-crs-port
+    # local_path: .../42-afc-crs
+  cpuset: "4-7"
+  memory: "16G"
+  llm_budget: 100
+
+# LiteLLM config - routes through external proxy at goldbug.gtisc.gatech.edu
+# Requires: source oss-crs/.env (sets LITELLM_URL and LITELLM_KEY)
+llm_config:
+  litellm_config: ./example/42-bugfind/litellm-config.yaml
