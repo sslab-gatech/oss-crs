@@ -5,21 +5,45 @@
 ## Build ID
 
 The `--build-id` flag isolates build artifacts, allowing parallel builds of different target versions or configurations.
-By default, it will be "default" and override previous builds (but still delimited by project).
+
+**Default behavior:**
+- `build-target`: Generates a new timestamp-based ID (e.g., `1739819274ab`), creating a fresh build each time
+- `run`: Uses the latest existing build, or generates a new one if none exists
+
+To reuse an existing build (avoid rebuilding), explicitly specify `--build-id`:
+
+```bash
+# Build fresh artifacts
+uv run crs-compose build-target \
+  --compose-file ./crs-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2
+
+# Pin to a specific build ID to reuse across invocations
+uv run crs-compose build-target \
+  --compose-file ./crs-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 \
+  --build-id my-pinned-build
+```
+
+Build artifacts are stored at:
+```
+{work_dir}/{sanitizer}/builds/{build-id}/crs/{crs-name}/{target}/BUILD_OUT_DIR/
+```
+
+Multiple runs can share the same build by specifying the same `--build-id`.
+
+## Sanitizer
+
+The `--sanitizer` flag (default: from target config, usually `address`) determines which sanitizer configuration to use. It affects the directory structure, isolating artifacts by sanitizer type.
 
 ```bash
 uv run crs-compose build-target \
   --compose-file ./crs-compose.yaml \
   --target-proj-path ~/oss-fuzz/projects/libxml2 \
-  --build-id asan-build
+  --sanitizer undefined
 ```
 
-Build artifacts are stored at:
-```
-{work_dir}/{target}/BUILD_OUT_DIR/{build-id}/
-```
-
-Multiple runs can share the same build by specifying the same `--build-id`.
+All artifacts are stored under `{work_dir}/{sanitizer}/...`.
 
 ## Run ID
 
@@ -30,7 +54,7 @@ uv run crs-compose run \
   --compose-file ./crs-compose.yaml \
   --target-proj-path ~/oss-fuzz/projects/libxml2 \
   --target-harness xml \
-  --build-id asan-build \
+  --build-id my-pinned-build \
   --run-id experiment-1 \
   --timeout 3600
 ```
@@ -42,10 +66,11 @@ uv run crs-compose run \
 
 Run artifacts are stored at:
 ```
-{work_dir}/{target}/SUBMIT_DIR/{harness}/{run-id}/pov/
-{work_dir}/{target}/SUBMIT_DIR/{harness}/{run-id}/seed/
-{work_dir}/{target}/FETCH_DIR/{harness}/{run-id}/
-{work_dir}/{target}/SHARED_DIR/{harness}/{run-id}/
+{work_dir}/{sanitizer}/runs/{run-id}/BUILD_ID                              # records which build was used
+{work_dir}/{sanitizer}/runs/{run-id}/crs/{crs-name}/{target}/SUBMIT_DIR/{harness}/pov/
+{work_dir}/{sanitizer}/runs/{run-id}/crs/{crs-name}/{target}/SUBMIT_DIR/{harness}/seed/
+{work_dir}/{sanitizer}/runs/{run-id}/crs/{crs-name}/{target}/SHARED_DIR/{harness}/
+{work_dir}/{sanitizer}/runs/{run-id}/EXCHANGE_DIR/{target}/{harness}/      # shared across all CRSs
 ```
 
 ## Artifacts Command
@@ -57,9 +82,13 @@ uv run crs-compose artifacts \
   --compose-file ./crs-compose.yaml \
   --target-proj-path ~/oss-fuzz/projects/libxml2 \
   --target-harness xml \
-  --build-id default \
   --run-id 1739819274ab
 ```
+
+**Default behavior:**
+- `--run-id`: Interactive selection if omitted
+- `--build-id`: Reads from the run's `BUILD_ID` file, falls back to latest build
+- `--sanitizer`: Defaults to `address`
 
 ### Interactive Run Selection
 
@@ -76,15 +105,15 @@ If `--run-id` is omitted, an interactive prompt lists available runs sorted by t
 
 ```json
 {
-  "build_id": "default",
+  "build_id": "1739819200cd",
   "run_id": "1739819274ab",
   "crs": {
     "crs-libfuzzer": {
-      "build": "/path/to/BUILD_OUT_DIR/default",
-      "pov": "/path/to/SUBMIT_DIR/xml/1739819274ab/pov",
-      "seed": "/path/to/SUBMIT_DIR/xml/1739819274ab/seed",
-      "fetch": "/path/to/FETCH_DIR/xml/1739819274ab",
-      "shared": "/path/to/SHARED_DIR/xml/1739819274ab"
+      "build": "/path/to/address/builds/1739819200cd/crs/crs-libfuzzer/target/BUILD_OUT_DIR",
+      "pov": "/path/to/address/runs/1739819274ab/crs/crs-libfuzzer/target/SUBMIT_DIR/xml/pov",
+      "seed": "/path/to/address/runs/1739819274ab/crs/crs-libfuzzer/target/SUBMIT_DIR/xml/seed",
+      "fetch": "/path/to/address/runs/1739819274ab/EXCHANGE_DIR/target/xml",
+      "shared": "/path/to/address/runs/1739819274ab/crs/crs-libfuzzer/target/SHARED_DIR/xml"
     }
   }
 }
