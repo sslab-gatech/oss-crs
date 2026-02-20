@@ -317,7 +317,8 @@ def cli() -> bool:
     signal.signal(signal.SIGTERM, _sigterm_handler)
     load_dotenv()
     parser = argparse.ArgumentParser(
-        description="CRS (Cyber Reasoning System) Compose CLI"
+        prog="oss-crs",
+        description="OSS-CRS: Cyber Reasoning System orchestration CLI"
     )
     subparsers = parser.add_subparsers(
         dest="command", required=True, help="Command to run"

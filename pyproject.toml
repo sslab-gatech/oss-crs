@@ -26,8 +26,7 @@ dependencies = [
 ]
 
 [project.scripts]
-crs-compose = "oss_crs.src.cli.crs_compose:main"
-crs = "oss_crs.src.cli.crs:main"
+oss-crs = "oss_crs.src.cli.crs_compose:main"
 
 [project.optional-dependencies]
 dev = [
