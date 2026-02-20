@@ -77,14 +77,9 @@ Run artifacts are stored at:
 
 ## Artifacts Command
 
-The `artifacts` command operates in two modes:
-
-### Path Resolution Mode (with `--compose-file`)
-
-Computes all artifact paths deterministically from the compose file. No filesystem existence checks — paths are returned even if the run hasn't started yet. Use this **before** a run to pre-resolve EXCHANGE_DIR, SUBMIT_DIR, etc.
+The `artifacts` command takes the same options as `run` and computes all artifact paths deterministically from the compose file. No filesystem existence checks — paths are returned even if the run hasn't started yet.
 
 ```bash
-# Pre-resolve paths before a run starts (CRSBench use case)
 oss-crs artifacts \
   --compose-file ./crs-compose.yaml \
   --target-proj-path ~/oss-fuzz/projects/libxml2 \
@@ -97,7 +92,7 @@ oss-crs artifacts \
 - `--build-id`: Reads from the run's `BUILD_ID` file, falls back to latest build
 - `--sanitizer`: Defaults to `address`
 
-#### Interactive Run Selection
+### Interactive Run Selection
 
 If `--run-id` is omitted, an interactive prompt lists available runs sorted by timestamp:
 
@@ -108,18 +103,7 @@ If `--run-id` is omitted, an interactive prompt lists available runs sorted by t
   2025-02-17 15:55:00  (experiment-1)
 ```
 
-### Filesystem Scanning Mode (without `--compose-file`)
-
-Discovers artifacts by scanning the work directory. Used post-hoc or by humans to inspect completed runs. Requires `--run-id`.
-
-```bash
-# Discover artifacts from a completed run
-oss-crs artifacts --work-dir /path/to/workdir --run-id 1739819274ab
-```
-
 ### Output Format
-
-Both modes return the same JSON structure:
 
 ```json
 {
@@ -149,7 +133,6 @@ Both modes return the same JSON structure:
 }
 ```
 
-- In path resolution mode, all computed paths are returned regardless of existence
-- In filesystem scanning mode, `null` fields indicate directories not found on disk
+- All computed paths are returned regardless of whether they exist on disk
 - `build_id` is `null` if no build is associated with the run
-- If `--target-harness` is not provided in path resolution mode, only `build` is returned
+- If `--target-harness` is not provided, only `build` is returned
