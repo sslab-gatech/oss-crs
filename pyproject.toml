@@ -26,8 +26,8 @@ dependencies = [
 ]
 
 [project.scripts]
-crs-compose = "crs.src.cli.crs_compose:main"
-crs = "crs.src.cli.crs:main"
+crs-compose = "oss_crs.src.cli.crs_compose:main"
+crs = "oss_crs.src.cli.crs:main"
 
 [project.optional-dependencies]
 dev = [
@@ -37,10 +37,10 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["crs*"]
+include = ["oss_crs*"]
 
 [tool.setuptools.package-data]
-"crs.src.templates" = ["*.j2", "*.py"]
+"oss_crs.src.templates" = ["*.j2", "*.py"]
 
 [dependency-groups]
 dev = [
