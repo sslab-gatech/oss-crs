@@ -1,0 +1,6 @@
+language: c
+sanitizers:
+  - address
+main_repo: 'git@github.com:Team-Atlanta/mock-c.git'
+fuzzing_engines:
+  - libfuzzer

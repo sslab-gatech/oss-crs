@@ -4,6 +4,7 @@
 build
 .work
 /logs
+**/.logs
 .vscode
 .oss-patch
 .oss-patch-work
