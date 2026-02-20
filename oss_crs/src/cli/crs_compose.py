@@ -46,12 +46,6 @@ def add_target_arguments(parser):
         required=False,
         help="Local path to the target repository to build with the target project configuration.",
     )
-    parser.add_argument(
-        "--no-checkout",
-        action="store_true",
-        default=False,
-        help="Whether to checkout the target repository before building.",
-    )
 
 
 def add_prepare_command(subparsers):
@@ -192,7 +186,6 @@ def init_target_from_args(args) -> Target:
         args.work_dir,
         args.target_proj_path,
         args.target_repo_path,
-        args.no_checkout,
         target_harness,
     )
 

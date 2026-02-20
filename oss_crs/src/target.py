@@ -76,7 +76,6 @@ class Target:
         work_dir: Path,
         proj_path: Path,
         repo_path: Optional[Path],
-        no_checkout: bool = False,
         target_harness: Optional[str] = None,
     ):
         self.name = extract_name_from_proj_path(str(proj_path))
@@ -86,6 +85,7 @@ class Target:
         self.work_dir = work_dir / "targets" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
+        self._user_provided_repo = repo_path is not None
         if repo_path:
             self.repo_path = repo_path
         else:
@@ -95,7 +95,6 @@ class Target:
             self.repo_path = work_dir / "targets" / f"{self.name}_{repo_key}" / "repo"
 
         self.repo_hash: Optional[str] = None
-        self.no_checkout = no_checkout
         self.target_harness = target_harness
         self.snapshot_image_tag: Optional[str] = None
 
@@ -155,30 +154,24 @@ class Target:
         # Use file lock to prevent race conditions when multiple runs access same repo
         lock_path = self.repo_path.parent / ".repo.lock"
         with file_lock(lock_path):
-            no_checkout = self.no_checkout
             title = f"Setting up Target {self.name}"
             head = [
                 ui.bold(f"Init {self.name} repo into {self.repo_path}"),
-                ui.yellow(
-                    "Please make sure the repo is accessible without typing your credentials.",
-                    True,
-                ),
             ]
             tasks = []
             if self.repo_path.exists():
-                head.append(ui.bold(f"--no-checkout: {no_checkout}, repo exists: True"))
-                if no_checkout:
-                    head.append(ui.yellow("Skipping repository initialization."))
+                if self._user_provided_repo:
+                    head.append(ui.green("Using user-provided repository as-is."))
                 else:
-                    head.append(ui.green("Fetching latest changes..."))
+                    head.append(ui.green("Updating auto-cloned repository..."))
                     tasks += [
-                        ("Git fetch", lambda progress: self.__fetch_repo(progress)),
-                        (
-                            "Git checkout HEAD",
-                            lambda progress: self.__checkout_HEAD(progress),
-                        ),
+                        ("Git fetch", lambda progress: self.__fetch_and_reset(progress)),
                     ]
             else:
+                head.append(ui.yellow(
+                    "Please make sure the repo is accessible without typing your credentials.",
+                    True,
+                ))
                 head.append(ui.green("Cloning repository..."))
                 tasks += [
                     ("Git clone", lambda progress: self.__clone(progress)),
@@ -187,17 +180,10 @@ class Target:
                 progress.add_items_to_head(head)
                 return progress.run_added_tasks().success
 
-    def __fetch_repo(self, progress: MultiTaskProgress) -> "TaskResult":
-        cmd = ["git", "fetch", "--recurse-submodules", "origin"]
+    def __fetch_and_reset(self, progress: MultiTaskProgress) -> "TaskResult":
+        # Run as shell to chain the two commands
         return progress.run_command_with_streaming_output(
-            cmd=cmd,
-            cwd=self.repo_path,
-        )
-
-    def __checkout_HEAD(self, progress: MultiTaskProgress) -> "TaskResult":
-        cmd = ["git", "reset", "--hard", "origin/HEAD"]
-        return progress.run_command_with_streaming_output(
-            cmd=cmd,
+            cmd=["sh", "-c", "git fetch origin && git reset --hard origin/HEAD"],
             cwd=self.repo_path,
         )
 
