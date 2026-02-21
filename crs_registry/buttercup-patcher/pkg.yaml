@@ -1,5 +1,0 @@
-name: buttercup-patcher
-type: bug-fixing
-source:
-  url: git@github.com:sslab-gatech/buttercup-patcher.git
-  ref: main

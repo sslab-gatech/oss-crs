@@ -1,88 +1,166 @@
-# OSS-CRS: LLM-era Bug Finding and Remediation for Open Source Software
+# OSS-CRS: Open Source Cyber Reasoning System Framework
 
-OSS-CRS (Cyber Reasoning System) is a unified orchestration framework for LLM-based bug-finding and remediation systems. It provides budget control and ensembling for Java and C projects, and uses [OSS-Fuzz](https://github.com/google/oss-fuzz) as the default target format, enabling support for 1,000+ projects out of the box.
+**OSS-CRS** is a standard orchestration framework for building and running LLM-based autonomous bug-finding and bug-fixing systems (Cyber Reasoning Systems).
 
-## Quickstart
+## Why OSS-CRS?
 
-### 1. Set up the environment
+- **Standard CRS Interface** — OSS-CRS defines a unified interface for CRS development. Build your CRS once following the [development guide](docs/crs-development-guide.md), and run it across different environments (local, Azure, ...) **without any modification**.
+- **Effortless Targeting** — Run any CRS against projects in [OSS-Fuzz](https://github.com/google/oss-fuzz) format. If your project is compatible with OSS-Fuzz, OSS-CRS can orchestrate CRSs against it out of the box.
+- **Ensemble Multiple CRSs** — Compose and run multiple CRSs together in a single campaign to combine their strengths and maximize bug-finding and bug-fixing coverage.
+- **Resource Control** — Manage CPU limits and LLM budgets per CRS to keep costs and resources in check.
+- **Multi-Environment Support** — Run locally today; deploy to Azure (coming soon) with zero changes to your CRS.
 
-- python >= 3.10
-- docker
-- git
-- rsync
-- uv (optional, but preferred)
+## Quick Start
 
-### 2. Build and run a simple bug-finding or bug-fixing system
+### Prerequisites
 
-#### libfuzzer
+| Requirement | Version |
+|---|---|
+| Python | >= 3.10 |
+| Docker | latest |
+| Git | latest |
+| [uv](https://github.com/astral-sh/uv) | latest |
 
-We packaged libfuzzer (the default OSS-Fuzz fuzzer) for OSS-CRS.
-The bug-finding workflow is composed of two primary stages:
-1. `build` which lets CRSs perform custom instrumenation and compilation for the fuzzers
-2. `run` which lets CRSs run the fuzzers
+### 1. Prepare a Target Project (OSS-Fuzz Format)
 
-```bash
-# Build and run a bug-finding CRS
-# See more options: uv run oss-bugfind-crs build/run --help
-uv run oss-bugfind-crs build example_configs/crs-libfuzzer json-c
-uv run oss-bugfind-crs run example_configs/crs-libfuzzer json-c json_array_fuzzer
-```
-
-#### atlantis-multi-retrieval
+OSS-CRS works with any project that follows the [OSS-Fuzz](https://github.com/google/oss-fuzz) project structure. Clone the OSS-Fuzz repository to get started:
 
 ```bash
-# Build and run a bug-fixing CRS
-# `atlantis-multi-retrieval` is a bundled CRS config in `crs_registry/atlantis-multi-retrieval/`.
-# Provide OSS-Fuzz by copying it to `./.oss-fuzz/` or passing `--oss-fuzz /path/to/oss-fuzz`.
-# See more options: uv run oss-bugfix-crs build/run --help
-uv run oss-bugfix-crs build atlantis-multi-retrieval json-c
-uv run oss-bugfix-crs run atlantis-multi-retrieval json-c --povs /path/to/povs --harness json_array_fuzzer \
-    --litellm-base $URL --litellm-key $KEY --out /tmp/out-test
+git clone git@github.com:google/oss-fuzz.git ~/oss-fuzz
 ```
 
-#### Note on LLM Keys
+> **Tip:** You can also prepare your own target repository as long as it is compatible with the OSS-Fuzz project format.
 
-For bug-finding systems that need LLM capabilities, the user must provide appropriate keys.
-For example, [atlantis-java](https://github.com/sslab-gatech/oss-crs/blob/main/crs_registry/atlantis-java-main/config-crs.yaml)
-requires OpenAI models such as GPT-5.
-The user must provide `OPENAI_API_KEY` as an environment variable before launching `atlantis-java`.
-Environment variables mapping to models can be found at our default
-[config-litellm.yaml](https://github.com/sslab-gatech/oss-crs/blob/main/bug_finding/templates/config-litellm.yaml).
+### 2. Run a Simple Bug-Finding CRS
+
+The example below uses **crs-libfuzzer**, a lightweight CRS that runs libFuzzer on the target.
+See [`./example/crs-libfuzzer/crs-libfuzzer-compose.yaml`](example/crs-libfuzzer/crs-libfuzzer-compose.yaml) for the full configuration.
 
 ```bash
-# Build artifacts (no LLM requirement or support)
-uv run oss-bugfind-crs build example_configs/atlantis-java-main java-example
-# atlantis-java needs an OpenAI key
-export OPENAI_API_KEY=<OpenAI Key>
-uv run oss-bugfind-crs run example_configs/atlantis-java-main java-example ExampleFuzzer
+# Prepare the CRS (pull images, set up dependencies)
+uv run oss-crs prepare \
+  --compose-file ./example/crs-libfuzzer/crs-libfuzzer-compose.yaml
+
+# Build the target project
+uv run oss-crs build-target \
+  --compose-file ./example/crs-libfuzzer/crs-libfuzzer-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2
+
+# Run the CRS against a specific harness (e.g., "xml")
+uv run oss-crs run \
+  --compose-file ./example/crs-libfuzzer/crs-libfuzzer-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 \
+  --target-harness xml
 ```
 
-Currently, only bug-finding systems support native LLM provider keys.
-The bug-fixing systems *must* provide a LiteLLM proxy and virtual key.
-As such, if you need to run both systems we recommend setting up a LiteLLM proxy and
-use it for both bug-finding and bug-fixing.
+### 3. Run an LLM-Powered CRS
+
+For a more advanced CRS that leverages LLMs, you can use **atlantis-multilang**. This CRS supports multiple languages and uses an LLM to generate and refine fuzz harnesses.
+See [`./example/multilang/multilang-compose.yaml`](example/multilang/multilang-compose.yaml) for the full configuration.
 
 ```bash
-# Build artifacts (no LLM requirement or support)
-uv run oss-bugfind-crs build example_configs/atlantis-java-main java-example
-# Use --external-litellm for LiteLLM proxy usage
-export LITELLM_URL=<LiteLLM Proxy URL>
-export LITELLM_KEY=<LiteLLM Virtual Key>
-uv run oss-bugfind-crs run --external-litellm example_configs/atlantis-java-main java-example ExampleFuzzer
+# Prepare the LLM-powered CRS, for example, multilang
+uv run oss-crs prepare \
+  --compose-file ./example/multilang/multilang-compose.yaml 
+
+# Build the target
+uv run oss-crs build-target \
+  --compose-file ./example/multilang/multilang-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 
+
+# Run the CRS
+export OPENAI_API_KEY=<OPENAI_API_KEY>
+export GEMINI_API_KEY=<GEMINI_API_KEY>
+export ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>
+uv run oss-crs run \
+  --compose-file ./example/multilang/multilang-compose.yaml \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 \
+  --target-harness xml
 ```
 
-We aim to resolve this discrepancy with [#20](https://github.com/sslab-gatech/oss-crs/issues/20).
+> **Note:** LLM-powered CRSs require an LLM API key. Refer to [docs/config/llm.md](docs/config/llm.md) for configuration details.
 
-### 3. Build and run an ensemble system (combining multiple systems together)
+### 4. Use the Builder CRS for Incremental Builds
+
+For CRSs that generate source patches (bug-fixing), the **Builder CRS** provides fast incremental builds. Instead of rebuilding the target from scratch for each patch, the builder creates a snapshot of the compiled project and applies patches on top of it.
+
+First, fetch the required oss-fuzz scripts (one-time setup):
 
 ```bash
-# Choose configured CRS from `example_configs` and build it:
-# Example: Build ensemble-java for the json-example project
-uv run oss-bugfind-crs build example_configs/ensemble-java java-example
-# Run the built systems
-uv run oss-bugfind-crs run example_configs/ensemble-java java-example ExampleFuzzer
+bash scripts/setup-third-party.sh
 ```
+
+Then add the builder as a separate CRS entry in your compose file alongside your patcher CRS:
+
+```yaml
+oss-crs-builder:
+  source:
+    local_path: /path/to/oss-crs/builder
+  cpuset: "2-3"
+  memory: "8G"
+
+my-patcher-crs:
+  source:
+    local_path: /path/to/my-patcher-crs
+  cpuset: "4-7"
+  memory: "16G"
+```
+
+The framework automatically creates a snapshot image, starts the builder service, and connects it with your patcher CRS. Any CRS that uses `libCRS.apply_patch_build()` will communicate with the builder via HTTP.
+
+See [`builder/README.md`](builder/README.md) for full details on the builder's API and configuration.
+
+### 5. Run an Ensemble of Multiple CRSs
+
+Combine multiple CRSs in a single campaign to get the best of each approach. Simply define them in an ensemble compose file
+ For example, [`./example/ensemble/ensemble-compose.yaml`](example/ensemble/ensemble-compose.yaml) launches both **crs-libfuzzer** and **multilang** simultaneously. Check the compose file for detailed configuration.
+
+```bash
+# Prepare 
+uv run oss-crs prepare \
+  --compose-file ./example/ensemble/ensemble-compose.yaml 
+
+# Build the target
+uv run oss-crs build-target \
+  --compose-file ./example/ensemble/ensemble-compose.yaml  \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 
+
+# Run the CRS
+export OPENAI_API_KEY=<OPENAI_API_KEY>
+export GEMINI_API_KEY=<GEMINI_API_KEY>
+export ANTHROPIC_API_KEY=<ANTHROPIC_API_KEY>
+uv run oss-crs run \
+  --compose-file ./example/ensemble/ensemble-compose.yaml  \
+  --target-proj-path ~/oss-fuzz/projects/libxml2 \
+  --target-harness xml
+```
+
+Each CRS runs independently with its own resource allocation, and results are aggregated automatically.
+
+## Build Your Own CRS
+
+OSS-CRS is designed to make CRS development simple. Follow the [CRS Development Guide](docs/crs-development-guide.md) to package your bug-finding or bug-fixing tool as a CRS. Once integrated, your CRS will:
+
+- Work with any OSS-Fuzz-compatible target
+- Run in any supported environment (local, Azure, ...) without modification
+- Be composable with other CRSs for ensemble campaigns
 
 ## Documentation
 
-Read our [detailed documentation](./docs/README.md) to learn more about OSS-CRS.
+- [CRS Development Guide](docs/crs-development-guide.md): How to build or integrate your own CRS
+- [Architecture](docs/design/architecture.md): System design and component overview
+- [Target Project](docs/config/target-project.md): Target project setup and OSS-Fuzz compatibility
+- [CRS Configuration](docs/config/crs.md): CRS config reference
+- [CRS-Compose Configuration](docs/config/crs-compose.md): Compose file reference
+- [Builder CRS](builder/README.md): Incremental build service for patch-testing CRSs
+- [LLM Configuration](docs/config/llm.md): LLM provider setup
+- [Plan](PLAN.md): Upcoming features and planned improvements
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+See [LICENSE](LICENSE) for details.
+

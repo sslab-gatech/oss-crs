@@ -1,5 +1,0 @@
-name: atlantis-prism
-type: bug-fixing
-source:
-  url: git@github.com:sslab-gatech/atlantis-crete.git
-  ref: main

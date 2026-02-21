@@ -1,4 +1,0 @@
-# Explicitly track .env files in this directory
-# These are example configurations, not secrets
-!.env
-!**/.env

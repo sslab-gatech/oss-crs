@@ -1,9 +1,0 @@
-atlantis-c-deepgen:
-  models:
-    - gpt5
-    - gpt5-mini
-  cpu: "all"
-  ram: 4G
-  dependencies:
-    - dind
-  features: []

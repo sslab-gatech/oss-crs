@@ -1,3 +1,0 @@
-mock-dind:
-  dependencies:
-    - dind

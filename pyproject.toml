@@ -7,7 +7,7 @@ name = "oss-crs"
 version = "0.1.0"
 description = "Cyber Reasoning System (CRS) build and run tools for bug finding and fixing"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = "MIT"
 authors = [
     {name = "Team Atlanta"}
 ]
@@ -20,11 +20,13 @@ dependencies = [
     "ruff>=0.14.5",
     "pyright>=1.1.407",
     "gitpython>=3.1.45",
+    "pydantic>=2.12.5",
+    "rich>=13.7.0",
+    "questionary>=2.1.1",
 ]
 
 [project.scripts]
-oss-bugfind-crs = "bug_finding.src.__main__:main"
-oss-bugfix-crs = "bug_fixing.src.__main__:main"
+oss-crs = "oss_crs.src.cli.crs_compose:main"
 
 [project.optional-dependencies]
 dev = [
@@ -33,33 +35,11 @@ dev = [
     "watchdog>=4.0.0",
 ]
 
-[tool.setuptools]
-packages = [
-    "bug_finding", "bug_finding.src", "bug_finding.src.render_compose",
-    "bug_fixing", "bug_fixing.src",
-    "bug_fixing.src.oss_patch",
-    "bug_fixing.src.oss_patch.crs_builder",
-    "bug_fixing.src.oss_patch.crs_context",
-    "bug_fixing.src.oss_patch.project_builder",
-    "bug_fixing.src.oss_patch.inc_build_checker",
-    "crs_registry"
-]
+[tool.setuptools.packages.find]
+include = ["oss_crs*"]
 
 [tool.setuptools.package-data]
-"bug_finding" = [
-    "templates/*.j2",
-    "key_provisioner/*.py",
-    "key_provisioner/Dockerfile",
-    "key_provisioner/*.toml",
-    "seed_watcher/*.py",
-    "seed_watcher/Dockerfile",
-    "seed_watcher/*.toml",
-]
-"bug_fixing" = [
-    "base_images/docker_cache_builder/*",
-    "base_images/oss_patch_runner/*",
-]
-"crs_registry" = ["*/*.yaml"]
+"oss_crs.src.templates" = ["*.j2", "*.py"]
 
 [dependency-groups]
 dev = [
@@ -67,10 +47,7 @@ dev = [
 ]
 
 [tool.ty.src]
-include = [
-    "bug_finding",
-    "bug_fixing",
-]
+include = []
 
 [tool.pytest.ini_options]
 markers = [

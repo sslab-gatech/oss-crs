@@ -1,5 +1,0 @@
-name: atlantis-java-atljazzer
-type: bug-finding
-source:
-  url: https://github.com/Team-Atlanta/atlantis-java-snapshot
-  ref: atljazzer

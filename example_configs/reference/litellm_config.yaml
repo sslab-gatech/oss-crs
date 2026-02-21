@@ -1,5 +1,0 @@
-model_list:
-  - model_name: gpt-4o-mini
-    litellm_params:
-      model: gpt-4o-mini
-      api_key: os.environ/OPENAI_API_KEY
