@@ -129,18 +129,17 @@ class CRSCompose:
 
         return True
 
-    def build_target(self, target: Target, build_id: str | None = None, sanitizer: str | None = None, cgroup_parent: bool = False) -> bool:
+    def build_target(self, target: Target, build_id: str | None = None, sanitizer: str | None = None) -> bool:
         # Normalize build_id at library boundary; generate timestamp-based ID if not provided
         build_id = normalize_run_id(build_id) if build_id else generate_run_id()
         sanitizer = sanitizer if sanitizer else self._get_sanitizer(target)
 
-        # Check cgroup-parent availability if requested
+        # Auto-detect cgroup-parent availability
+        cgroup_parent, msg = check_cgroup_parent_available()
         if cgroup_parent:
-            available, msg = check_cgroup_parent_available()
-            if not available:
-                Console().print(f"[yellow]Warning:[/yellow] cgroup-parent not available: {msg}")
-                Console().print("[yellow]Falling back to per-container resource limits.[/yellow]")
-                cgroup_parent = False
+            Console().print("[green]Using cgroup-parent for shared resource limits[/green]")
+        else:
+            Console().print(f"[dim]Using per-container resource limits ({msg})[/dim]")
 
         target_base_image = target.build_docker_image()
         if target_base_image is None:
@@ -199,19 +198,13 @@ class CRSCompose:
         pov_dir: Optional[Path] = None,
         diff: Optional[Path] = None,
         seed_dir: Optional[Path] = None,
-        cgroup_parent: bool = False,
     ) -> bool:
         # Normalize IDs at library boundary
         run_id = normalize_run_id(run_id) if run_id else generate_run_id()
         sanitizer = sanitizer if sanitizer else self._get_sanitizer(target)
 
-        # Check cgroup-parent availability if requested
-        if cgroup_parent:
-            available, msg = check_cgroup_parent_available()
-            if not available:
-                Console().print(f"[yellow]Warning:[/yellow] cgroup-parent not available: {msg}")
-                Console().print("[yellow]Falling back to per-container resource limits.[/yellow]")
-                cgroup_parent = False
+        # Auto-detect cgroup-parent availability
+        cgroup_parent, _ = check_cgroup_parent_available()
 
         # Determine build_id: use provided, find latest, or generate new
         if build_id:

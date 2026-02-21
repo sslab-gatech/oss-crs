@@ -80,11 +80,6 @@ def add_build_target_command(subparsers):
         default=None,
         help="Sanitizer to use for build (default: from target config, usually 'address').",
     )
-    build_target.add_argument(
-        "--cgroup-parent",
-        action="store_true",
-        help="Use cgroup-parent for resource management instead of per-container limits. Requires 'oss-crs setup' first.",
-    )
 
 
 def add_run_command(subparsers):
@@ -146,11 +141,6 @@ def add_run_command(subparsers):
         type=Path,
         default=None,
         help="Directory of initial seed files, pre-populated into FETCH_DIR before containers start. Accessible via: libCRS fetch seed <local_path>",
-    )
-    run.add_argument(
-        "--cgroup-parent",
-        action="store_true",
-        help="Use cgroup-parent for resource management instead of per-container limits. Requires 'oss-crs setup' first.",
     )
 
 def add_artifacts_command(subparsers):
@@ -289,16 +279,14 @@ def cli() -> bool:
             return False
     elif args.command == "build-target":
         target = init_target_from_args(args)
-        cgroup_parent = getattr(args, "cgroup_parent", False)
         # Library normalizes build_id internally
-        if not crs_compose.build_target(target, build_id=args.build_id, sanitizer=args.sanitizer, cgroup_parent=cgroup_parent):
+        if not crs_compose.build_target(target, build_id=args.build_id, sanitizer=args.sanitizer):
             return False
     elif args.command == "run":
         target = init_target_from_args(args)
-        cgroup_parent = getattr(args, "cgroup_parent", False)
         if args.timeout is not None:
             crs_compose.set_deadline(time.monotonic() + args.timeout)
-        if not crs_compose.run(target, run_id=args.run_id, build_id=args.build_id, sanitizer=args.sanitizer, pov=args.pov, pov_dir=args.pov_dir, diff=args.diff, seed_dir=args.seed_dir, cgroup_parent=cgroup_parent):
+        if not crs_compose.run(target, run_id=args.run_id, build_id=args.build_id, sanitizer=args.sanitizer, pov=args.pov, pov_dir=args.pov_dir, diff=args.diff, seed_dir=args.seed_dir):
             return False
     elif args.command == "artifacts":
         target = init_target_from_args(args)
