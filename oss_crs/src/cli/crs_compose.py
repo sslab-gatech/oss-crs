@@ -2,15 +2,12 @@ import sys
 import time
 import signal
 import argparse
-import datetime
 from pathlib import Path
 from dotenv import load_dotenv
-import questionary
 from ..crs_compose import CRSCompose
 from ..config.crs_compose import CRSComposeConfig
 from ..target import Target
-from ..utils import normalize_run_id
-from ..config.artifacts import ArtifactsOutput, CRSArtifacts, ExchangeDir
+from .artifacts import handle_artifacts
 
 
 DEFAULT_WORK_DIR = (Path(__file__) / "../../../../.oss-crs-workdir").resolve()
@@ -216,142 +213,6 @@ def init_target_from_args(args) -> Target:
     )
 
 
-def _collect_run_ids_for_target(crs_compose, target, harness: str | None, sanitizer: str) -> list[str]:
-    """Collect all run-ids for a target from SUBMIT_DIR (run artifacts)."""
-    import re
-    seen = set()
-
-    runs_dir = crs_compose.work_dir.get_runs_dir(sanitizer)
-    if not runs_dir.exists():
-        return []
-
-    # Temporarily set harness for path resolution
-    original_harness = target.target_harness
-    if harness:
-        target.target_harness = harness
-
-    for run_id_dir in runs_dir.iterdir():
-        if not run_id_dir.is_dir():
-            continue
-        run_id = run_id_dir.name
-        # Check if any CRS has submit output for this target
-        for crs in crs_compose.crs_list:
-            submit_path = crs_compose.work_dir.get_submit_dir(
-                crs.name, target, run_id, sanitizer, create=False
-            )
-            # For harness=None, check parent dir (without harness component)
-            if not harness:
-                submit_path = submit_path.parent
-            if submit_path.exists():
-                seen.add(run_id)
-                break
-
-    # Restore original harness
-    target.target_harness = original_harness
-
-    # Sort by timestamp (extract 10-digit sequences), newest first
-    def extract_ts(run_id: str) -> int:
-        match = re.search(r'\d{10}', run_id)
-        return int(match.group()) if match else 0
-
-    return sorted(seen, key=extract_ts, reverse=True)
-
-
-def _format_run_id(run_id: str) -> str:
-    """Format a run-id for display. Extract unix timestamp and show human-readable time."""
-    import re
-    match = re.search(r'\d{10}', run_id)
-    if match:
-        ts = int(match.group())
-        dt = datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
-        return f"{dt}  ({run_id})"
-    return run_id
-
-
-def _select_run_id_interactively(crs_compose, target, harness: str | None, sanitizer: str) -> str | None:
-    """Prompt user to select a run-id from available runs."""
-    all_run_ids = _collect_run_ids_for_target(crs_compose, target, harness, sanitizer)
-    if not all_run_ids:
-        print("No runs found for this target.", file=sys.stderr)
-        return None
-
-    choices = [questionary.Choice(title=_format_run_id(r), value=r) for r in all_run_ids]
-    selected = questionary.select("Select run-id:", choices=choices).ask()
-    return selected
-
-
-def _handle_artifacts(args, crs_compose) -> bool:
-    target = init_target_from_args(args)
-    harness = target.target_harness
-    sanitizer = args.sanitizer
-
-    # run_id for SUBMIT/FETCH/SHARED dirs - interactive selection if not provided
-    if args.run_id:
-        run_id = normalize_run_id(args.run_id)
-    else:
-        run_id = _select_run_id_interactively(crs_compose, target, harness, sanitizer)
-        if run_id is None:
-            return False
-
-    # build_id for BUILD_OUT_DIR - use provided, read from run, or find latest
-    if args.build_id:
-        build_id = normalize_run_id(args.build_id)
-        # Explicit --build-id must exist on disk
-        build_dir = crs_compose.work_dir.get_build_dir(build_id, sanitizer)
-        if not build_dir.exists():
-            print(f"Build '{args.build_id}' not found.", file=sys.stderr)
-            return False
-    else:
-        # Try to get build_id from the run directory first
-        build_id = crs_compose.get_build_id_for_run(run_id, sanitizer)
-        if build_id is None:
-            # Fall back to latest build
-            build_id = crs_compose.get_latest_build_id(target, sanitizer)
-
-    # Build structured result — always return computed paths
-    output = ArtifactsOutput(build_id=build_id, run_id=run_id, sanitizer=sanitizer)
-    work_dir = crs_compose.work_dir
-
-    # exchange_dir is shared across all CRSs
-    if harness:
-        exchange_path = work_dir.get_exchange_dir(target, run_id, sanitizer, create=False)
-        output.exchange_dir = ExchangeDir(
-            base=str(exchange_path),
-            pov=str(exchange_path / "povs"),
-            seed=str(exchange_path / "seeds"),
-            bug_candidate=str(exchange_path / "bug-candidates"),
-            patch=str(exchange_path / "patches"),
-            diff=str(exchange_path / "diffs"),
-        )
-
-    for crs in crs_compose.crs_list:
-        crs_artifacts = CRSArtifacts()
-
-        # Build output uses build_id
-        if build_id:
-            build_path = work_dir.get_build_output_dir(crs.name, target, build_id, sanitizer, create=False)
-            crs_artifacts.build = str(build_path)
-
-        # Per-harness artifacts use run_id
-        if harness:
-            submit_path = work_dir.get_submit_dir(crs.name, target, run_id, sanitizer, create=False)
-            crs_artifacts.submit_dir = str(submit_path)
-            crs_artifacts.pov = str(submit_path / "povs")
-            crs_artifacts.seed = str(submit_path / "seeds")
-            crs_artifacts.bug_candidate = str(submit_path / "bug-candidates")
-            crs_artifacts.patch = str(submit_path / "patches")
-
-            crs_artifacts.fetch = output.exchange_dir.base if output.exchange_dir else None
-
-            shared_path = work_dir.get_shared_dir(crs.name, target, run_id, sanitizer, create=False)
-            crs_artifacts.shared = str(shared_path)
-
-        output.crs[crs.name] = crs_artifacts
-
-    print(output.to_json())
-    return True
-
-
 def _sigterm_handler(signum, frame):
     """Convert SIGTERM into KeyboardInterrupt so cleanup tasks can run."""
     raise KeyboardInterrupt("SIGTERM received")
@@ -419,7 +280,8 @@ def cli() -> bool:
         if not crs_compose.run(target, run_id=args.run_id, build_id=args.build_id, sanitizer=args.sanitizer, pov=args.pov, pov_dir=args.pov_dir, diff=args.diff, seed_dir=args.seed_dir):
             return False
     elif args.command == "artifacts":
-        return _handle_artifacts(args, crs_compose)
+        target = init_target_from_args(args)
+        return handle_artifacts(args, crs_compose, target)
     elif args.command == "check":
         pass
     return True

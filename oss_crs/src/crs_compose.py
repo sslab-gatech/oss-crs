@@ -87,10 +87,6 @@ class CRSCompose:
                     break  # Found at least one CRS with this build, no need to check others
         return latest_build_id
 
-    def get_build_id_for_run(self, run_id: str, sanitizer: str) -> str | None:
-        """Get the build-id that was used for a specific run."""
-        return self.work_dir.read_build_id_for_run(run_id, sanitizer)
-
     def __prepare_oss_crs_infra(
         self, publish: bool = False, docker_registry: str = None
     ) -> "TaskResult":
