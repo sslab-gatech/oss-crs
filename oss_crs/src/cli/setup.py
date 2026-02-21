@@ -5,6 +5,8 @@ the host system for cgroup-parent based resource management.
 """
 
 import subprocess
+from dataclasses import dataclass
+from typing import Callable, Optional
 from rich.console import Console
 from rich.panel import Panel
 import questionary
@@ -22,287 +24,317 @@ from ..cgroup import (
 )
 
 
-console = Console()
+# =============================================================================
+# Data Classes
+# =============================================================================
+
+@dataclass
+class CheckResult:
+    """Result of a requirement check."""
+    ok: bool
+    detail: str = ""
+    needs_fix: bool = False
 
 
-def print_status(label: str, ok: bool, detail: str = "") -> None:
-    """Print a status line with checkmark or cross."""
-    icon = "[green]OK[/green]" if ok else "[red]X[/red]"
-    detail_text = f" - {detail}" if detail else ""
-    console.print(f"  [{icon}] {label}{detail_text}")
+@dataclass
+class SetupStep:
+    """A setup step that can be executed to fix a requirement."""
+    title: str
+    description: str
+    commands: Callable[[], list[tuple[str, str]]]  # Returns [(description, command), ...]
+    verify: Optional[Callable[[], bool]] = None
+    skip_message: str = ""
 
 
-def print_step(step_num: int, description: str) -> None:
-    """Print a numbered step header."""
-    console.print(f"\n[bold cyan]Step {step_num}:[/bold cyan] {description}")
+# =============================================================================
+# Requirement Checks
+# =============================================================================
 
-
-def confirm_command(description: str, command: str) -> bool:
-    """Ask user to confirm running a privileged command.
-
-    Args:
-        description: Human-readable description of what the command does
-        command: The actual command to run
-
-    Returns:
-        True if user confirmed and command succeeded, False otherwise
-    """
-    console.print(f"\n[yellow]Action:[/yellow] {description}")
-    console.print(f"[dim]Command:[/dim] {command}")
-
-    answer = questionary.confirm(
-        "Run this command?",
-        default=True,
-    ).ask()
-
-    if answer is None:  # User pressed Ctrl+C
-        console.print("[yellow]Aborted by user[/yellow]")
-        return False
-
-    if not answer:
-        console.print("[yellow]Skipped[/yellow]")
-        return False
-
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode == 0:
-            console.print("[green]Success[/green]")
-            return True
-        else:
-            console.print(f"[red]Failed:[/red] {result.stderr.strip()}")
-            return False
-    except subprocess.TimeoutExpired:
-        console.print("[red]Command timed out[/red]")
-        return False
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        return False
-
-
-def run_setup(check_only: bool = False) -> bool:
-    """Run the setup process for cgroup-parent mode.
-
-    Args:
-        check_only: If True, only check status without making changes
-
-    Returns:
-        True if setup is complete (or check passes), False otherwise
-    """
-    console.print(Panel(
-        "[bold]oss-crs setup[/bold]\n\n"
-        "This command configures your system for cgroup-parent mode,\n"
-        "which enables fine-grained CPU and memory resource control\n"
-        "for CRS containers without Docker-in-Docker.",
-        title="Cgroup-Parent Setup",
-        border_style="blue",
-    ))
-
-    all_ok = True
-    needs_docker_config = False
-    needs_cgroup_setup = False
-    needs_controller_enable = False
-
-    # === Check 1: Docker cgroup driver ===
-    console.print("\n[bold]Checking requirements...[/bold]")
-
+def check_docker_driver() -> CheckResult:
+    """Check if Docker is using cgroupfs driver."""
     is_cgroupfs, driver = check_docker_cgroup_driver()
+
     if driver == "docker_not_found":
-        print_status("Docker installed", False, "Docker not found in PATH")
-        console.print("\n[red]Docker must be installed to continue.[/red]")
-        return False
+        return CheckResult(ok=False, detail="Docker not found in PATH")
     elif driver == "timeout":
-        print_status("Docker daemon", False, "Docker daemon not responding")
-        console.print("\n[red]Docker daemon must be running to continue.[/red]")
-        return False
+        return CheckResult(ok=False, detail="Docker daemon not responding")
     elif is_cgroupfs:
-        print_status("Docker cgroup driver", True, "cgroupfs")
+        return CheckResult(ok=True, detail="cgroupfs")
     else:
-        print_status("Docker cgroup driver", False, f"using '{driver}', needs 'cgroupfs'")
-        all_ok = False
-        needs_docker_config = True
+        return CheckResult(ok=False, detail=f"using '{driver}', needs 'cgroupfs'", needs_fix=True)
 
-    # === Check 2: Cgroup v2 delegation ===
-    delegation_ok, missing_controllers = check_cgroup_delegation()
+
+def check_delegation() -> CheckResult:
+    """Check if cgroup v2 delegation is configured."""
+    delegation_ok, missing = check_cgroup_delegation()
+
     if delegation_ok:
-        print_status("Cgroup v2 delegation", True, "cpuset, memory enabled")
+        return CheckResult(ok=True, detail="cpuset, memory enabled")
     else:
-        detail = f"missing: {', '.join(missing_controllers)}" if missing_controllers else "not configured"
-        print_status("Cgroup v2 delegation", False, detail)
-        all_ok = False
-        needs_cgroup_setup = True
+        detail = f"missing: {', '.join(missing)}" if missing else "not configured"
+        return CheckResult(ok=False, detail=detail, needs_fix=True)
 
-    # === Check 3: oss-crs directory ===
-    dir_ok, dir_status = check_oss_crs_directory()
+
+def check_directory() -> CheckResult:
+    """Check if oss-crs cgroup directory exists and is writable."""
+    dir_ok, status = check_oss_crs_directory()
+
     if dir_ok:
-        print_status("oss-crs cgroup directory", True, str(get_user_cgroup_base()))
+        return CheckResult(ok=True, detail=str(get_user_cgroup_base()))
     else:
         detail = {
             "not_exists": "directory does not exist",
             "permission_denied": "permission denied",
-        }.get(dir_status, dir_status)
-        print_status("oss-crs cgroup directory", False, detail)
-        all_ok = False
-        needs_cgroup_setup = True
+        }.get(status, status)
+        return CheckResult(ok=False, detail=detail, needs_fix=True)
 
-    # === Check 4: oss-crs controllers (only if directory exists) ===
-    if dir_ok:
-        controllers_ok, missing = check_oss_crs_controllers()
-        if controllers_ok:
-            print_status("oss-crs controllers", True, "cpuset, memory enabled")
-        else:
-            detail = f"missing: {', '.join(missing)}" if missing else "not enabled"
-            print_status("oss-crs controllers", False, detail)
-            all_ok = False
-            needs_controller_enable = True
 
-    if all_ok:
-        console.print("\n[bold green]All checks passed![/bold green] Your system is ready for cgroup-parent mode.")
-        return True
+def check_controllers() -> CheckResult:
+    """Check if controllers are enabled at oss-crs level."""
+    controllers_ok, missing = check_oss_crs_controllers()
 
-    if check_only:
-        console.print("\n[yellow]Some checks failed.[/yellow] Run [bold]oss-crs setup[/bold] to fix issues.")
-        return False
+    if controllers_ok:
+        return CheckResult(ok=True, detail="cpuset, memory enabled")
+    else:
+        detail = f"missing: {', '.join(missing)}" if missing else "not enabled"
+        return CheckResult(ok=False, detail=detail, needs_fix=True)
 
-    # === Interactive Setup ===
-    console.print("\n[bold]Setup required[/bold]")
-    console.print("Some configuration is needed. The following changes require [bold]sudo[/bold] privileges.")
-    console.print("You will be asked to confirm each command before it runs.\n")
 
-    step_num = 1
+# =============================================================================
+# Setup Steps
+# =============================================================================
 
-    # === Step: Configure Docker ===
-    if needs_docker_config:
-        print_step(step_num, "Configure Docker to use cgroupfs driver")
-        step_num += 1
-
-        console.print("""
+def docker_setup_step() -> SetupStep:
+    """Create the Docker configuration setup step."""
+    return SetupStep(
+        title="Configure Docker to use cgroupfs driver",
+        description="""
 Docker must use the [bold]cgroupfs[/bold] cgroup driver instead of [bold]systemd[/bold].
 This change requires modifying /etc/docker/daemon.json and restarting Docker.
 
 [yellow]Warning:[/yellow] This will restart Docker daemon. Running containers will be stopped.
-""")
+""",
+        commands=generate_docker_config_commands,
+        verify=lambda: check_docker_cgroup_driver()[0],
+        skip_message="""You can configure Docker manually by adding to /etc/docker/daemon.json:
+[dim]{"exec-opts": ["native.cgroupdriver=cgroupfs"]}[/dim]""",
+    )
 
-        proceed = questionary.confirm(
-            "Proceed with Docker configuration?",
-            default=True,
-        ).ask()
 
-        if proceed is None:
-            console.print("[yellow]Aborted by user[/yellow]")
-            return False
+def cgroup_setup_step() -> SetupStep:
+    """Create the cgroup delegation setup step."""
+    user_service = get_user_service_cgroup()
+    oss_crs_path = get_user_cgroup_base()
 
-        if proceed:
-            commands = generate_docker_config_commands()
-            for desc, cmd in commands:
-                if not confirm_command(desc, cmd):
-                    console.print("[yellow]Docker configuration incomplete. Please complete manually.[/yellow]")
-                    return False
-
-            # Verify Docker config
-            is_cgroupfs, driver = check_docker_cgroup_driver()
-            if is_cgroupfs:
-                console.print("[green]Docker cgroup driver configured successfully![/green]")
-            else:
-                console.print(f"[red]Docker still using '{driver}' driver. Please check configuration.[/red]")
-                return False
-        else:
-            console.print("[yellow]Skipping Docker configuration.[/yellow]")
-            console.print("You can configure Docker manually by adding to /etc/docker/daemon.json:")
-            console.print('[dim]{"exec-opts": ["native.cgroupdriver=cgroupfs"]}[/dim]')
-
-    # === Step: Set up cgroup delegation ===
-    if needs_cgroup_setup:
-        print_step(step_num, "Set up cgroup v2 delegation")
-        step_num += 1
-
-        user_service = get_user_service_cgroup()
-        oss_crs_path = get_user_cgroup_base()
-
-        console.print(f"""
+    return SetupStep(
+        title="Set up cgroup v2 delegation",
+        description=f"""
 Cgroup v2 requires proper delegation to allow non-root users to manage resources.
 This will:
 1. Enable cpuset and memory controllers at [dim]{user_service}[/dim]
 2. Create the oss-crs directory at [dim]{oss_crs_path}[/dim]
 3. Set ownership so you can manage cgroups without sudo
-""")
+""",
+        commands=generate_cgroup_setup_commands,
+    )
 
-        proceed = questionary.confirm(
-            "Proceed with cgroup setup?",
-            default=True,
-        ).ask()
 
-        if proceed is None:
-            console.print("[yellow]Aborted by user[/yellow]")
+def controller_setup_step() -> SetupStep:
+    """Create the controller enable setup step."""
+    oss_crs_path = get_user_cgroup_base()
+
+    return SetupStep(
+        title="Enable controllers in oss-crs cgroup",
+        description="Enabling cpuset and memory controllers at oss-crs level...",
+        commands=lambda: [
+            ("Enable controllers at oss-crs level",
+             f'echo "+cpuset +memory" | sudo tee {oss_crs_path}/cgroup.subtree_control')
+        ],
+    )
+
+
+# =============================================================================
+# Setup Runner
+# =============================================================================
+
+# Define all requirements in order
+REQUIREMENTS: list[tuple[str, Callable[[], CheckResult], str]] = [
+    ("Docker cgroup driver", check_docker_driver, "docker"),
+    ("Cgroup v2 delegation", check_delegation, "delegation"),
+    ("oss-crs cgroup directory", check_directory, "directory"),
+    ("oss-crs controllers", check_controllers, "controllers"),
+]
+
+
+class SetupRunner:
+    """Runs the interactive setup process for cgroup-parent mode."""
+
+    def __init__(self):
+        self.console = Console()
+        self.step_num = 0
+        self.results: dict[str, CheckResult] = {}
+
+    def print_status(self, label: str, ok: bool, detail: str = "") -> None:
+        """Print a status line with checkmark or cross."""
+        icon = "[green]OK[/green]" if ok else "[red]X[/red]"
+        detail_text = f" - {detail}" if detail else ""
+        self.console.print(f"  [{icon}] {label}{detail_text}")
+
+    def run_command(self, description: str, command: str) -> bool:
+        """Run a command with user confirmation."""
+        self.console.print(f"\n[yellow]Action:[/yellow] {description}")
+        self.console.print(f"[dim]Command:[/dim] {command}")
+
+        answer = questionary.confirm("Run this command?", default=True).ask()
+
+        if answer is None:  # Ctrl+C
+            self.console.print("[yellow]Aborted by user[/yellow]")
+            return False
+        if not answer:
+            self.console.print("[yellow]Skipped[/yellow]")
             return False
 
-        if proceed:
-            commands = generate_cgroup_setup_commands()
-            for desc, cmd in commands:
-                if not confirm_command(desc, cmd):
-                    console.print("[yellow]Cgroup setup incomplete. Please complete manually.[/yellow]")
-                    return False
-            # Controllers are now enabled as part of cgroup setup commands
-        else:
-            console.print("[yellow]Skipping cgroup setup.[/yellow]")
+        try:
+            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=120)
+            if result.returncode == 0:
+                self.console.print("[green]Success[/green]")
+                return True
+            else:
+                self.console.print(f"[red]Failed:[/red] {result.stderr.strip()}")
+                return False
+        except subprocess.TimeoutExpired:
+            self.console.print("[red]Command timed out[/red]")
+            return False
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] {e}")
+            return False
 
-    # === Step: Enable controllers at oss-crs level (only if dir exists but controllers not enabled) ===
-    elif needs_controller_enable:
-        print_step(step_num, "Enable controllers in oss-crs cgroup")
-        step_num += 1
+    def execute_step(self, step: SetupStep) -> bool:
+        """Execute a setup step with user interaction."""
+        self.step_num += 1
+        self.console.print(f"\n[bold cyan]Step {self.step_num}:[/bold cyan] {step.title}")
+        self.console.print(step.description)
 
-        console.print("Enabling cpuset and memory controllers at oss-crs level...")
-        success, message = enable_oss_crs_controllers()
-        if success:
-            console.print(f"[green]{message}[/green]")
-        else:
-            # Try with sudo as fallback
-            console.print(f"[yellow]Direct write failed: {message}[/yellow]")
-            console.print("Attempting with sudo...")
-            oss_crs_path = get_user_cgroup_base()
-            if not confirm_command(
-                "Enable controllers at oss-crs level",
-                f'echo "+cpuset +memory" | sudo tee {oss_crs_path}/cgroup.subtree_control'
-            ):
-                console.print("[red]Failed to enable controllers.[/red]")
+        proceed = questionary.confirm(f"Proceed with {step.title.lower()}?", default=True).ask()
+
+        if proceed is None:
+            self.console.print("[yellow]Aborted by user[/yellow]")
+            return False
+
+        if not proceed:
+            self.console.print("[yellow]Skipped[/yellow]")
+            if step.skip_message:
+                self.console.print(step.skip_message)
+            return False
+
+        # Run all commands for this step
+        for desc, cmd in step.commands():
+            if not self.run_command(desc, cmd):
+                self.console.print(f"[yellow]{step.title} incomplete. Please complete manually.[/yellow]")
                 return False
 
-    # === Final verification ===
-    console.print("\n[bold]Verifying setup...[/bold]")
+        # Verify if verification function provided
+        if step.verify and not step.verify():
+            self.console.print(f"[red]Verification failed for {step.title}[/red]")
+            return False
 
-    is_cgroupfs, driver = check_docker_cgroup_driver()
-    print_status("Docker cgroup driver", is_cgroupfs, driver)
+        return True
 
-    delegation_ok, _ = check_cgroup_delegation()
-    print_status("Cgroup v2 delegation", delegation_ok)
+    def run_checks(self) -> dict[str, CheckResult]:
+        """Run all requirement checks."""
+        self.console.print("\n[bold]Checking requirements...[/bold]")
+        self.results = {}
 
-    dir_ok, _ = check_oss_crs_directory()
-    print_status("oss-crs cgroup directory", dir_ok)
+        for name, check_fn, key in REQUIREMENTS:
+            # Skip controller check if directory doesn't exist
+            if key == "controllers" and not self.results.get("directory", CheckResult(ok=False)).ok:
+                continue
 
-    if dir_ok:
-        controllers_ok, _ = check_oss_crs_controllers()
-        print_status("oss-crs controllers", controllers_ok)
-    else:
-        controllers_ok = False
+            result = check_fn()
+            self.results[key] = result
+            self.print_status(name, result.ok, result.detail)
 
-    all_ok = is_cgroupfs and delegation_ok and dir_ok and controllers_ok
+        return self.results
 
-    if all_ok:
-        console.print("\n[bold green]Setup complete![/bold green] Your system is ready for cgroup-parent mode.")
-        console.print("\nYou can now use [bold]--cgroup-parent[/bold] with oss-crs commands:")
-        console.print("  [dim]oss-crs build-target --cgroup-parent ...[/dim]")
-        console.print("  [dim]oss-crs run --cgroup-parent ...[/dim]")
-    else:
-        console.print("\n[yellow]Setup incomplete.[/yellow] Some checks are still failing.")
-        console.print("Please address the issues above and run [bold]oss-crs setup[/bold] again.")
+    def all_ok(self) -> bool:
+        """Check if all requirements are satisfied."""
+        return all(r.ok for r in self.results.values())
 
-    return all_ok
+    def needs_fix(self, key: str) -> bool:
+        """Check if a specific requirement needs fixing."""
+        return self.results.get(key, CheckResult(ok=True)).needs_fix
 
+    def run(self, check_only: bool = False) -> bool:
+        """Run the setup process."""
+        self.console.print(Panel(
+            "[bold]oss-crs setup[/bold]\n\n"
+            "This command configures your system for cgroup-parent mode,\n"
+            "which enables fine-grained CPU and memory resource control\n"
+            "for CRS containers without Docker-in-Docker.",
+            title="Cgroup-Parent Setup",
+            border_style="blue",
+        ))
+
+        # Run initial checks
+        self.run_checks()
+
+        # Check for fatal errors (Docker not found/not running)
+        docker_result = self.results.get("docker", CheckResult(ok=False))
+        if not docker_result.ok and not docker_result.needs_fix:
+            self.console.print(f"\n[red]Cannot continue: {docker_result.detail}[/red]")
+            return False
+
+        if self.all_ok():
+            self.console.print("\n[bold green]All checks passed![/bold green] Your system is ready for cgroup-parent mode.")
+            return True
+
+        if check_only:
+            self.console.print("\n[yellow]Some checks failed.[/yellow] Run [bold]oss-crs setup[/bold] to fix issues.")
+            return False
+
+        # Interactive setup
+        self.console.print("\n[bold]Setup required[/bold]")
+        self.console.print("Some configuration is needed. The following changes require [bold]sudo[/bold] privileges.")
+        self.console.print("You will be asked to confirm each command before it runs.\n")
+
+        # Docker configuration
+        if self.needs_fix("docker"):
+            if not self.execute_step(docker_setup_step()):
+                return False
+
+        # Cgroup delegation and directory setup
+        if self.needs_fix("delegation") or self.needs_fix("directory"):
+            if not self.execute_step(cgroup_setup_step()):
+                return False
+
+        # Controller setup (only if directory exists but controllers not enabled)
+        elif self.needs_fix("controllers"):
+            # Try direct write first
+            success, message = enable_oss_crs_controllers()
+            if success:
+                self.console.print(f"[green]{message}[/green]")
+            else:
+                self.console.print(f"[yellow]Direct write failed: {message}[/yellow]")
+                if not self.execute_step(controller_setup_step()):
+                    return False
+
+        # Final verification
+        self.console.print("\n[bold]Verifying setup...[/bold]")
+        self.run_checks()
+
+        if self.all_ok():
+            self.console.print("\n[bold green]Setup complete![/bold green] Your system is ready for cgroup-parent mode.")
+            self.console.print("\nCgroup-parent mode will be used automatically when available.")
+        else:
+            self.console.print("\n[yellow]Setup incomplete.[/yellow] Some checks are still failing.")
+            self.console.print("Please address the issues above and run [bold]oss-crs setup[/bold] again.")
+
+        return self.all_ok()
+
+
+# =============================================================================
+# CLI Entry Points
+# =============================================================================
 
 def add_setup_command(subparsers) -> None:
     """Add the setup command to the CLI parser."""
@@ -318,12 +350,5 @@ def add_setup_command(subparsers) -> None:
 
 
 def handle_setup(args) -> bool:
-    """Handle the setup command.
-
-    Args:
-        args: Parsed command line arguments
-
-    Returns:
-        True if setup succeeded, False otherwise
-    """
-    return run_setup(check_only=args.check)
+    """Handle the setup command."""
+    return SetupRunner().run(check_only=args.check)
