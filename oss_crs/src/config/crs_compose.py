@@ -149,20 +149,27 @@ class CRSComposeConfig(BaseModel):
         return v
 
     @classmethod
-    def from_yaml(cls, yaml_content: str) -> "CRSComposeConfig":
+    def from_yaml(cls, yaml_content: str, resolve_sources: bool = True) -> "CRSComposeConfig":
         """Parse CRS Compose config from YAML string."""
         data = yaml.safe_load(yaml_content)
-        return cls.from_dict(data)
+        return cls.from_dict(data, resolve_sources=resolve_sources)
 
     @classmethod
-    def from_yaml_file(cls, filepath: str) -> "CRSComposeConfig":
+    def from_yaml_file(cls, filepath: str | Path, resolve_sources: bool = True) -> "CRSComposeConfig":
         """Parse CRS Compose config from YAML file."""
         with open(filepath, "r") as f:
-            return cls.from_yaml(f.read())
+            return cls.from_yaml(f.read(), resolve_sources=resolve_sources)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "CRSComposeConfig":
-        """Parse CRS Compose config from dictionary."""
+    def from_dict(cls, data: dict, resolve_sources: bool = True) -> "CRSComposeConfig":
+        """Parse CRS Compose config from dictionary.
+
+        Args:
+            data: Dictionary containing the config
+            resolve_sources: If True, resolve missing CRS sources from the registry.
+                            Set to False for operations like gen-compose that don't
+                            need source resolution.
+        """
         RUN_ENV = "run_env"
         DOCKER_REGISTRY = "docker_registry"
         OSS_CRS_INFRA = "oss_crs_infra"
@@ -186,9 +193,10 @@ class CRSComposeConfig(BaseModel):
         )
 
         # Resolve missing sources from registry
-        for name, entry in config.crs_entries.items():
-            if entry.source is None:
-                entry.source = resolve_source_from_registry(name)
+        if resolve_sources:
+            for name, entry in config.crs_entries.items():
+                if entry.source is None:
+                    entry.source = resolve_source_from_registry(name)
 
         return config
 
@@ -198,6 +206,78 @@ class CRSComposeConfig(BaseModel):
         config_json = remove_keys(config_json, ["cpuset", "llm_budget", "memory", "additional_env", "llm_config"])
         config_json = json.dumps(config_json)
         return hashlib.md5(config_json.encode()).hexdigest()[:12]
+
+    def to_dict(self) -> dict:
+        """Convert config to dictionary suitable for YAML output.
+
+        Flattens crs_entries back to top-level keys (inverse of from_dict).
+        """
+        data = {
+            "run_env": self.run_env.value,
+            "docker_registry": self.docker_registry,
+            "oss_crs_infra": {
+                "cpuset": self.oss_crs_infra.cpuset,
+                "memory": self.oss_crs_infra.memory,
+            },
+        }
+        if self.oss_crs_infra.llm_budget is not None:
+            data["oss_crs_infra"]["llm_budget"] = self.oss_crs_infra.llm_budget
+
+        if self.llm_config is not None:
+            data["llm_config"] = {"litellm_config": self.llm_config.litellm_config}
+
+        # Flatten CRS entries to top-level
+        for name, entry in self.crs_entries.items():
+            entry_dict = {
+                "cpuset": entry.cpuset,
+                "memory": entry.memory,
+            }
+            if entry.source is not None:
+                source_dict = {}
+                if entry.source.url is not None:
+                    source_dict["url"] = entry.source.url
+                if entry.source.ref is not None:
+                    source_dict["ref"] = entry.source.ref
+                if entry.source.local_path is not None:
+                    source_dict["local_path"] = entry.source.local_path
+                if source_dict:
+                    entry_dict["source"] = source_dict
+            if entry.llm_budget is not None:
+                entry_dict["llm_budget"] = entry.llm_budget
+            if entry.additional_env:
+                entry_dict["additional_env"] = entry.additional_env
+            data[name] = entry_dict
+
+        return data
+
+    def to_yaml(self) -> str:
+        """Serialize config to YAML string."""
+        return yaml.dump(self.to_dict(), default_flow_style=False, sort_keys=False)
+
+    def to_yaml_file(self, filepath: Path) -> None:
+        """Write config to YAML file."""
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "w") as f:
+            f.write(self.to_yaml())
+
+    def get_all_cpusets(self) -> list[str]:
+        """Collect all cpuset values from config."""
+        cpusets = [self.oss_crs_infra.cpuset]
+        for entry in self.crs_entries.values():
+            cpusets.append(entry.cpuset)
+        return cpusets
+
+    def apply_cpuset_mapping(self, cpu_mapping: dict[int, int]) -> None:
+        """Apply CPU mapping to all cpuset fields in-place.
+
+        Args:
+            cpu_mapping: Dict mapping virtual CPU IDs to real CPU IDs
+        """
+        from ..cpuset import map_cpuset
+
+        self.oss_crs_infra.cpuset = map_cpuset(self.oss_crs_infra.cpuset, cpu_mapping)
+        for entry in self.crs_entries.values():
+            entry.cpuset = map_cpuset(entry.cpuset, cpu_mapping)
 
 
 def remove_keys(d, keys_to_remove):
