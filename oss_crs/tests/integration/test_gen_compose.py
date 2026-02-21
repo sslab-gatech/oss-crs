@@ -37,7 +37,7 @@ def simple_compose(tmp_dir):
         "run_env": "local",
         "docker_registry": "local",
         "oss_crs_infra": {"cpuset": "0-3", "memory": "16G"},
-        "test-crs": {"cpuset": "4-7", "memory": "8G"},
+        "crs-libfuzzer": {"cpuset": "4-7", "memory": "8G"},
     }
     path = tmp_dir / "compose.yaml"
     path.write_text(yaml.dump(content))
@@ -51,8 +51,8 @@ def ensemble_compose(tmp_dir):
         "run_env": "local",
         "docker_registry": "local",
         "oss_crs_infra": {"cpuset": "0-3", "memory": "16G"},
-        "crs-one": {"cpuset": "4-7", "memory": "8G"},
-        "crs-two": {"cpuset": "8-11", "memory": "8G", "llm_budget": 100},
+        "crs-libfuzzer": {"cpuset": "4-7", "memory": "8G"},
+        "crs-codex": {"cpuset": "8-11", "memory": "8G", "llm_budget": 100},
     }
     path = tmp_dir / "ensemble.yaml"
     path.write_text(yaml.dump(content))
@@ -80,7 +80,7 @@ class TestGenComposeCommand:
             data = yaml.safe_load(f)
 
         assert data["oss_crs_infra"]["cpuset"] == "20-23"
-        assert data["test-crs"]["cpuset"] == "24-27"
+        assert data["crs-libfuzzer"]["cpuset"] == "24-27"
 
     def test_generate_ensemble_compose(self, cli_runner, tmp_dir, ensemble_compose):
         """Generate compose file for ensemble (multiple CRSes)."""
@@ -98,11 +98,11 @@ class TestGenComposeCommand:
         with open(output_file) as f:
             data = yaml.safe_load(f)
 
-        # Original: infra=0-3, crs-one=4-7, crs-two=8-11
+        # Original: infra=0-3, crs-libfuzzer=4-7, crs-codex=8-11
         # Mapped to: 100-111
         assert data["oss_crs_infra"]["cpuset"] == "100-103"
-        assert data["crs-one"]["cpuset"] == "104-107"
-        assert data["crs-two"]["cpuset"] == "108-111"
+        assert data["crs-libfuzzer"]["cpuset"] == "104-107"
+        assert data["crs-codex"]["cpuset"] == "108-111"
 
     def test_non_contiguous_pool(self, cli_runner, tmp_dir, simple_compose):
         """Generate compose file with non-contiguous CPU pool."""
@@ -121,7 +121,7 @@ class TestGenComposeCommand:
             data = yaml.safe_load(f)
 
         assert data["oss_crs_infra"]["cpuset"] == "1-4"
-        assert data["test-crs"]["cpuset"] == "10-13"
+        assert data["crs-libfuzzer"]["cpuset"] == "10-13"
 
     def test_preserves_non_cpuset_fields(self, cli_runner, tmp_dir, ensemble_compose):
         """Verify that non-cpuset fields are preserved."""
@@ -142,7 +142,7 @@ class TestGenComposeCommand:
         assert data["run_env"] == "local"
         assert data["docker_registry"] == "local"
         assert data["oss_crs_infra"]["memory"] == "16G"
-        assert data["crs-two"]["llm_budget"] == 100
+        assert data["crs-codex"]["llm_budget"] == 100
 
     def test_error_insufficient_cpus(self, cli_runner, tmp_dir, ensemble_compose):
         """Error when pool has fewer CPUs than required."""
