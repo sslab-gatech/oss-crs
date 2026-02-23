@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 DEFAULT_LITELLM_CONFIG_PATH = (
-    Path(__file__).resolve().parents[3] / "services" / "litellm" / "default-models.yaml"
+    Path(__file__).resolve().parents[1] / "defaults" / "litellm" / "default-models.yaml"
 )
 
 
