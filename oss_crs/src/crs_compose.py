@@ -447,11 +447,17 @@ class CRSCompose:
                     result = subprocess.run(cmd, stdout=stdout_f, stderr=stderr_f, text=True)
                     return result.returncode
 
+        compose_logs_rc = _run_to_files(
+            [*cmd_base, "logs", "--no-color", "--timestamps"],
+            logs_dir / "docker-compose.stdout.log",
+            logs_dir / "docker-compose.stderr.log",
+        )
+
         services_stdout, services_stderr, services_rc = _run_capture(
             [*cmd_base, "config", "--services"]
         )
-        (logs_dir / "docker-compose.stdout.log").write_text(services_stdout)
-        (logs_dir / "docker-compose.stderr.log").write_text(services_stderr)
+        if services_stderr:
+            (logs_dir / "services-config.stderr.log").write_text(services_stderr)
 
         service_names = [
             line.strip() for line in services_stdout.splitlines() if line.strip()
@@ -481,6 +487,7 @@ class CRSCompose:
                 self._link_or_copy(service_stderr_log, crs_dir / service_stderr_log.name)
 
         metadata = {
+            "compose_logs_rc": compose_logs_rc,
             "services_command_rc": services_rc,
             "failed_service_logs": failed_services,
         }
