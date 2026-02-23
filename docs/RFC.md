@@ -19,6 +19,8 @@
   - [Output format standards](#output-format-standards)
   - [Delta Scan Mode](#delta-scan-mode)
   - [CRS Ensemble Support](#crs-ensemble-support)
+  - [Multiple POV Support](#multiple-pov-support)
+  - [Patching CRS Ensemble Support](#patching-crs-ensemble-support)
 - [Example Reference CRSs](#example-reference-crses)
 - [Alternative Considerations](#alternative-considerations)
 - [Risks / Open Questions](#risks--open-questions)
@@ -37,6 +39,7 @@ This unification enables CRSs to interoperate and accurately measure their capab
 This RFC proposes to standardise the following systems:
 
 - Bug Finding Systems
+- Bug Fixing Systems
 - Tools for LLM-based systems
 
 **The implementation of this proposal: OSS-CRS ([https://github.com/sslab-gatech/oss-crs/tree/main](https://github.com/sslab-gatech/oss-crs/tree/main)) is an independent standard CRS framework that can test and run against OSS-Fuzz projects.**
@@ -315,7 +318,7 @@ uv run oss-crs run \
   --target-harness <harness>
 ```
 
-### CRS Ensemble Support
+### Bug-Finding CRS Ensemble Support
 
 **Motivation:** Combine a diverse set of techniques to boost bug-finding and patching effectiveness.
 
@@ -324,6 +327,31 @@ Multiple CRSs can run simultaneously against the same target, sharing data throu
 - **Seed sharing:** CRSs register fetch directories to receive seeds from other CRSs
 - **POV deduplication:** Infrastructure automatically deduplicates submitted POVs
 - **Resource isolation:** Each CRS runs with its own cpuset and memory limits
+
+### Multiple POV Support
+
+To support multiple PoV patching for a single vulnerability, the entry point will be extended to accept multiple PoV inputs. This allows the CRS to receive and process all relevant PoVs for a given crash, enabling a more comprehensive patching strategy.
+
+```bash
+oss-crs --crs martian,multi-retrieval --pov-dir PATH_TO_POVS ...
+```
+
+Here, `PATH_TO_POVS` contains different PoVs for the same vulnerability. The patching CRS is expected to leverage these multiple PoVs to generate a robust and comprehensive patch.
+
+### Patching CRS Ensemble Support
+
+To support multiple CRS-generated patches for a single vulnerability, an aggregator will be introduced. This aggregator defines the policy for selecting the "best" patch from the set of patches proposed by different CRSes. The entry point will be extended to specify the chosen aggregation policy.
+
+```bash
+oss-crs --crs martian,multi-retrieval --aggregator <policy> ...
+```
+
+Example aggregators:
+
+- **`naive`**: First valid result
+- **`consensus`**: Majority agreement
+- **`weighted`**: Score-based selection
+- **`custom`**: User-defined aggregator
 
 <!-- NOTE: comment out until desired CLI interface is implemented -->
 <!-- ### A Working Example -->
