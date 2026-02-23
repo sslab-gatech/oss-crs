@@ -252,6 +252,9 @@ class CRSCompose:
         return self.__run(target, run_id=run_id, build_id=build_id, sanitizer=sanitizer, pov_files=pov_files, diff_path=diff, seed_dir=seed_dir)
 
     def __validate_before_run(self, target: Target) -> bool:
+        if not self.llm.exists():
+            return True
+
         tasks = [
             (
                 "Validate required LLMs for CRS targets",
