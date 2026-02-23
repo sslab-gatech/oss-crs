@@ -74,9 +74,7 @@ def main():
         print(f" - {model}")
 
     for crs_name, info in key_requests.items():
-        required_models = info["required_llms"]
-        if required_models is None:
-            continue
+        required_models = info.get("required_llms") or []
         for model in required_models:
             if model not in available_models:
                 print(
