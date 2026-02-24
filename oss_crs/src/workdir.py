@@ -66,10 +66,9 @@ class WorkDir:
         """Resolve a user-provided id to an existing directory name.
 
         Prefer exact match first, then try normalized form for backward
-        compatibility. IDs are treated as directory names, so path separators
-        are rejected.
+        compatibility.
         """
-        if not raw_id or "/" in raw_id or "\\" in raw_id:
+        if not raw_id:
             return None
         if (ids_dir / raw_id).is_dir():
             return raw_id

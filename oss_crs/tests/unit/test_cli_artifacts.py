@@ -27,12 +27,6 @@ def test_resolve_existing_id_returns_none_when_missing(tmp_path: Path) -> None:
     assert WorkDir._resolve_existing_id("does-not-exist", tmp_path) is None
 
 
-def test_resolve_existing_id_does_not_normalize_path_input(tmp_path: Path) -> None:
-    normalized = normalize_run_id("../escape")
-    _mkdir(tmp_path, normalized)
-    assert WorkDir._resolve_existing_id("../escape", tmp_path) is None
-
-
 def test_resolve_existing_id_prefers_exact_when_both_exist(tmp_path: Path) -> None:
     raw = "my-exact-id"
     normalized = normalize_run_id(raw)
