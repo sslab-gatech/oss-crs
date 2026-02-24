@@ -157,18 +157,13 @@ class LLM:
                             f"{DEFAULT_LITELLM_CONFIG_PATH}"
                         ),
                     )
-            missing_models = required_llms - self.available_models
-            if missing_models:
-                msg = "The following LLMs are required by the CRS targets but not defined in the LiteLLM config:\n"
-                for model in sorted(missing_models):
-                    msg += f"  - {model}\n"
-                return TaskResult(success=False, error=msg.strip())
-            return TaskResult(success=True)
+            return self._validate_missing_models(
+                required_llms,
+                self.available_models,
+                "the LiteLLM config",
+            )
 
         if self.mode == "external":
-            if not self.model_check_enabled:
-                return TaskResult(success=True)
-
             external_models = self._fetch_external_models()
             if external_models is None:
                 return TaskResult(
@@ -178,15 +173,31 @@ class LLM:
                         f"{self.get_crs_api_url()}/models"
                     ),
                 )
-            missing_models = required_llms - external_models
-            if missing_models:
-                msg = "The following LLMs are required by the CRS targets but not defined in external LiteLLM endpoint:\n"
-                for model in sorted(missing_models):
-                    msg += f"  - {model}\n"
-                return TaskResult(success=False, error=msg.strip())
-            return TaskResult(success=True)
+            return self._validate_missing_models(
+                required_llms,
+                external_models,
+                "external LiteLLM endpoint",
+            )
 
         return TaskResult(success=True)
+
+    @staticmethod
+    def _validate_missing_models(
+        required_llms: set[str],
+        available_models: set[str],
+        source_name: str,
+    ) -> TaskResult:
+        missing_models = required_llms - available_models
+        if not missing_models:
+            return TaskResult(success=True)
+
+        msg = (
+            "The following LLMs are required by the CRS targets but not defined in "
+            f"{source_name}:\n"
+        )
+        for model in sorted(missing_models):
+            msg += f"  - {model}\n"
+        return TaskResult(success=False, error=msg.strip())
 
     def _fetch_external_models(self) -> Optional[set[str]]:
         base_url = self.get_crs_api_url()

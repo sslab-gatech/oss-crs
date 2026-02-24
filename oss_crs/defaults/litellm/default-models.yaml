@@ -4,8 +4,13 @@
 # It forwards all requests to the external LiteLLM instance.
 #
 # Environment Variables Required:
-#   OSS_CRS_LLM_EXTERNAL_BASE_URL - URL of external LiteLLM
-#   OSS_CRS_LLM_EXTERNAL_API_KEY          - API key for external LiteLLM
+#   OSS_CRS_LLM_EXTERNAL_BASE_URL - URL of external LiteLLM proxy
+#   OSS_CRS_LLM_EXTERNAL_API_KEY  - API key for that external LiteLLM proxy
+#
+# NOTE:
+# This default file is proxy-oriented (litellm_proxy/*), so it authenticates to
+# the external LiteLLM endpoint itself. Provider keys like OPENAI_API_KEY /
+# ANTHROPIC_API_KEY are expected to be managed by that external LiteLLM service.
 #
 
 model_list:

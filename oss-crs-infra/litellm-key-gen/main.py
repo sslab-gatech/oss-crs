@@ -7,14 +7,13 @@ LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY")
 LITELLM_API_URL = os.getenv("LITELLM_API_URL")
 
 
-def create_llm_key(key: str, budget: int, _required_models: list[str]) -> str | None:
+def create_llm_key(key: str, budget: int) -> str | None:
     """
     Create an LLM API key using LiteLLM's key/generate endpoint.
 
     Args:
-        key: speicifed key
+        key: specified key
         budget: Max budget for this key (in USD)
-        required_models: List of required models (validated separately)
 
     Returns:
         The generated API key string, or None if failed
@@ -84,7 +83,6 @@ def main():
         api_key = create_llm_key(
             info["api_key"],
             info["llm_budget"],
-            required_models,
         )
         if api_key:
             print(f"Generated API key for CRS '{crs_name}': {api_key}")
