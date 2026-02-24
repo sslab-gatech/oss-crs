@@ -199,7 +199,11 @@ class LocalCRSUtils(CRSUtils):
         (response_dir / "build_exit_code").write_text(str(build_exit_code))
         if "build_log" in result:
             (response_dir / "build.log").write_text(result["build_log"])
-        if "id" in result:
+        if "build_stdout" in result:
+            (response_dir / "build_stdout.log").write_text(result["build_stdout"])
+        if "build_stderr" in result:
+            (response_dir / "build_stderr.log").write_text(result["build_stderr"])
+        if build_exit_code == 0 and "id" in result:
             (response_dir / "build_id").write_text(result["id"])
 
         return build_exit_code
@@ -251,6 +255,8 @@ class LocalCRSUtils(CRSUtils):
 
         test_exit_code = result.get("test_exit_code", 1)
         (response_dir / "test_exit_code").write_text(str(test_exit_code))
+        if "test_stdout" in result:
+            (response_dir / "test_stdout.log").write_text(result["test_stdout"])
         if "test_stderr" in result:
             (response_dir / "test_stderr.log").write_text(result["test_stderr"])
 

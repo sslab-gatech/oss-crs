@@ -14,7 +14,10 @@ services:
       - OSS_CRS_BUILD_ID={{ build_id }}
       - OSS_CRS_BUILD_OUT_DIR=/OSS_CRS_BUILD_OUT_DIR
       - OSS_CRS_TARGET={{ target.name }}
-      - OSS_CRS_TARGET_PROJ_DIR=/project_dir
+      - OSS_CRS_PROJ_PATH=/OSS_CRS_PROJ_PATH
+      # During build-target phase, source repository root is conventionally under $SRC.
+      # CRS build scripts may provide a canonical symlink at /src/repo for run phase.
+      - OSS_CRS_REPO_PATH=/src/repo
 {%- for key, value in additional_env.items() %}
       - {{ key }}={{ value }}
 {%- endfor %}

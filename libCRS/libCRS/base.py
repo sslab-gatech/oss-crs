@@ -94,7 +94,8 @@ class CRSUtils(ABC):
         Args:
             patch_path: Path to a unified diff file.
             response_dir: Directory to receive results:
-                - build_exit_code, build.log, build_id
+                - build_exit_code, build.log, build_stdout.log, build_stderr.log
+                - build_id (present only when build_exit_code is 0)
             builder: Builder sidecar module name (resolved to URL internally).
 
         Returns:
@@ -118,7 +119,7 @@ class CRSUtils(ABC):
             harness_name: Harness binary name in /out/.
             build_id: Build ID from a prior apply_patch_build call.
             response_dir: Directory to receive results:
-                - pov_exit_code, pov_stderr.log
+                - pov_exit_code, pov_stdout.log, pov_stderr.log
             builder: Builder sidecar module name (resolved to URL internally).
 
         Returns:
@@ -138,7 +139,7 @@ class CRSUtils(ABC):
         Args:
             build_id: Build ID from a prior apply_patch_build call.
             response_dir: Directory to receive results:
-                - test_exit_code, test_stderr.log
+                - test_exit_code, test_stdout.log, test_stderr.log
             builder: Builder sidecar module name (resolved to URL internally).
 
         Returns:

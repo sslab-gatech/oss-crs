@@ -320,7 +320,7 @@ class Target:
                 f"--exclude=.git/ORIG_HEAD "
                 f"--from=repo_path . .\n"
             ).encode()
-            added_dockerfile += ("COPY . /project_dir\n").encode()
+            added_dockerfile += ("COPY . /OSS_CRS_PROJ_PATH\n").encode()
             tmp_dockerfile.write_bytes(added_dockerfile)
 
             # TODO: We might need to consider cache options here later.
@@ -349,7 +349,7 @@ class Target:
         """Build docker image without a repo overlay.
 
         Uses self.proj_path as Docker context directly. The Dockerfile is
-        extended with ``COPY . /project_dir`` so that build.sh, test.sh,
+        extended with ``COPY . /OSS_CRS_PROJ_PATH`` so that build.sh, test.sh,
         and other project files are available inside the image.
         """
         dockerfile_dir = self.work_dir / ".oss-crs-dockerfiles"
@@ -359,7 +359,7 @@ class Target:
         try:
             added_dockerfile = (self.proj_path / "Dockerfile").read_bytes()
             added_dockerfile += b"\n# Added by CRS Target build (plain)\n"
-            added_dockerfile += b"COPY . /project_dir\n"
+            added_dockerfile += b"COPY . /OSS_CRS_PROJ_PATH\n"
             tmp_dockerfile.write_bytes(added_dockerfile)
 
             cmd = [
