@@ -103,6 +103,10 @@ def render_build_target_docker_compose(
         "build_id": build_id,
         "crs_compose_env": crs.crs_compose_env.get_env(),
         "libCRS_path": str(LIBCRS_PATH),
+        "resource": {
+            "cpuset": crs.resource.cpuset if crs.resource else "0",
+            "memory": crs.resource.memory if crs.resource else "8G",
+        },
     }
     return render_template(template_path, context)
 

@@ -134,13 +134,6 @@ class CRSCompose:
         build_id = normalize_run_id(build_id) if build_id else generate_run_id()
         sanitizer = sanitizer if sanitizer else self._get_sanitizer(target)
 
-        # Auto-detect cgroup-parent availability
-        cgroup_parent, msg = check_cgroup_parent_available()
-        if cgroup_parent:
-            Console().print("[green]Using cgroup-parent for shared resource limits[/green]")
-        else:
-            Console().print(f"[dim]Using per-container resource limits ({msg})[/dim]")
-
         target_base_image = target.build_docker_image()
         if target_base_image is None:
             return False

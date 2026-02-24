@@ -26,5 +26,7 @@ services:
         - crs_version={{ crs.version }}
       additional_contexts:
         libcrs: {{ libCRS_path }}
+    cpuset: "{{ resource.cpuset }}"
+    mem_limit: "{{ resource.memory }}"
     volumes:
       - {{build_out_dir}}:/OSS_CRS_BUILD_OUT_DIR
