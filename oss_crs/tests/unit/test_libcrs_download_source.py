@@ -23,6 +23,13 @@ def test_download_source_requires_existing_source(monkeypatch, tmp_path: Path) -
         utils.download_source(SourceType.REPO, tmp_path / "dst")
 
 
+def test_download_source_requires_repo_env(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("OSS_CRS_REPO_PATH", raising=False)
+    utils = LocalCRSUtils()
+    with pytest.raises(RuntimeError, match="OSS_CRS_REPO_PATH"):
+        utils.download_source(SourceType.REPO, tmp_path / "dst")
+
+
 def test_download_source_rejects_overlapping_paths(monkeypatch, tmp_path: Path) -> None:
     src = tmp_path / "src"
     src.mkdir()
@@ -52,3 +59,9 @@ def test_download_source_calls_rsync_copy(monkeypatch, tmp_path: Path) -> None:
 
     assert calls["src"] == src.resolve()
     assert calls["dst"] == dst.resolve()
+
+
+def test_download_source_rejects_unknown_source_type(tmp_path: Path) -> None:
+    utils = LocalCRSUtils()
+    with pytest.raises(ValueError, match="Unsupported source type"):
+        utils.download_source("invalid-type", tmp_path / "dst")  # type: ignore[arg-type]
