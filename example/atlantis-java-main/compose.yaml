@@ -8,14 +8,14 @@ run_env: local
 docker_registry: local
 
 # --- Infrastructure ---------------------------------------------------------
-# LiteLLM proxy + PostgreSQL + Exchange sidecar 等基础设施服务的资源限制
+# Resource limits for infrastructure services (LiteLLM proxy, PostgreSQL, Exchange sidecar)
 oss_crs_infra:
   cpuset: "0-3"
   memory: "16G"
 
 # --- CRS (atlantis-java-main) ----------------------------------------------
-# Java bug-finding CRS — 多 Jazzer fuzzer 变体 + LLM 驱动的 PoC 生成、
-# 漏洞利用套件(expkit)、静态分析、CodeQL、concolic 执行等模块。
+# Java bug-finding CRS with multiple Jazzer fuzzer variants, LLM-powered PoC
+# generation, exploitation kit (expkit), static analysis, CodeQL, and more.
 atlantis-java-main:
   source:
     local_path: /tmp/atlantis-java-snapshot
