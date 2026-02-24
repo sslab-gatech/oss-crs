@@ -33,12 +33,12 @@ Full spec: [OSS-Fuzz project.yaml reference](https://google.github.io/oss-fuzz/g
 # Build target
 uv run oss-crs build-target \
     --compose-file ./crs-compose.yaml \
-    --target-proj-path /path/to/<project-name>
+    --target-path /path/to/<project-name>
 
 # Run CRS
 uv run oss-crs run \
     --compose-file ./crs-compose.yaml \
-    --target-proj-path /path/to/<project-name> \
+    --target-path /path/to/<project-name> \
     --target-harness <harness_name>
 ```
 
