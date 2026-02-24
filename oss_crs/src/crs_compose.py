@@ -273,6 +273,9 @@ class CRSCompose:
         )
 
     def __validate_before_run(self, target: Target) -> bool:
+        if not self.llm.exists():
+            return True
+
         tasks = [
             (
                 "Validate required LLMs for CRS targets",
