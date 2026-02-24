@@ -72,6 +72,7 @@ def render_build_target_docker_compose(
     build_out_dir: Path,
     build_id: str,
     sanitizer: str,
+    bug_candidate_dir: Optional[Path] = None,
 ) -> str:
     """Render the docker-compose file for building a target.
 
@@ -82,6 +83,7 @@ def render_build_target_docker_compose(
         build_out_dir (Path): Output directory for the build.
         build_id (str): Build identifier.
         sanitizer (str): Sanitizer to use (e.g., "address", "undefined").
+        bug_candidate_dir: Optional path to SARIF bug-candidate directory.
 
     Returns:
         str: Rendered docker-compose content as a string.
@@ -104,6 +106,7 @@ def render_build_target_docker_compose(
         "build_id": build_id,
         "crs_compose_env": crs.crs_compose_env.get_env(),
         "libCRS_path": str(LIBCRS_PATH),
+        "bug_candidate_dir": str(bug_candidate_dir) if bug_candidate_dir else None,
     }
     return render_template(template_path, context)
 

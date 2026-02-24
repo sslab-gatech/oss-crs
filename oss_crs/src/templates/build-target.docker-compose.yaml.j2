@@ -18,14 +18,8 @@ services:
 {%- if target.harness is defined %}
       - OSS_CRS_TARGET_HARNESS={{ target.harness }}
 {%- endif %}
-{%- if target.sink_file_path is defined %}
-      - OSS_CRS_TARGET_SINK_FILE_PATH={{ target.sink_file_path }}
-      - OSS_CRS_TARGET_SINK_FUNC_NAME={{ target.sink_function_name }}
-      - OSS_CRS_TARGET_SINK_START_LINE={{ target.sink_start_line }}
-      - OSS_CRS_TARGET_SINK_END_LINE={{ target.sink_end_line }}
-{%- endif %}
-{%- if target.description is defined and target.description %}
-      - OSS_CRS_TARGET_DESCRIPTION={{ target.description }}
+{%- if bug_candidate_dir %}
+      - OSS_CRS_BUG_CANDIDATE_DIR=/OSS_CRS_BUG_CANDIDATES
 {%- endif %}
 {%- for key, value in additional_env.items() %}
       - {{ key }}={{ value }}
@@ -40,3 +34,6 @@ services:
         libcrs: {{ libCRS_path }}
     volumes:
       - {{build_out_dir}}:/OSS_CRS_BUILD_OUT_DIR
+{%- if bug_candidate_dir %}
+      - {{ bug_candidate_dir }}:/OSS_CRS_BUG_CANDIDATES:ro
+{%- endif %}

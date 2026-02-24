@@ -211,6 +211,7 @@ class CRS:
         progress: MultiTaskProgress,
         build_id: str,
         sanitizer: str,
+        bug_candidate_dir: Optional[Path] = None,
     ) -> "TaskResult":
         if (
             self.config.target_build_phase is None
@@ -247,6 +248,7 @@ class CRS:
                         build_id,
                         sanitizer,
                         p,
+                        bug_candidate_dir=bug_candidate_dir,
                     )
                 ),
             )
@@ -332,6 +334,7 @@ class CRS:
         build_id: str,
         sanitizer: str,
         progress: MultiTaskProgress,
+        bug_candidate_dir: Optional[Path] = None,
     ) -> "TaskResult":
         build_out_dir = self.work_dir.get_build_output_dir(
             self.name, target, build_id, sanitizer
@@ -350,6 +353,7 @@ class CRS:
                 build_out_dir,
                 build_id,
                 sanitizer,
+                bug_candidate_dir=bug_candidate_dir,
             )
             tmp_docker_compose.docker_compose.write_text(rendered)
             return TaskResult(success=True)

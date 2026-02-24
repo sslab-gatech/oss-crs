@@ -6,7 +6,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from ..crs_compose import CRSCompose
 from ..config.crs_compose import CRSComposeConfig
-from ..config.target_input import TargetInput
 from ..target import Target
 from .artifacts import handle_artifacts
 
@@ -46,11 +45,11 @@ def add_target_arguments(parser):
         help="Local path to the target repository to build with the target project configuration.",
     )
     parser.add_argument(
-        "--target-input",
+        "--bug-candidate",
         type=Path,
         required=False,
         default=None,
-        help="Path to JSON file with directed fuzzing sink location.",
+        help="Path to SARIF 2.1.0 file or directory with bug-candidate reports.",
     )
 
 
@@ -213,14 +212,11 @@ def add_gen_compose_command(subparsers):
 
 def init_target_from_args(args) -> Target:
     target_harness = args.target_harness if hasattr(args, "target_harness") else None
-    target_input_path = args.target_input if hasattr(args, "target_input") else None
-    target_input = TargetInput.from_json_file(target_input_path) if target_input_path else None
     return Target(
         args.work_dir,
         args.target_proj_path,
         args.target_repo_path,
         target_harness,
-        target_input,
     )
 
 
@@ -282,13 +278,15 @@ def cli() -> bool:
             return False
     elif args.command == "build-target":
         target = init_target_from_args(args)
-        if not crs_compose.build_target(target, build_id=args.build_id, sanitizer=args.sanitizer):
+        bug_candidate = args.bug_candidate if hasattr(args, "bug_candidate") else None
+        if not crs_compose.build_target(target, build_id=args.build_id, sanitizer=args.sanitizer, bug_candidate=bug_candidate):
             return False
     elif args.command == "run":
         target = init_target_from_args(args)
         if args.timeout is not None:
             crs_compose.set_deadline(time.monotonic() + args.timeout)
-        if not crs_compose.run(target, run_id=args.run_id, build_id=args.build_id, sanitizer=args.sanitizer, pov=args.pov, pov_dir=args.pov_dir, diff=args.diff, seed_dir=args.seed_dir):
+        bug_candidate = args.bug_candidate if hasattr(args, "bug_candidate") else None
+        if not crs_compose.run(target, run_id=args.run_id, build_id=args.build_id, sanitizer=args.sanitizer, pov=args.pov, pov_dir=args.pov_dir, diff=args.diff, seed_dir=args.seed_dir, bug_candidate=bug_candidate):
             return False
     elif args.command == "artifacts":
         target = init_target_from_args(args)

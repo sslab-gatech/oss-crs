@@ -134,7 +134,8 @@ class CRSCompose:
         return True
 
     def build_target(
-        self, target: Target, build_id: str | None = None, sanitizer: str | None = None
+        self, target: Target, build_id: str | None = None, sanitizer: str | None = None,
+        bug_candidate: Optional[Path] = None,
     ) -> bool:
         # Normalize build_id at library boundary; generate timestamp-based ID if not provided
         build_id = normalize_run_id(build_id) if build_id else generate_run_id()
@@ -170,12 +171,23 @@ class CRSCompose:
                     )
                 )
 
+        # Resolve bug-candidate path to a directory for volume mount
+        bug_candidate_dir: Optional[Path] = None
+        if bug_candidate is not None:
+            if bug_candidate.is_dir():
+                bug_candidate_dir = bug_candidate
+            elif bug_candidate.is_file():
+                bug_candidate_dir = bug_candidate.parent
+            else:
+                print(f"Warning: --bug-candidate path does not exist: {bug_candidate}")
+
         for crs in self.crs_list:
             tasks.append(
                 (
                     crs.name,
                     lambda progress, crs=crs: crs.build_target(
-                        target, target_base_image, progress, build_id, sanitizer
+                        target, target_base_image, progress, build_id, sanitizer,
+                        bug_candidate_dir=bug_candidate_dir,
                     ),
                 )
             )
@@ -197,6 +209,7 @@ class CRSCompose:
         pov_dir: Optional[Path] = None,
         diff: Optional[Path] = None,
         seed_dir: Optional[Path] = None,
+        bug_candidate: Optional[Path] = None,
     ) -> bool:
         # Normalize IDs at library boundary
         run_id = normalize_run_id(run_id) if run_id else generate_run_id()
@@ -241,7 +254,7 @@ class CRSCompose:
             # Generate new build_id if we don't have one
             if not build_id:
                 build_id = generate_run_id()
-            if not self.build_target(target, build_id, sanitizer):
+            if not self.build_target(target, build_id, sanitizer, bug_candidate=bug_candidate):
                 return False
 
         # Ensure snapshot_image_tag is set for the run phase, even if
@@ -270,6 +283,7 @@ class CRSCompose:
             pov_files=pov_files,
             diff_path=diff,
             seed_dir=seed_dir,
+            bug_candidate=bug_candidate,
         )
 
     def __validate_before_run(self, target: Target) -> bool:
@@ -325,6 +339,7 @@ class CRSCompose:
         pov_files: list[Path] | None = None,
         diff_path: Optional[Path] = None,
         seed_dir: Optional[Path] = None,
+        bug_candidate: Optional[Path] = None,
     ) -> bool:
         if self.crs_compose_env.run_env == RunEnv.LOCAL:
             return self.__run_local(
@@ -335,6 +350,7 @@ class CRSCompose:
                 pov_files=pov_files or [],
                 diff_path=diff_path,
                 seed_dir=seed_dir,
+                bug_candidate=bug_candidate,
             )
         else:
             print(f"TODO: Support run env {self.crs_compose_env.run_env}")
@@ -349,6 +365,7 @@ class CRSCompose:
         pov_files: list[Path] | None = None,
         diff_path: Optional[Path] = None,
         seed_dir: Optional[Path] = None,
+        bug_candidate: Optional[Path] = None,
     ) -> bool:
         with MultiTaskProgress(
             tasks=[],
@@ -392,6 +409,7 @@ class CRSCompose:
                             pov_files=pov_files or [],
                             diff_path=diff_path,
                             seed_dir=seed_dir,
+                            bug_candidate=bug_candidate,
                         ),
                     ),
                     (
@@ -592,6 +610,7 @@ class CRSCompose:
         pov_files: list[Path] | None = None,
         diff_path: Optional[Path] = None,
         seed_dir: Optional[Path] = None,
+        bug_candidate: Optional[Path] = None,
     ) -> TaskResult:
         def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
             content = renderer.render_run_crs_compose_docker_compose(
@@ -651,6 +670,17 @@ class CRSCompose:
                     shutil.copy2(f, seed_subdir / f.name)
             return TaskResult(success=True)
 
+        def copy_bug_candidates(progress: MultiTaskProgress) -> TaskResult:
+            bc_subdir = _get_exchange_dir() / "bug-candidates"
+            bc_subdir.mkdir(parents=True, exist_ok=True)
+            if bug_candidate.is_file():
+                shutil.copy2(bug_candidate, bc_subdir / bug_candidate.name)
+            elif bug_candidate.is_dir():
+                for f in bug_candidate.iterdir():
+                    if f.is_file():
+                        shutil.copy2(f, bc_subdir / f.name)
+            return TaskResult(success=True)
+
         progress.add_task("Clean up exchange directory", cleanup_exchange_dir)
         progress.add_task("Clean up shared directories", cleanup_shared_dirs)
 
@@ -662,6 +692,9 @@ class CRSCompose:
 
         if seed_dir:
             progress.add_task("Copy seed files to exchange dir", copy_seeds)
+
+        if bug_candidate:
+            progress.add_task("Copy bug-candidate SARIF to exchange dir", copy_bug_candidates)
 
         progress.add_task(
             "Prepare combined docker compose file", prepare_docker_compose
