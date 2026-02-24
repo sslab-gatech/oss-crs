@@ -72,6 +72,15 @@ services:
 {%- for env_key, env_value in crs.resource.additional_env.items() %}
       - {{ env_key }}={{ env_value }}
 {%- endfor %}
+{%- if target_env.sink_file_path is defined %}
+      - OSS_CRS_TARGET_SINK_FILE_PATH={{ target_env.sink_file_path }}
+      - OSS_CRS_TARGET_SINK_FUNC_NAME={{ target_env.sink_function_name }}
+      - OSS_CRS_TARGET_SINK_START_LINE={{ target_env.sink_start_line }}
+      - OSS_CRS_TARGET_SINK_END_LINE={{ target_env.sink_end_line }}
+{%- endif %}
+{%- if target_env.description is defined and target_env.description %}
+      - OSS_CRS_TARGET_DESCRIPTION={{ target_env.description }}
+{%- endif %}
 {%- if llm_context is defined and not crs.config.is_builder %}
       - OSS_CRS_LLM_API_URL={{ llm_context.llm_api_url }}
 {%- if llm_context.api_keys.get(crs.name) %}

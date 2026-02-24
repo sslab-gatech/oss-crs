@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from ..crs_compose import CRSCompose
 from ..config.crs_compose import CRSComposeConfig
+from ..config.target_input import TargetInput
 from ..target import Target
 from .artifacts import handle_artifacts
 
@@ -43,6 +44,13 @@ def add_target_arguments(parser):
         type=Path,
         required=False,
         help="Local path to the target repository to build with the target project configuration.",
+    )
+    parser.add_argument(
+        "--target-input",
+        type=Path,
+        required=False,
+        default=None,
+        help="Path to JSON file with directed fuzzing sink location.",
     )
 
 
@@ -205,11 +213,14 @@ def add_gen_compose_command(subparsers):
 
 def init_target_from_args(args) -> Target:
     target_harness = args.target_harness if hasattr(args, "target_harness") else None
+    target_input_path = args.target_input if hasattr(args, "target_input") else None
+    target_input = TargetInput.from_json_file(target_input_path) if target_input_path else None
     return Target(
         args.work_dir,
         args.target_proj_path,
         args.target_repo_path,
         target_harness,
+        target_input,
     )
 
 

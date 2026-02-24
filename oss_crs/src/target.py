@@ -10,6 +10,7 @@ import fcntl
 from contextlib import contextmanager
 
 from .config.target import TargetConfig
+from .config.target_input import TargetInput
 from .ui import MultiTaskProgress, TaskResult
 from .utils import generate_random_name, rm_with_docker
 from . import ui
@@ -80,6 +81,7 @@ class Target:
         proj_path: Path,
         repo_path: Optional[Path],
         target_harness: Optional[str] = None,
+        target_input: Optional[TargetInput] = None,
     ):
         self.name = extract_name_from_proj_path(str(proj_path))
         self.proj_path = proj_path
@@ -99,6 +101,7 @@ class Target:
 
         self.repo_hash: Optional[str] = None
         self.target_harness = target_harness
+        self.target_input = target_input
         self.snapshot_image_tag: Optional[str] = None
 
     @property
@@ -413,6 +416,14 @@ class Target:
 
         if self.target_harness:
             ret["harness"] = self.target_harness
+
+        if self.target_input is not None:
+            ret["sink_function_name"] = self.target_input.sink.function_name
+            ret["sink_file_path"] = self.target_input.sink.file_path
+            ret["sink_start_line"] = str(self.target_input.sink.start_line)
+            ret["sink_end_line"] = str(self.target_input.sink.end_line)
+            if self.target_input.description:
+                ret["description"] = self.target_input.description
 
         return ret
 
