@@ -226,11 +226,61 @@ def test_build_target_no_limits_when_unspecified(
     assert memory_max == "max", f"Expected 'max' for unlimited memory, got: {memory_max}"
 
 
+def _parse_memory_log(log_path) -> dict:
+    """Parse a dummy-crs memory test log file.
+
+    Returns dict with:
+        - cgroup_path: str
+        - memory_max: int (bytes) or "max" for unlimited
+        - env_memory_limit: str (e.g., "128M")
+        - final_allocated_mb: int (MB allocated before OOM or completion)
+        - hit_oom: bool
+    """
+    text = log_path.read_text()
+    result = {
+        "cgroup_path": None,
+        "memory_max": None,
+        "env_memory_limit": None,
+        "final_allocated_mb": None,
+        "hit_oom": False,
+    }
+
+    for line in text.splitlines():
+        if "cgroup_path:" in line:
+            result["cgroup_path"] = line.split("cgroup_path:", 1)[1].strip()
+        elif "memory.max:" in line:
+            val = line.split("memory.max:", 1)[1].strip()
+            if val == "max":
+                result["memory_max"] = "max"
+            elif val.isdigit():
+                result["memory_max"] = int(val)
+        elif "env_memory_limit:" in line:
+            result["env_memory_limit"] = line.split("env_memory_limit:", 1)[1].strip().strip('"')
+        elif "FINAL: allocated" in line:
+            # Parse "FINAL: allocated X chunks = YMB before OOM" or "... (no OOM)"
+            result["hit_oom"] = "before OOM" in line
+            match = re.search(r"= (\d+)MB", line)
+            if match:
+                result["final_allocated_mb"] = int(match.group(1))
+
+    return result
+
+
+def _get_crs_name_from_path(log_path) -> str | None:
+    """Extract CRS name from log file path.
+
+    Log paths look like: .../crs-alpha/.../fuzzer_memory_test.txt
+    """
+    parts = log_path.parts
+    for part in parts:
+        if part.startswith("crs-"):
+            return part
+    return None
+
+
 @pytest.fixture
 def multi_crs_compose_file(tmp_dir):
     """Create a compose file with multiple CRSs having different resource limits."""
-    # We'll use the same dummy-crs source but configure it twice with different names
-    # Note: This requires the CRS to be registered or use local_path
     content = {
         "run_env": "local",
         "docker_registry": "local",
@@ -259,11 +309,14 @@ def test_multi_crs_different_resource_limits(
     multi_crs_compose_file,
     work_dir,
 ):
-    """Multiple CRSs should each have their own resource limits."""
+    """Multiple CRSs should each have their own resource limits.
+
+    crs-alpha: 128M limit -> should OOM around 80-120MB allocated (40MB chunks)
+    crs-beta:  256M limit -> should allocate more than crs-alpha before OOM
+    """
     build_id = "multi-crs-build"
     run_id = "multi-crs-run"
 
-    # Build for each CRS - they share the same target
     build_result = cli_runner(
         "build-target",
         "--compose-file",
@@ -280,7 +333,6 @@ def test_multi_crs_different_resource_limits(
     )
     assert build_result.returncode == 0, f"build-target failed: {build_result.stderr}"
 
-    # Run with both CRSs
     run_result = cli_runner(
         "run",
         "--compose-file",
@@ -298,45 +350,69 @@ def test_multi_crs_different_resource_limits(
         "--run-id",
         run_id,
         "--timeout",
-        "30",
-        timeout=120,
+        "60",
+        timeout=180,
     )
-    # Run may timeout or complete, both are acceptable for this test
     assert run_result.returncode in (0, 1), f"run failed unexpectedly: {run_result.stderr}"
 
-    # Check if cgroup-parent mode was used
+    # Parse all memory test logs
+    memory_logs = sorted(work_dir.rglob("*_memory_test.txt"))
+    assert memory_logs, "Expected memory test logs from dummy-crs containers"
+
+    # Group logs by CRS
+    crs_results: dict[str, list[dict]] = {}
+    for log_path in memory_logs:
+        crs_name = _get_crs_name_from_path(log_path)
+        if crs_name:
+            parsed = _parse_memory_log(log_path)
+            parsed["log_path"] = str(log_path)
+            crs_results.setdefault(crs_name, []).append(parsed)
+
+    # We should have logs from both CRSs
+    assert "crs-alpha" in crs_results, f"Missing logs from crs-alpha. Found: {list(crs_results.keys())}"
+    assert "crs-beta" in crs_results, f"Missing logs from crs-beta. Found: {list(crs_results.keys())}"
+
+    # Get max allocation for each CRS (across all containers)
+    alpha_max_alloc = max(
+        (r["final_allocated_mb"] or 0 for r in crs_results["crs-alpha"]),
+        default=0
+    )
+    beta_max_alloc = max(
+        (r["final_allocated_mb"] or 0 for r in crs_results["crs-beta"]),
+        default=0
+    )
+
+    # Check memory.max values seen by containers
+    alpha_memory_max = [r["memory_max"] for r in crs_results["crs-alpha"] if r["memory_max"]]
+    beta_memory_max = [r["memory_max"] for r in crs_results["crs-beta"] if r["memory_max"]]
+
+    # Verify limits are different and correct
+    # crs-alpha should see ~128MB limit (134217728 bytes)
+    # crs-beta should see ~256MB limit (268435456 bytes)
     uses_cgroup_parent = "Created cgroups at:" in run_result.stdout
 
-    # Find memory logs from both CRSs
-    memory_logs = sorted(work_dir.rglob("*_memory_test.txt"))
-
     if uses_cgroup_parent:
-        # With cgroup-parent, we expect separate cgroups for each CRS
-        # The containers should see their cgroup path
-        cgroup_paths = set()
-        for log_path in memory_logs:
-            text = log_path.read_text()
-            # Extract cgroup path from log
-            for line in text.splitlines():
-                if "cgroup_path:" in line:
-                    path = line.split("cgroup_path:", 1)[1].strip()
-                    # Extract the CRS name from the cgroup path
-                    # Expected format: .../crs-alpha/... or .../crs-beta/...
-                    if "crs-alpha" in path or "crs-beta" in path:
-                        cgroup_paths.add(path)
+        # With cgroup-parent, containers see memory.max from their cgroup
+        # alpha: 128M = 134217728 bytes, beta: 256M = 268435456 bytes
+        for mem_max in alpha_memory_max:
+            if mem_max != "max":
+                assert mem_max <= 150 * 1024 * 1024, f"crs-alpha memory.max too high: {mem_max}"
 
-        # We should see logs from containers (may be from same CRS if running sequentially)
-        assert memory_logs, "Expected memory test logs from CRS containers"
+        for mem_max in beta_memory_max:
+            if mem_max != "max":
+                assert mem_max <= 300 * 1024 * 1024, f"crs-beta memory.max too high: {mem_max}"
+                assert mem_max > 150 * 1024 * 1024, f"crs-beta memory.max too low: {mem_max}"
     else:
-        # Without cgroup-parent, check env vars for different limits
-        env_limits = set()
-        for log_path in memory_logs:
-            text = log_path.read_text()
-            for line in text.splitlines():
-                if "env_memory_limit:" in line:
-                    limit = line.split("env_memory_limit:", 1)[1].strip().strip('"')
-                    env_limits.add(limit)
+        # Without cgroup-parent, check env vars
+        alpha_env = [r["env_memory_limit"] for r in crs_results["crs-alpha"]]
+        beta_env = [r["env_memory_limit"] for r in crs_results["crs-beta"]]
+        assert any("128" in (e or "") for e in alpha_env), f"crs-alpha should have 128M limit: {alpha_env}"
+        assert any("256" in (e or "") for e in beta_env), f"crs-beta should have 256M limit: {beta_env}"
 
-        # Should see different memory limits from different CRSs
-        # (128M from crs-alpha, 256M from crs-beta)
-        assert len(env_limits) >= 1, f"Expected to see memory limits in logs, got: {env_limits}"
+    # The key assertion: crs-beta (256M) should be able to allocate more than crs-alpha (128M)
+    # With 40MB chunks: alpha ~2-3 chunks (80-120MB), beta ~4-6 chunks (160-240MB)
+    if alpha_max_alloc > 0 and beta_max_alloc > 0:
+        assert beta_max_alloc >= alpha_max_alloc, (
+            f"crs-beta (256M limit) should allocate >= crs-alpha (128M limit). "
+            f"Got alpha={alpha_max_alloc}MB, beta={beta_max_alloc}MB"
+        )
