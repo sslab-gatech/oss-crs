@@ -1,4 +1,4 @@
-name: dummy-crs
+name: crs-resource-limits
 type:
   - bug-finding
 version: 1.0.0

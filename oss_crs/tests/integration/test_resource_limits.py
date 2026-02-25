@@ -53,8 +53,8 @@ def dummy_compose_file(tmp_dir):
         "run_env": "local",
         "docker_registry": "local",
         "oss_crs_infra": {"cpuset": "0", "memory": "256M"},
-        "dummy-crs": {
-            "source": {"local_path": str(FIXTURES_DIR / "dummy-crs")},
+        "crs-resource-limits": {
+            "source": {"local_path": str(FIXTURES_DIR / "crs-resource-limits")},
             "cpuset": "0-1",
             "memory": "192M",
         },
@@ -182,7 +182,7 @@ def test_containers_within_crs_share_memory_limit(
 ):
     """Multiple containers within a CRS should share the memory limit.
 
-    The dummy-crs has 3 containers (fuzzer, analyzer, monitor) each trying
+    The crs-resource-limits has 3 containers (fuzzer, analyzer, monitor) each trying
     to allocate 40MB chunks. With a 192M CRS limit:
     - If limits were per-container: each could allocate ~4 chunks (160MB) = 480MB total
     - If limits are shared: total across all containers should be ~192MB
@@ -252,7 +252,7 @@ def test_containers_within_crs_share_memory_limit(
 
     container_results = []
     for log_path in memory_logs:
-        parsed = _parse_memory_log(log_path)
+        parsed = _parse_resource_log(log_path)
         parsed["container"] = log_path.stem.replace("_memory_test", "")
         container_results.append(parsed)
 
@@ -317,8 +317,8 @@ def test_containers_within_crs_share_memory_limit(
     assert total_chunks > 0, "Expected at least one memory chunk to be allocated"
 
 
-def _parse_memory_log(log_path) -> dict:
-    """Parse a dummy-crs memory test log file.
+def _parse_resource_log(log_path) -> dict:
+    """Parse a crs-resource-limits resource test log file.
 
     Returns dict with:
         - cgroup_path: str
@@ -391,12 +391,12 @@ def multi_crs_compose_file(tmp_dir):
         "docker_registry": "local",
         "oss_crs_infra": {"cpuset": "0", "memory": "256M"},
         "crs-alpha": {
-            "source": {"local_path": str(FIXTURES_DIR / "dummy-crs")},
+            "source": {"local_path": str(FIXTURES_DIR / "crs-resource-limits")},
             "cpuset": "0-1",
             "memory": "128M",
         },
         "crs-beta": {
-            "source": {"local_path": str(FIXTURES_DIR / "dummy-crs")},
+            "source": {"local_path": str(FIXTURES_DIR / "crs-resource-limits")},
             "cpuset": "2-3",
             "memory": "256M",
         },
@@ -462,14 +462,14 @@ def test_multi_crs_different_resource_limits(
 
     # Parse all memory test logs
     memory_logs = sorted(work_dir.rglob("*_memory_test.txt"))
-    assert memory_logs, "Expected memory test logs from dummy-crs containers"
+    assert memory_logs, "Expected memory test logs from crs-resource-limits containers"
 
     # Group logs by CRS
     crs_results: dict[str, list[dict]] = {}
     for log_path in memory_logs:
         crs_name = _get_crs_name_from_path(log_path)
         if crs_name:
-            parsed = _parse_memory_log(log_path)
+            parsed = _parse_resource_log(log_path)
             parsed["log_path"] = str(log_path)
             crs_results.setdefault(crs_name, []).append(parsed)
 
