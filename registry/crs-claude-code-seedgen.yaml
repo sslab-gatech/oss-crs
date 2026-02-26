@@ -1,0 +1,6 @@
+name: crs-claude-code-seedgen
+type:
+  - bug-finding
+source:
+  url: https://github.com/Team-Atlanta/crs-claude-code.git
+  ref: seed-generation

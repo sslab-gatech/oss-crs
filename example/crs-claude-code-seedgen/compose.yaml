@@ -1,0 +1,28 @@
+##############################################################################
+#                        CRS Compose Configuration                           #
+#              Example for crs-claude-code-bugfind (bug-finding)             #
+##############################################################################
+
+# --- General Settings -------------------------------------------------------
+run_env: local
+docker_registry: local
+
+# --- Infrastructure ---------------------------------------------------------
+oss_crs_infra:
+  cpuset: "0-1"
+  memory: "8G"
+
+# --- CRS (crs-claude-code-seedgen) -----------------------------------------
+# Fuzzer sidecar is declared in crs.yaml (run_fuzzer: true)
+# and handled automatically by the framework.
+crs-claude-code-seedgen:
+  cpuset: "2-7"
+  memory: "16G"
+  llm_budget: 10
+  additional_env:
+    ANTHROPIC_MODEL: claude-sonnet-4-5-20250929
+    CLAUDE_CODE_SUBAGENT_MODEL: claude-sonnet-4-5-20250929
+
+# --- LLM Configuration -----------------------------------------------------
+llm_config:
+  litellm_config: ./example/crs-claude-code-seedgen/litellm-config.yaml
