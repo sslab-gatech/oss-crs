@@ -74,9 +74,7 @@ semantics, or migration-impacting docs), add an entry to `CHANGELOG.md` under
 `[Unreleased]`.
 
 We follow [Common Changelog](https://common-changelog.org/) (lightly, to keep
-contributor overhead low) and
-[Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html) for release
-notes and versioning.
+contributor overhead low) for release notes.
 
 When the change is deprecating or breaking:
 - clearly mark it in the changelog

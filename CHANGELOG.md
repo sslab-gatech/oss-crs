@@ -2,8 +2,7 @@
 
 All notable changes to this project are documented in this file.
 This format is based on [Common Changelog](https://common-changelog.org/) (a
-stricter subset of Keep a Changelog) and follows
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+stricter subset of Keep a Changelog).
 
 ## [Unreleased]
 
