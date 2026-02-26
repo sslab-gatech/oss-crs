@@ -1,4 +1,5 @@
 import logging
+import subprocess
 import time
 import threading
 from dataclasses import dataclass
@@ -82,8 +83,19 @@ class SubmitHelper:
                 dst = self.__dst_path(item.content_hash, suffix)
                 if dst is None or dst.exists():
                     continue
+                # Skip files that no longer exist (e.g., fuzzer corpus minimization)
+                if not item.file_path.exists():
+                    logger.debug("skipping deleted file %s", item.file_path)
+                    continue
                 try:
                     rsync_copy(item.file_path, dst)
+                except subprocess.CalledProcessError as e:
+                    # rsync exit code 23 = "some files/attrs were not transferred"
+                    # This happens when files are deleted during transfer (race condition)
+                    if e.returncode == 23:
+                        logger.debug("file deleted during flush: %s", item.file_path)
+                    else:
+                        logger.exception("flush failed for %s", item.file_path)
                 except Exception:
                     logger.exception("flush failed for %s", item.file_path)
         self._last_flush_time = time.time()

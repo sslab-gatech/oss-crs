@@ -108,6 +108,27 @@ def _count_crashes(crashes_dir: Path) -> int:
     return len([f for f in crashes_dir.iterdir() if f.is_file() and f.name.startswith("crash-")])
 
 
+def _parse_options_file(harness: Path) -> list[str]:
+    """Parse libfuzzer .options file for harness-specific flags.
+
+    Uses configparser like oss-fuzz's parse_options.py.
+    Returns list of args like ['-max_len=100000', '-timeout=25'].
+    """
+    import configparser
+
+    options_file = harness.with_suffix(".options")
+    if not options_file.exists():
+        return []
+
+    parser = configparser.ConfigParser()
+    parser.read(options_file)
+
+    if not parser.has_section("libfuzzer"):
+        return []
+
+    return [f"-{key}={value}" for key, value in parser["libfuzzer"].items()]
+
+
 def _build_fuzzer_cmd(
     engine: str,
     harness: Path,
@@ -123,12 +144,28 @@ def _build_fuzzer_cmd(
         # Artifact prefix for crashes
         cmd.append(f"-artifact_prefix={crashes_dir}/")
 
+        # Fork mode with crash tolerance - keeps fuzzing after finding crashes
+        fork_jobs = os.cpu_count() or 1
+        cmd.append(f"-fork={fork_jobs}")
+        cmd.append("-ignore_crashes=1")
+        cmd.append("-ignore_timeouts=1")
+        cmd.append("-ignore_ooms=1")
+
         # Disable leak detection (leaks are not POVs)
         cmd.append("-detect_leaks=0")
+
+        # Close stdin/stdout for fork workers (reduces noise)
+        cmd.append("-close_fd_mask=3")
+
+        # Reload corpus periodically to pick up new seeds
+        cmd.append("-reload=1")
 
         # Timeout per input
         if timeout > 0:
             cmd.append(f"-max_total_time={timeout}")
+
+        # Harness-specific options from .options file (e.g., max_len, timeout)
+        cmd.extend(_parse_options_file(harness))
 
         # Add extra args if provided
         if extra_args:
