@@ -11,6 +11,11 @@ from .artifacts import handle_artifacts
 
 
 DEFAULT_WORK_DIR = (Path(__file__) / "../../../../.oss-crs-workdir").resolve()
+DEPRECATED_FLAGS = {
+    "--target-proj-path": "--fuzz-proj-path",
+    "--target-path": "--fuzz-proj-path",
+    "--target-repo-path": "--target-source-path",
+}
 
 
 def add_common_arguments(parser):
@@ -30,6 +35,7 @@ def add_common_arguments(parser):
 
 def add_target_arguments(parser):
     parser.add_argument(
+        "--fuzz-proj-path",
         "--target-path",
         "--target-proj-path",
         dest="target_proj_path",
@@ -38,7 +44,7 @@ def add_target_arguments(parser):
         help=(
             "Path to OSS-Fuzz target project directory "
             "(contains Dockerfile/project.yaml/build.sh). "
-            "--target-proj-path is kept as compatibility alias."
+            "--target-path and --target-proj-path are kept as compatibility aliases."
         ),
     )
     parser.add_argument(
@@ -227,6 +233,18 @@ def init_target_from_args(args) -> Target:
     )
 
 
+def _warn_deprecated_cli_aliases(argv: list[str]) -> None:
+    for legacy, preferred in DEPRECATED_FLAGS.items():
+        if legacy in argv:
+            print(
+                (
+                    f"Warning: {legacy} is deprecated and will be removed in a "
+                    f"future minor release. Use {preferred} instead."
+                ),
+                file=sys.stderr,
+            )
+
+
 def _sigterm_handler(signum, frame):
     """Convert SIGTERM into KeyboardInterrupt so cleanup tasks can run."""
     raise KeyboardInterrupt("SIGTERM received")
@@ -248,10 +266,12 @@ def cli() -> bool:
     add_check_command(subparsers)
     add_gen_compose_command(subparsers)
 
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    _warn_deprecated_cli_aliases(argv)
+    args = parser.parse_args(argv)
 
     # Resolve all Path arguments to absolute paths so that relative paths
-    # (e.g., --target-proj-path ../ghostscript) work regardless of cwd.
+    # (e.g., --fuzz-proj-path ../ghostscript) work regardless of cwd.
     for key, value in vars(args).items():
         if isinstance(value, Path):
             setattr(args, key, value.expanduser().resolve())

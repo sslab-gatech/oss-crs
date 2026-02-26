@@ -105,7 +105,7 @@ class Target:
 
     @property
     def _has_repo(self) -> bool:
-        """Whether a repo path was explicitly provided via --target-repo-path."""
+        """Whether a repo path was explicitly provided via --target-source-path."""
         return self._user_provided_repo
 
     def _compute_repo_key(self) -> str:
@@ -411,6 +411,8 @@ class Target:
             "engine": "libfuzzer",
             "sanitizer": "address",
             "architecture": "x86_64",
+            # Backward-compatible key name. This is the in-container effective
+            # source path (final WORKDIR), not the host filesystem repo path.
             "repo_path": self._resolve_effective_workdir(),
         }
 

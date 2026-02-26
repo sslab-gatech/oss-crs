@@ -33,26 +33,27 @@ Full spec: [OSS-Fuzz project.yaml reference](https://google.github.io/oss-fuzz/g
 # Build target
 uv run oss-crs build-target \
     --compose-file ./crs-compose.yaml \
-    --target-path /path/to/<project-name>
+    --fuzz-proj-path /path/to/<project-name>
 
 # Run CRS
 uv run oss-crs run \
     --compose-file ./crs-compose.yaml \
-    --target-path /path/to/<project-name> \
+    --fuzz-proj-path /path/to/<project-name> \
     --target-harness <harness_name>
 ```
 
 | Argument              | Required | Description                                                                    |
 |-----------------------|----------|--------------------------------------------------------------------------------|
-| `--target-path` (`--target-proj-path`) | Yes | Path to the OSS-Fuzz target project directory (`Dockerfile`, `project.yaml`, `build.sh`). |
-| `--target-source-path` (`--target-repo-path`) | No | Optional local source override path. If set, source is overlaid to the effective Dockerfile `WORKDIR`. |
+| `--fuzz-proj-path` (`--target-path`, `--target-proj-path`, deprecated aliases) | Yes | Path to the OSS-Fuzz target project directory (`Dockerfile`, `project.yaml`, `build.sh`). |
+| `--target-source-path` (`--target-repo-path`, deprecated alias) | No | Optional local source override path. If set, source is overlaid to the effective Dockerfile `WORKDIR`. |
 | `--target-harness`    | Yes (run)| Fuzz target harness binary name.                                               |
 
-Existing [OSS-Fuzz projects](https://github.com/google/oss-fuzz/tree/master/projects) can be used directly as `--target-path` (or `--target-proj-path`) without modification.
+Existing [OSS-Fuzz projects](https://github.com/google/oss-fuzz/tree/master/projects) can be used directly as `--fuzz-proj-path` without modification.
 
 ### Source Path Semantics
 
 - `OSS_CRS_PROJ_PATH` points to the copied target project directory.
-- `OSS_CRS_REPO_PATH` points to the effective final Dockerfile `WORKDIR`.
+- `OSS_CRS_REPO_PATH` points to the effective final Dockerfile `WORKDIR` inside
+  the target image (default `/src` when no `WORKDIR` is set).
 - When `--target-source-path` is set, the override source is synchronized into
   `OSS_CRS_REPO_PATH`.
