@@ -164,10 +164,16 @@ class CRSUtils(ABC):
     ) -> FuzzerHandle:
         """Start a fuzzer in the fuzzer sidecar container.
 
+        Automatically sets up shared directories for corpus_dir and crashes_dir
+        if they aren't already linked to OSS_CRS_SHARED_DIR. This allows the
+        fuzzer sidecar to access the same directories as the CRS agent.
+
         Args:
             harness_name: Name of the harness binary in /out/.
-            corpus_dir: Directory for corpus files (shared filesystem path).
-            crashes_dir: Directory for crash files (shared filesystem path).
+            corpus_dir: Local directory for corpus files. Will be symlinked to
+                OSS_CRS_SHARED_DIR/<dirname> if not already a shared dir.
+            crashes_dir: Local directory for crash files. Will be symlinked to
+                OSS_CRS_SHARED_DIR/<dirname> if not already a shared dir.
             fuzzer: Fuzzer sidecar module name (resolved to URL internally).
             engine: Fuzzing engine name (default: "libfuzzer").
             timeout: Maximum fuzzing time in seconds (0 = unlimited).
@@ -175,6 +181,10 @@ class CRSUtils(ABC):
 
         Returns:
             FuzzerHandle with fuzzer_id and pid.
+
+        Raises:
+            FileExistsError: If corpus_dir or crashes_dir exist but aren't
+                symlinks to the shared directory.
         """
         pass
 

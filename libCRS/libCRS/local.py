@@ -64,6 +64,51 @@ class LocalCRSUtils(CRSUtils):
         local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.symlink_to(shared_path)
 
+    def _ensure_shared_dir(self, local_path: Path) -> Path:
+        """Ensure local_path is linked to a shared directory, return the shared path.
+
+        - If local_path is already inside OSS_CRS_SHARED_DIR, return it as-is.
+        - If local_path is already a symlink to OSS_CRS_SHARED_DIR, return the target.
+        - If local_path doesn't exist, create a symlink to OSS_CRS_SHARED_DIR/<name>.
+        - If local_path exists but isn't a symlink to shared dir, raise an error.
+        """
+        OSS_CRS_SHARED_DIR = Path(get_env("OSS_CRS_SHARED_DIR"))
+
+        # If path is already inside OSS_CRS_SHARED_DIR, just ensure it exists and return
+        try:
+            local_path.relative_to(OSS_CRS_SHARED_DIR)
+            # Path is inside shared dir - ensure it exists and return as-is
+            local_path.mkdir(parents=True, exist_ok=True)
+            return local_path
+        except ValueError:
+            pass  # Not inside shared dir, continue with normal handling
+
+        if local_path.is_symlink():
+            target = local_path.resolve()
+            # Check if symlink points to shared dir
+            try:
+                target.relative_to(OSS_CRS_SHARED_DIR)
+                return target
+            except ValueError:
+                raise ValueError(
+                    f"Path '{local_path}' is a symlink but not to shared dir"
+                )
+
+        if local_path.exists():
+            raise FileExistsError(
+                f"Path '{local_path}' exists and is not a symlink to shared dir. "
+                f"Use register_shared_dir() before creating the directory, or remove it."
+            )
+
+        # Create new shared dir link using the local path's name
+        shared_name = local_path.name
+        shared_path = OSS_CRS_SHARED_DIR / shared_name
+        shared_path.mkdir(parents=True, exist_ok=True)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.symlink_to(shared_path)
+
+        return shared_path
+
     def __init_fetch_helper(self, data_type: DataType) -> FetchHelper:
         return FetchHelper(data_type, self.infra_client)
 
@@ -306,15 +351,24 @@ class LocalCRSUtils(CRSUtils):
         timeout: int = 0,
         extra_args: list[str] | None = None,
     ) -> FuzzerHandle:
-        """Start a fuzzer in the fuzzer sidecar container."""
+        """Start a fuzzer in the fuzzer sidecar container.
+
+        Automatically sets up shared directories for corpus_dir and crashes_dir
+        if they aren't already linked to OSS_CRS_SHARED_DIR. The fuzzer sidecar
+        receives the shared paths so it can access the same directories.
+        """
         if not self._wait_for_fuzzer_health(fuzzer):
             raise RuntimeError(f"Fuzzer sidecar '{fuzzer}' not available")
+
+        # Ensure directories are shared with fuzzer sidecar
+        shared_corpus = self._ensure_shared_dir(corpus_dir)
+        shared_crashes = self._ensure_shared_dir(crashes_dir)
 
         fuzzer_url = self._get_fuzzer_url(fuzzer)
         payload = {
             "harness_name": harness_name,
-            "corpus_dir": str(corpus_dir),
-            "crashes_dir": str(crashes_dir),
+            "corpus_dir": str(shared_corpus),
+            "crashes_dir": str(shared_crashes),
             "engine": engine,
             "timeout": timeout,
             "extra_args": extra_args or [],
