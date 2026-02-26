@@ -13,9 +13,9 @@ stricter subset of Keep a Changelog).
 - Clarified that target env `repo_path` is the effective in-container source
   path (Dockerfile final `WORKDIR`) used for `OSS_CRS_REPO_PATH`, not a host
   path override.
-- When `--target-source-path` is provided, source override now uses `rsync -a`
-  overlay semantics into the effective `WORKDIR` without deleting
-  non-overwritten files.
+- When `--target-source-path` is provided, source override now uses
+  `rsync -a --delete` into the effective `WORKDIR` (strict replacement of that
+  tree).
 - `OSS_CRS_REPO_PATH` resolution is documented as: final `WORKDIR` -> `$SRC` ->
   `/src` fallback chain.
 

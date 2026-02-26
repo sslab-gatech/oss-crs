@@ -45,7 +45,7 @@ uv run oss-crs run \
 | Argument              | Required | Description                                                                    |
 |-----------------------|----------|--------------------------------------------------------------------------------|
 | `--fuzz-proj-path` (`--target-path`, `--target-proj-path`, deprecated aliases) | Yes | Path to the OSS-Fuzz target project directory (`Dockerfile`, `project.yaml`, `build.sh`). |
-| `--target-source-path` | No | Optional local source override path. If set, source is synchronized with `rsync -a` into the effective Dockerfile `WORKDIR` (no delete). |
+| `--target-source-path` | No | Optional local source override path. If set, source is synchronized with `rsync -a --delete` into the effective Dockerfile `WORKDIR`. |
 | `--target-harness`    | Yes (run)| Fuzz target harness binary name.                                               |
 
 Existing [OSS-Fuzz projects](https://github.com/google/oss-fuzz/tree/master/projects) can be used directly as `--fuzz-proj-path` without modification.
@@ -58,7 +58,7 @@ Existing [OSS-Fuzz projects](https://github.com/google/oss-fuzz/tree/master/proj
 - `WORKDIR` resolution follows Dockerfile semantics, with fallback chain:
   final `WORKDIR` -> `$SRC` -> `/src` (when `SRC` is not provided).
 - When `--target-source-path` is set, the override source is synchronized into
-  `OSS_CRS_REPO_PATH` via `rsync -a` (no delete of non-overwritten files).
+  `OSS_CRS_REPO_PATH` via `rsync -a --delete`.
 
 ### `--target-source-path` Sync Flow
 
@@ -67,5 +67,6 @@ Instead, during image build:
 
 1. The host source path is passed as a Docker build context (`repo_path=...`).
 2. It is copied into a temporary image path (`/OSS_CRS_REPO_OVERRIDE`).
-3. `rsync -a /OSS_CRS_REPO_OVERRIDE/ ./` runs from the effective `WORKDIR`.
+3. `rsync -a --delete /OSS_CRS_REPO_OVERRIDE/ ./` runs from the effective
+   `WORKDIR`.
 4. `OSS_CRS_REPO_PATH` points to that effective `WORKDIR` path.

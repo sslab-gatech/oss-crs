@@ -20,7 +20,7 @@ class _CaptureProgress:
         return TaskResult(success=True)
 
 
-def test_repo_override_uses_rsync_overlay_without_deleting_workdir(tmp_path: Path) -> None:
+def test_repo_override_uses_rsync_delete_overlay(tmp_path: Path) -> None:
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "Dockerfile").write_text(
@@ -44,9 +44,9 @@ def test_repo_override_uses_rsync_overlay_without_deleting_workdir(tmp_path: Pat
 
     assert result.success is True
     assert "--from=repo_path . /OSS_CRS_REPO_OVERRIDE" in progress.generated_dockerfile
-    assert "RUN rsync -a /OSS_CRS_REPO_OVERRIDE/ ./" in progress.generated_dockerfile
+    assert "RUN rsync -a --delete /OSS_CRS_REPO_OVERRIDE/ ./" in progress.generated_dockerfile
     assert "RUN rm -rf /OSS_CRS_REPO_OVERRIDE" in progress.generated_dockerfile
     assert "RUN find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +" not in progress.generated_dockerfile
     assert progress.generated_dockerfile.index(
         "--from=repo_path . /OSS_CRS_REPO_OVERRIDE"
-    ) < progress.generated_dockerfile.index("RUN rsync -a /OSS_CRS_REPO_OVERRIDE/ ./")
+    ) < progress.generated_dockerfile.index("RUN rsync -a --delete /OSS_CRS_REPO_OVERRIDE/ ./")
