@@ -160,8 +160,13 @@ Each CRS entry is defined as a top-level key (other than `run_env` and `oss_crs_
 | `cpuset`    | string  | Yes      | CPU cores to allocate (see [CPU Set Format](#cpu-set-format)) |
 | `memory`    | string  | Yes      | Memory limit (see [Memory Format](#memory-format)) |
 | `llm_budget`| integer | No       | LLM API budget limit (must be > 0 if specified)  |
-| `additional_env` | dict[string, string] | No | Additional environment variables passed to all modules in this CRS entry |
+| `additional_env` | dict[string, string] | No | Additional environment variables passed to all modules in this CRS entry. Keys must match `[A-Za-z_][A-Za-z0-9_]*`. |
 | `source`    | object  | No       | Source configuration (see [Source Configuration](#source-configuration)). If omitted, resolved from the [CRS registry](../registry.md). |
+
+`additional_env` notes:
+- Build-option keys (`SANITIZER`, `FUZZING_ENGINE`, `ARCHITECTURE`, `FUZZING_LANGUAGE`) can be overridden here.
+- `OSS_CRS_*` keys are reserved for framework-managed values. If provided, `oss-crs` emits warnings (`ENV001`/`ENV002`).
+- For framework-owned `OSS_CRS_*` keys in a given phase, framework values take precedence. Unknown `OSS_CRS_*` keys are warned and may pass through.
 
 #### Source Configuration
 

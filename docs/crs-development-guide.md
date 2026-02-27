@@ -313,6 +313,11 @@ Your containers receive these environment variables automatically:
 | `FUZZING_LANGUAGE` | Target language | `c` |
 | `OSS_CRS_SNAPSHOT_IMAGE` | Snapshot Docker image tag (set on non-builder modules when the CRS has builder sidecars) | `my-crs-snapshot-asan:latest` |
 
+Notes:
+- `additional_env` keys are validated with pattern `[A-Za-z_][A-Za-z0-9_]*`.
+- `OSS_CRS_*` keys are reserved. If provided by users, `oss-crs` emits warnings (`ENV001`/`ENV002`).
+- Framework-owned `OSS_CRS_*` keys override user values for that phase; unknown reserved keys are warned and may pass through.
+
 ### LLM Environment Variables (if configured)
 
 | Variable | Description |

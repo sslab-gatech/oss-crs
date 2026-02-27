@@ -34,13 +34,26 @@ Multiple runs can share the same build by specifying the same `--build-id`.
 
 ## Target Build Options
 
-`oss-crs` uses fixed defaults for target build options:
+`oss-crs` uses framework defaults for target build options:
 
 - `SANITIZER=address`
 - `FUZZING_ENGINE=libfuzzer`
 - `ARCHITECTURE=x86_64`
+- `FUZZING_LANGUAGE=c`
 
-Users can override these through `additional_env` (CRS entry level and CRS module/build-step level). There are no dedicated CLI flags for these options.
+If `project.yaml` exists and is parseable, its values are used as fallback target defaults. Users can override through `additional_env` (CRS entry level and CRS module/build-step level). There are no dedicated CLI flags for these options.
+
+Effective precedence:
+- `additional_env` override
+- `project.yaml` fallback values
+- framework defaults (`address`, `libfuzzer`, `x86_64`, `c`)
+
+Notes:
+- `additional_env` keys must follow env-var format: `[A-Za-z_][A-Za-z0-9_]*`.
+- `OSS_CRS_*` keys are reserved for framework-owned values. If provided in
+  `additional_env`, `oss-crs` warns (`ENV001`/`ENV002`).
+- Framework-owned `OSS_CRS_*` keys in the active phase override user values.
+  Unknown `OSS_CRS_*` keys are warned and may pass through.
 
 Only `sanitizer` affects artifact directory partitioning.
 

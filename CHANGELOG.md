@@ -18,6 +18,11 @@ stricter subset of Keep a Changelog).
   tree).
 - `OSS_CRS_REPO_PATH` resolution is documented as: final `WORKDIR` -> `$SRC` ->
   `/src` fallback chain.
+- Target build-option resolution now uses precedence:
+  `additional_env` override (SANITIZER at CRS-entry scope) -> `project.yaml`
+  fallback -> framework defaults.
+- `artifacts --sanitizer` is now optional; when omitted, sanitizer is resolved
+  using the same contract (compose/project/default) used by build/run flows.
 
 ### Deprecated
 - Deprecated CLI aliases:

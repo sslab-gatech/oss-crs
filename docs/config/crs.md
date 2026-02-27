@@ -108,7 +108,7 @@ The target build phase is a list of `BuildConfig` objects, each defining a named
 | `dockerfile` | `string` | Yes | - | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`). Use an `oss-crs-infra:` prefix for framework-provided builds (e.g., `oss-crs-infra:default-builder`). |
 | `outputs` | `list[string]` | No | `[]` | List of output paths. Can be empty for snapshot builds where no explicit outputs are needed. |
 | `snapshot` | `bool` | No | `false` | When `true`, creates a snapshot Docker image during the build phase. The snapshot captures the fully compiled target and is used as the base image for incremental builds. |
-| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass during the build |
+| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass during the build. Keys must match `[A-Za-z_][A-Za-z0-9_]*`. |
 
 ### Example
 
@@ -187,7 +187,7 @@ The CRS run phase is a dictionary where each key is a module name and each value
 |-------|------|----------|---------|-------------|
 | `dockerfile` | `string` | Conditional | - | Path to the Dockerfile (must contain "Dockerfile" or end with `.Dockerfile`). Can use `oss-crs-infra:` prefix for framework-provided services. **Required** when `run_snapshot` is `false`; **optional** when `run_snapshot` is `true`. |
 | `run_snapshot` | `bool` | No | `false` | When `true`, uses the snapshot image from the build phase as this module's base image. Enables the module to use builder sidecar commands (`apply-patch-build`, `run-pov`, `run-test`). |
-| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass to the module |
+| `additional_env` | `dict[string, string]` | No | `{}` | Additional environment variables to pass to the module. Keys must match `[A-Za-z_][A-Za-z0-9_]*`. |
 
 ### Example
 
@@ -220,6 +220,16 @@ crs_run_phase:
     dockerfile: oss-crs-infra:default-builder
     run_snapshot: true
 ```
+
+### `additional_env` Key Rules
+
+- Key format is validated: `[A-Za-z_][A-Za-z0-9_]*`.
+- Build-option keys such as `SANITIZER`, `FUZZING_ENGINE`, `ARCHITECTURE`, and
+  `FUZZING_LANGUAGE` can be overridden through `additional_env`.
+- `OSS_CRS_*` namespace is reserved for framework-managed values. If users set
+  those keys in `additional_env`, `oss-crs` warns (`ENV001`/`ENV002`).
+- For framework-owned `OSS_CRS_*` keys in a given phase, framework values take
+  precedence. Unknown `OSS_CRS_*` keys are warned and may pass through.
 
 ---
 
