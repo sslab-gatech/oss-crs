@@ -10,6 +10,7 @@ import git
 import fcntl
 from contextlib import contextmanager
 
+from .config.target import TargetConfig
 from .ui import MultiTaskProgress, TaskResult
 from .utils import generate_random_name, rm_with_docker
 from . import ui
@@ -90,6 +91,10 @@ class Target:
         self.proj_path = proj_path
         self.main_repo: Optional[str] = None
         self.language = self.DEFAULT_LANGUAGE
+        self.engine = self.DEFAULT_ENGINE
+        self.sanitizer = self.DEFAULT_SANITIZER
+        self.architecture = self.DEFAULT_ARCHITECTURE
+        self._load_project_yaml_defaults()
 
         self.work_dir = work_dir / "targets" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
@@ -104,6 +109,29 @@ class Target:
         self.repo_hash: Optional[str] = None
         self.target_harness = target_harness
         self.snapshot_image_tag: Optional[str] = None
+
+    def _load_project_yaml_defaults(self) -> None:
+        """Load optional OSS-Fuzz project.yaml defaults.
+
+        Precedence is enforced by callers via env merge policy:
+        compose additional_env > project.yaml > framework defaults.
+        """
+        project_yaml = self.proj_path / "project.yaml"
+        if not project_yaml.exists():
+            return
+        try:
+            cfg = TargetConfig.from_yaml_file(project_yaml)
+        except Exception:
+            return
+
+        self.main_repo = cfg.main_repo
+        self.language = cfg.language.value
+        if cfg.fuzzing_engines:
+            self.engine = cfg.fuzzing_engines[0].value
+        if cfg.sanitizers:
+            self.sanitizer = cfg.sanitizers[0].value
+        if cfg.architectures:
+            self.architecture = cfg.architectures[0].value
 
     @property
     def _has_repo(self) -> bool:
@@ -412,9 +440,9 @@ class Target:
         ret = {
             "name": self.name,
             "language": self.language,
-            "engine": self.DEFAULT_ENGINE,
-            "sanitizer": self.DEFAULT_SANITIZER,
-            "architecture": self.DEFAULT_ARCHITECTURE,
+            "engine": self.engine,
+            "sanitizer": self.sanitizer,
+            "architecture": self.architecture,
             # Backward-compatible key name. This is the in-container effective
             # source path (final WORKDIR), not the host filesystem repo path.
             "repo_path": self._resolve_effective_workdir(),
