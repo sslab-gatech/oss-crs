@@ -17,6 +17,40 @@ def test_default_sanitizer_is_address() -> None:
     assert Target.DEFAULT_SANITIZER == "address"
 
 
+def test_target_env_uses_project_yaml_when_available(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+    (proj / "project.yaml").write_text(
+        "\n".join(
+            [
+                "language: jvm",
+                "sanitizers: [memory, undefined]",
+                "architectures: [i386]",
+                "fuzzing_engines: [afl, libfuzzer]",
+            ]
+        )
+        + "\n"
+    )
+    target = Target(tmp_path / "work", proj, None)
+    env = target.get_target_env()
+    assert env["language"] == "jvm"
+    assert env["sanitizer"] == "memory"
+    assert env["architecture"] == "i386"
+    assert env["engine"] == "afl"
+
+
+def test_target_env_falls_back_when_project_yaml_invalid(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir(parents=True, exist_ok=True)
+    (proj / "project.yaml").write_text("language: not-a-real-language\n")
+    target = Target(tmp_path / "work", proj, None)
+    env = target.get_target_env()
+    assert env["language"] == "c"
+    assert env["sanitizer"] == "address"
+    assert env["architecture"] == "x86_64"
+    assert env["engine"] == "libfuzzer"
+
+
 def test_user_provided_missing_repo_path_fails_init(tmp_path: Path) -> None:
     proj = tmp_path / "proj"
     proj.mkdir(parents=True, exist_ok=True)
