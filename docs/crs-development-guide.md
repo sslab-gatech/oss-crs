@@ -311,7 +311,7 @@ Your containers receive these environment variables automatically:
 | `SANITIZER` | OSS-Fuzz sanitizer | `address` |
 | `ARCHITECTURE` | Target architecture | `x86_64` |
 | `FUZZING_LANGUAGE` | Target language | `c` |
-| `OSS_CRS_SNAPSHOT_IMAGE` | Snapshot Docker image tag (set on non-builder modules when the CRS has builder sidecars) | `my-crs-snapshot-asan:latest` |
+| `OSS_CRS_SNAPSHOT_IMAGE` | Snapshot Docker image tag (set on non-builder modules that are not `run_snapshot` when a snapshot tag exists for the run) | `my-crs-snapshot-asan:latest` |
 
 Notes:
 - `additional_env` keys are validated with pattern `[A-Za-z_][A-Za-z0-9_]*`.
@@ -642,7 +642,7 @@ libCRS run-test /tmp/test-result --build-id "$BUILD_ID" --builder builder-asan
 `run-test` contract notes:
 - Builder sidecar resolves the test script at `/OSS_CRS_PROJ_PATH/test.sh`.
 - `/OSS_CRS_PROJ_PATH` must exist inside the runtime snapshot image used by the builder sidecar.
-- If `test.sh` is missing, sidecar returns skipped-success (`exit_code=0`) by contract.
+- If `test.sh` is missing, sidecar returns skipped-success (`test_exit_code=0`) by contract.
 
 ### Multi-Sanitizer Setup
 
