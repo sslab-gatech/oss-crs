@@ -40,7 +40,7 @@ libCRS relies on several environment variables injected by CRS Compose at contai
 | `OSS_CRS_SUBMIT_DIR` | Shared filesystem path for submitted artifacts (seeds, PoVs, etc.) |
 | `OSS_CRS_SHARED_DIR` | Shared filesystem path for inter-container file sharing within a CRS |
 | `OSS_CRS_FETCH_DIR` | Read-only filesystem path for fetching inter-CRS data and bootup data (set on run containers, and on build-target builder containers when directed inputs are provided) |
-| `OSS_CRS_SNAPSHOT_IMAGE` | Docker image tag of the snapshot (set on non-builder modules when the CRS has builder sidecars) |
+| `OSS_CRS_SNAPSHOT_IMAGE` | Docker image tag of the snapshot (set on non-builder modules that are not `run_snapshot` when a snapshot tag exists for the run) |
 
 ## Architecture
 
@@ -419,7 +419,7 @@ $ libCRS run-test /tmp/test-result --build-id abc123 --builder builder-asan
 `run-test` contract notes:
 - `test.sh` is resolved by the builder sidecar at `/OSS_CRS_PROJ_PATH/test.sh`.
 - `/OSS_CRS_PROJ_PATH` must be present inside the runtime snapshot image used by the sidecar.
-- If `test.sh` is missing, the sidecar returns a skipped-success result (`exit_code=0`) by contract.
+- If `test.sh` is missing, the sidecar returns a skipped-success result (`test_exit_code=0`) by contract.
 
 ## Typical Usage in a CRS
 

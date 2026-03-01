@@ -41,10 +41,11 @@ Multiple runs can share the same build by specifying the same `--build-id`.
 - `ARCHITECTURE=x86_64`
 - `FUZZING_LANGUAGE=c`
 
-If `project.yaml` exists and is parseable, its values are used as fallback target defaults. Users can override through `additional_env` (CRS entry level and CRS module/build-step level). There are no dedicated CLI flags for these options.
+If `project.yaml` exists and is parseable, its values are used as fallback target defaults. Users can override through `additional_env` (CRS entry level and CRS module/build-step level). There are no dedicated `build-target`/`run` CLI flags for these options; `artifacts` has optional `--sanitizer` for artifact path resolution.
 
 Effective precedence:
-- `additional_env` override
+- compose CRS-entry `additional_env` (user)
+- CRS module/build-step `additional_env` (`crs.yaml`)
 - `project.yaml` fallback values
 - framework defaults (`address`, `libfuzzer`, `x86_64`, `c`)
 
@@ -54,6 +55,8 @@ Notes:
   `additional_env`, `oss-crs` warns (`ENV001`/`ENV002`).
 - Framework-owned `OSS_CRS_*` keys in the active phase override user values.
   Unknown `OSS_CRS_*` keys are warned and may pass through.
+- If multiple CRS entries specify conflicting `SANITIZER` values and no explicit
+  sanitizer is provided, `build-target`/`run` fails fast with a conflict error.
 
 Only `sanitizer` affects artifact directory partitioning.
 
@@ -95,6 +98,15 @@ Run artifacts are stored at:
 {work_dir}/{sanitizer}/runs/{run-id}/EXCHANGE_DIR/{target}/{harness}/      # shared across all CRSs
 {work_dir}/{sanitizer}/runs/{run-id}/logs/{target}/{harness}/              # compose/service logs
 ```
+
+### Cleanup Semantics
+
+- At run start, `oss-crs` cleans run-scoped directories for the selected
+  `run-id` (including `EXCHANGE_DIR` and per-CRS `SHARED_DIR`) before services
+  start.
+- At run cleanup, `docker compose down` is always attempted, and project-scoped
+  compose image cleanup is attempted best-effort (warnings are emitted on
+  failures).
 
 ## Artifacts Command
 

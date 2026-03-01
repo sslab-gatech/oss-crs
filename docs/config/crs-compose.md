@@ -160,7 +160,7 @@ Each CRS entry is defined as a top-level key (other than `run_env` and `oss_crs_
 | `cpuset`    | string  | Yes      | CPU cores to allocate (see [CPU Set Format](#cpu-set-format)) |
 | `memory`    | string  | Yes      | Memory limit (see [Memory Format](#memory-format)) |
 | `llm_budget`| integer | No       | LLM API budget limit (must be > 0 if specified)  |
-| `additional_env` | dict[string, string] | No | Additional environment variables passed to all modules in this CRS entry. Keys must match `[A-Za-z_][A-Za-z0-9_]*`. |
+| `additional_env` | dict[string, string] | No | Additional environment variables applied across this CRS entry (prepare/build/run). CRS-level build-step/module `additional_env` acts as fallback defaults; this entry overrides them for user keys. Keys must match `[A-Za-z_][A-Za-z0-9_]*`. |
 | `source`    | object  | No       | Source configuration (see [Source Configuration](#source-configuration)). If omitted, resolved from the [CRS registry](../registry.md). |
 
 `additional_env` notes:
