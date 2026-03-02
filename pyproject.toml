@@ -8,9 +8,6 @@ version = "0.1.0"
 description = "Cyber Reasoning System (CRS) build and run tools for bug finding and fixing"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [
-    {name = "Team Atlanta"}
-]
 dependencies = [
     "requests>=2.31.0",
     "PyYAML>=6.0.3",
