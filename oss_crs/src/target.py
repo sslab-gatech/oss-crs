@@ -90,14 +90,16 @@ class Target:
         self.work_dir = work_dir / "targets" / self.name
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
-        self._user_provided_repo = repo_path is not None
-        if repo_path:
+        self._user_provided_repo = repo_path is not None and str(repo_path) != ""
+        if self._user_provided_repo:
             self.repo_path = repo_path
-        else:
+        elif self.config.main_repo:
             # Default repo path includes hash of repo URL to isolate parallel builds
             # of different repo sources (e.g., different forks or refs)
             repo_key = self._compute_repo_key()
             self.repo_path = work_dir / "targets" / f"{self.name}_{repo_key}" / "repo"
+        else:
+            self.repo_path = None
 
         self.repo_hash: Optional[str] = None
         self.target_harness = target_harness
@@ -105,12 +107,15 @@ class Target:
 
     @property
     def _has_repo(self) -> bool:
-        """Whether a repo path was explicitly provided via --target-source-path."""
-        return self._user_provided_repo
+        """Whether a repo is available — either explicitly provided via
+        --target-source-path or auto-resolved from main_repo in project.yaml."""
+        return self._user_provided_repo or bool(self.config.main_repo)
 
     def _compute_repo_key(self) -> str:
         """Compute a short hash key from repo URL (and ref if specified)."""
         # TODO: Include ref when we add ref support to TargetConfig
+        if not self.config.main_repo:
+            raise ValueError("Cannot compute repo key without main_repo in project.yaml")
         key_source = self.config.main_repo
         return hashlib.sha256(key_source.encode()).hexdigest()[:12]
 
