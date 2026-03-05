@@ -10,7 +10,7 @@ import git
 import fcntl
 from contextlib import contextmanager
 
-from .config.target import TargetConfig, TargetSanitizer
+from .config.target import FuzzingEngine, TargetConfig, TargetSanitizer
 from .ui import MultiTaskProgress, TaskResult
 from .utils import generate_random_name, rm_with_docker, log_warning
 from . import ui
@@ -130,7 +130,11 @@ class Target:
         self.main_repo = cfg.main_repo
         self.language = cfg.language.value
         if cfg.fuzzing_engines:
-            self.engine = cfg.fuzzing_engines[0].value
+            # Prefer "libfuzzer" if listed; otherwise use first entry
+            if FuzzingEngine.LIBFUZZER in cfg.fuzzing_engines:
+                self.engine = FuzzingEngine.LIBFUZZER.value
+            else:
+                self.engine = cfg.fuzzing_engines[0].value
         if cfg.sanitizers:
             # Prefer "address" if listed; otherwise use first entry
             if TargetSanitizer.ASAN in cfg.sanitizers:
