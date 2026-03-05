@@ -7,7 +7,7 @@ stricter subset of Keep a Changelog).
 ## [Unreleased]
 
 ### Added
-- N/A
+- atlantis-c-deepgen to registry/ and example/
 
 ### Changed
 - Clarified that target env `repo_path` is the effective in-container source
