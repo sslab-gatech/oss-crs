@@ -7,6 +7,7 @@ stricter subset of Keep a Changelog).
 ## [Unreleased]
 
 ### Added
+- atlantis-java-main to registry/ and example/
 - atlantis-c-deepgen to registry/ and example/
 
 ### Changed
