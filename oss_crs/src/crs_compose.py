@@ -484,12 +484,9 @@ class CRSCompose:
             build_id = self.get_latest_build_id(target, sanitizer)
             # build_id may be None if no builds exist yet
 
-        diff_sha256: Optional[str] = None
         if diff is not None and not diff.is_file():
             print(f"Error: Diff file does not exist: {diff}")
             return False
-        if diff is not None:
-            diff_sha256 = hashlib.sha256(diff.read_bytes()).hexdigest()
         if bug_candidate is not None and bug_candidate_dir is not None:
             print("Error: --bug-candidate and --bug-candidate-dir are mutually exclusive.")
             return False
@@ -508,10 +505,6 @@ class CRSCompose:
         if bug_candidate_dir is not None and not bug_candidate_dir.is_dir():
             print("Error: --bug-candidate-dir must be a directory.")
             return False
-        bug_candidate_sha256 = self._hash_bug_candidate_input(
-            bug_candidate, bug_candidate_dir
-        )
-        input_sha256 = self._hash_directed_inputs(diff_sha256, bug_candidate_sha256)
         if seed_dir is not None and not seed_dir.is_dir():
             print(f"Error: Seed directory does not exist: {seed_dir}")
             return False
