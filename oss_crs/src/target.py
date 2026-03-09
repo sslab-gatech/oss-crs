@@ -691,7 +691,11 @@ class Target:
                         return result
 
                 # Step 2b: Copy libCRS into stopped container
-                libcrs_path = TEMPLATES_DIR.parent.parent.parent / "libCRS"
+                _pkg_data = TEMPLATES_DIR.parent.parent / "_data"
+                libcrs_path = (
+                    _pkg_data / "libCRS" if _pkg_data.is_dir()
+                    else TEMPLATES_DIR.parent.parent.parent / "libCRS"
+                )
                 cp_libcrs_cmd = [
                     "docker",
                     "cp",

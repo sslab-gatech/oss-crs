@@ -419,26 +419,26 @@ wheels = [
 
 [[package]]
 name = "oss-crs"
-version = "0.1.0"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "docker" },
     { name = "gitpython" },
     { name = "jinja2" },
     { name = "pydantic" },
-    { name = "pyright" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "questionary" },
     { name = "requests" },
     { name = "rich" },
-    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "ruff" },
     { name = "ty" },
     { name = "watchdog" },
 ]
@@ -449,19 +449,19 @@ requires-dist = [
     { name = "gitpython", specifier = ">=3.1.45" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pyright", specifier = ">=1.1.407" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "rich", specifier = ">=13.7.0" },
-    { name = "ruff", specifier = ">=0.14.5" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pyright", specifier = ">=1.1.407" },
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
+    { name = "ruff", specifier = ">=0.14.5" },
     { name = "ty", specifier = ">=0.0.4" },
     { name = "watchdog", specifier = ">=4.0.0" },
 ]

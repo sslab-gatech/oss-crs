@@ -551,6 +551,13 @@ class CRSCompose:
                 diff=diff,
             ):
                 return False
+            # build_target() normalizes build_id internally, so our local
+            # build_id may not match the actual directory created. Re-derive
+            # the real build_id from disk to avoid path mismatches.
+            build_id = self.get_latest_build_id(target, sanitizer)
+            if not build_id:
+                print("Error: build succeeded but could not find build outputs.")
+                return False
 
         # Ensure snapshot_image_tag is set for the run phase, even if
         # build_target() was skipped because the target was already built.

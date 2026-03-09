@@ -20,7 +20,14 @@ if TYPE_CHECKING:
     from ..crs_compose import CRSCompose
 
 CUR_DIR = Path(__file__).parent
-OSS_CRS_ROOT_PATH = (CUR_DIR / "../../../").resolve()
+OSS_CRS_PKG_DIR = (CUR_DIR / "../..").resolve()  # oss_crs/
+OSS_CRS_DATA_DIR = OSS_CRS_PKG_DIR / "_data"
+# Prefer _data/ inside the package (pip-installed wheel).
+# Fall back to repo root for editable/dev installs.
+OSS_CRS_ROOT_PATH = (
+    OSS_CRS_DATA_DIR if OSS_CRS_DATA_DIR.is_dir()
+    else (CUR_DIR / "../../../").resolve()
+)
 LIBCRS_PATH = (OSS_CRS_ROOT_PATH / "libCRS").resolve()
 
 

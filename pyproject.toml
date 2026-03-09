@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oss-crs"
-version = "0.1.0"
+version = "0.1.3"
 description = "Cyber Reasoning System (CRS) build and run tools for bug finding and fixing"
 requires-python = ">=3.10"
 license = "MIT"
@@ -17,8 +17,6 @@ dependencies = [
     "Jinja2>=3.1.6",
     "python-dotenv>=1.0.1",
     "docker>=7.1.0",
-    "ruff>=0.14.5",
-    "pyright>=1.1.407",
     "gitpython>=3.1.45",
     "pydantic>=2.12.5",
     "rich>=13.7.0",
@@ -32,7 +30,11 @@ oss-crs = "oss_crs.src.cli.crs_compose:main"
 include = ["oss_crs*"]
 
 [tool.setuptools.package-data]
-"oss_crs.src.templates" = ["*.j2", "*.py"]
+"oss_crs.src.templates" = ["*.j2", "*.py", "*.sh"]
+"oss_crs" = [
+    "_data/**/*",
+    "_data/**/.*",
+]
 
 [dependency-groups]
 dev = [
@@ -40,6 +42,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "watchdog>=4.0.0",
     "ty>=0.0.4",
+    "ruff>=0.14.5",
+    "pyright>=1.1.407",
 ]
 
 [tool.ty.src]
