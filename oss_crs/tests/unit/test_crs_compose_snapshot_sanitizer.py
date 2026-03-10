@@ -187,14 +187,14 @@ class TestPatchEnsembleAutoAttach:
     """Tests for auto-attach=false when a patch-ensemble CRS is present."""
 
     @staticmethod
-    def _make_crs(*, is_ensemble=False, is_builder=False, attach=True):
-        config = SimpleNamespace(is_ensemble=is_ensemble, is_builder=is_builder)
+    def _make_crs(*, is_bug_fixing_ensemble=False, is_builder=False, attach=True):
+        config = SimpleNamespace(is_bug_fixing_ensemble=is_bug_fixing_ensemble, is_builder=is_builder)
         resource = SimpleNamespace(attach=attach)
         return SimpleNamespace(name="crs", config=config, resource=resource)
 
     def test_ensemble_sets_attach_false_on_other_crs(self):
         patch_crs = self._make_crs()
-        patch_ensemble_crs = self._make_crs(is_ensemble=True)
+        patch_ensemble_crs = self._make_crs(is_bug_fixing_ensemble=True)
         compose = CRSCompose.__new__(CRSCompose)
         compose.crs_list = [patch_crs, patch_ensemble_crs]
         compose._apply_patch_ensemble_auto_attach()
@@ -214,7 +214,7 @@ class TestPatchEnsembleAutoAttach:
 
     def test_builder_not_affected_by_auto_attach(self):
         builder = self._make_crs(is_builder=True)
-        patch_ensemble_crs = self._make_crs(is_ensemble=True)
+        patch_ensemble_crs = self._make_crs(is_bug_fixing_ensemble=True)
         compose = CRSCompose.__new__(CRSCompose)
         compose.crs_list = [builder, patch_ensemble_crs]
         compose._apply_patch_ensemble_auto_attach()

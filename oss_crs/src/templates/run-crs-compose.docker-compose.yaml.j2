@@ -159,7 +159,7 @@ services:
     volumes:
       - {{ exchange_dir }}:/exchange:rw
 {%- for crs in crs_list %}
-{%- if not crs.config.is_builder and not crs.config.is_ensemble %}
+{%- if not crs.config.is_builder and not crs.config.is_bug_fixing_ensemble %}
       - {{ work_dir.get_submit_dir(crs.name, target, run_id, sanitizer) }}:/submit/{{ crs.name }}:ro
 {%- endif %}
 {%- endfor %}
@@ -172,7 +172,7 @@ services:
 {#- Collect non-builder, non-snapshot, non-ensemble bug-fixing CRS services #}
 {%- set watch_services = [] %}
 {%- for crs in crs_list %}
-{%- if not crs.config.is_builder and not crs.config.is_ensemble and crs.config.is_bug_fixing %}
+{%- if not crs.config.is_builder and not crs.config.is_bug_fixing_ensemble and crs.config.is_bug_fixing %}
 {%- for module_name, module_config in crs.config.crs_run_phase.modules.items() %}
 {%- if module_config.dockerfile and not module_config.run_snapshot %}
 {%- if watch_services.append(crs.name ~ "_" ~ module_name) %}{% endif %}

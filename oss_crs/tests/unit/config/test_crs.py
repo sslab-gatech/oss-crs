@@ -155,18 +155,18 @@ class TestCRSTypeProperties:
     def test_bug_finding_is_not_bug_fixing(self):
         config = CRSConfig.from_dict(_minimal_crs_config(type=["bug-finding"]))
         assert config.is_bug_fixing is False
-        assert config.is_ensemble is False
+        assert config.is_bug_fixing_ensemble is False
 
     def test_bug_fixing(self):
         config = CRSConfig.from_dict(_minimal_crs_config(type=["bug-fixing"]))
         assert config.is_bug_fixing is True
-        assert config.is_ensemble is False
+        assert config.is_bug_fixing_ensemble is False
 
     def test_bug_fixing_ensemble_implies_bug_fixing(self):
         """bug-fixing-ensemble alone is sufficient — no need to also list bug-fixing."""
         config = CRSConfig.from_dict(_minimal_crs_config(type=["bug-fixing-ensemble"]))
         assert config.is_bug_fixing is True
-        assert config.is_ensemble is True
+        assert config.is_bug_fixing_ensemble is True
 
 
 class TestSidecarDeploymentConditions:
@@ -192,7 +192,7 @@ class TestSidecarDeploymentConditions:
             if CRSType.BUG_FINDING in c.type and not c.is_builder
         )
         bug_finding_ensemble = bug_finding_count > 1
-        bug_fix_ensemble = any(c.is_ensemble for c in configs)
+        bug_fix_ensemble = any(c.is_bug_fixing_ensemble for c in configs)
         needs_exchange = bug_finding_ensemble or bug_fix_ensemble
         return bug_finding_ensemble, bug_fix_ensemble, needs_exchange
 

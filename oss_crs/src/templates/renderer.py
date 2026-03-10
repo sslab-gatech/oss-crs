@@ -213,7 +213,7 @@ def render_run_crs_compose_docker_compose(
         if CRSType.BUG_FINDING in crs.config.type and not crs.config.is_builder
     )
     bug_finding_ensemble = bug_finding_crs_count > 1
-    bug_fix_ensemble = any(crs.config.is_ensemble for crs in crs_compose.crs_list)
+    bug_fix_ensemble = any(crs.config.is_bug_fixing_ensemble for crs in crs_compose.crs_list)
     needs_exchange = bug_finding_ensemble or bug_fix_ensemble
     exchange_dir = (
         str(crs_compose.work_dir.get_exchange_dir(target, run_id, sanitizer))

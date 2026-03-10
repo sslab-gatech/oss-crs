@@ -56,10 +56,10 @@ class CRSCompose:
 
     def _apply_patch_ensemble_auto_attach(self) -> None:
         """When a patch-ensemble CRS is present, auto-set attach=false on other bug-fixing CRSes."""
-        has_ensemble = any(crs.config.is_ensemble for crs in self.crs_list)
+        has_ensemble = any(crs.config.is_bug_fixing_ensemble for crs in self.crs_list)
         if has_ensemble:
             for crs in self.crs_list:
-                if not crs.config.is_ensemble and not crs.config.is_builder and crs.resource:
+                if not crs.config.is_bug_fixing_ensemble and not crs.config.is_builder and crs.resource:
                     crs.resource.attach = False
 
     @property
