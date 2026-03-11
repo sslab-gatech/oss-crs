@@ -42,7 +42,7 @@ class BuilderClient:
         endpoint: str,
         files: dict | None = None,
         data: dict | None = None,
-        timeout: int = 600,
+        timeout: int | None = 600,
         poll_interval: int = 5,
     ) -> dict | None:
         if not self.wait_for_health():
@@ -66,7 +66,7 @@ class BuilderClient:
 
         job_id = resp.json()["id"]
         start = time.monotonic()
-        while time.monotonic() - start < timeout:
+        while timeout is None or time.monotonic() - start < timeout:
             try:
                 resp = http_requests.get(
                     f"{self.base_url}/status/{job_id}", timeout=10,
@@ -138,7 +138,7 @@ class BuilderClient:
 
     def run_test(self, build_id: str, response_dir: Path) -> int:
         result = self.submit_and_poll(
-            "/run-test", data={"build_id": build_id}, timeout=600,
+            "/run-test", data={"build_id": build_id}, timeout=None,
         )
 
         response_dir.mkdir(parents=True, exist_ok=True)

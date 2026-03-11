@@ -100,6 +100,8 @@ The builder has no `prepare_phase` or `target_build_phase` — the framework han
 | `/run-pov` | POST | Run a POV binary against a specific build. Accepts `pov` file, `harness_name`, and `build_id`. |
 | `/run-test` | POST | Run the project's bundled `test.sh` against a specific build. Accepts `build_id`. |
 | `/status/<id>` | GET | Poll job status. Returns `queued`, `running`, or `done`. |
+
+`/run-test` uses `TEST_TIMEOUT` from the container environment. If unset, it waits for `test.sh` to finish without a timeout.
 | `/health` | GET | Healthcheck endpoint. |
 
 All jobs are processed sequentially through a single worker thread to prevent races on the shared source tree.

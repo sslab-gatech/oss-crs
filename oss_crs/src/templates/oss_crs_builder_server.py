@@ -41,6 +41,47 @@ def _ignore_build_junk(directory, contents):
     return [c for c in contents if c in (".git", "src")]
 
 
+def _resolve_test_workdir() -> Path:
+    dockerfile_path = OSS_CRS_PROJ_PATH / "Dockerfile"
+    fallback = Path(os.environ.get("SRC", "/src"))
+    if not dockerfile_path.exists():
+        return fallback
+
+    current = Path("/")
+    for raw_line in dockerfile_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not line.upper().startswith("WORKDIR "):
+            continue
+
+        raw_value = line.split(None, 1)[1].strip()
+        expanded = Path(os.path.expandvars(raw_value))
+        current = expanded if expanded.is_absolute() else current / expanded
+
+    return current if current.exists() else fallback
+
+
+def _resolve_repo_dir() -> Path:
+    repo_hint = os.environ.get("OSS_CRS_REPO_PATH", "").strip()
+    search_root = Path(os.environ.get("SRC", "/src"))
+
+    if repo_hint:
+        candidate = Path(repo_hint)
+        if (candidate / ".git").exists():
+            return candidate
+
+    repo_candidate = search_root / "repo"
+    if (repo_candidate / ".git").exists():
+        return repo_candidate
+
+    git_dir = next(search_root.rglob(".git"), None)
+    if git_dir is not None:
+        return git_dir.parent
+
+    return search_root
+
+
 def _seed_base_out_if_needed() -> tuple[bool, str]:
     """Create /builds/base/out from prebuilt incremental build artifacts."""
     base_out = BUILDS_DIR / "base" / "out"
@@ -306,7 +347,8 @@ def _handle_run_pov(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
 def _handle_run_test(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
     """Run the project's bundled test.sh against a specific build's artifacts."""
     build_id = (req_dir / "build_id").read_text().strip()
-    test_timeout = int(os.environ.get("TEST_TIMEOUT", "120"))
+    raw_timeout = os.environ.get("TEST_TIMEOUT", "").strip()
+    test_timeout = int(raw_timeout) if raw_timeout else None
 
     test_path = OSS_CRS_PROJ_PATH / "test.sh"
     if not test_path.exists():
@@ -317,6 +359,20 @@ def _handle_run_test(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
         }
 
     build_out = BUILDS_DIR / build_id / "out"
+    source_repo_dir = _resolve_repo_dir()
+    source_work_dir = _resolve_test_workdir()
+    workspace_root = req_dir.parent / "test-workspace"
+    if workspace_root.exists():
+        shutil.rmtree(workspace_root)
+    workspace_repo_dir = workspace_root / source_repo_dir.name
+    shutil.copytree(source_repo_dir, workspace_repo_dir, symlinks=True, ignore=shutil.ignore_patterns(".git"))
+
+    try:
+        relative_work_dir = source_work_dir.relative_to(source_repo_dir)
+        work_dir = workspace_repo_dir / relative_work_dir
+    except ValueError:
+        work_dir = workspace_repo_dir
+
     env = os.environ.copy()
     env["OUT"] = str(build_out)
 
@@ -327,7 +383,7 @@ def _handle_run_test(job_id: str, req_dir: Path, resp_dir: Path) -> dict:
             text=True,
             timeout=test_timeout,
             env=env,
-            cwd=str(build_out),
+            cwd=str(work_dir),
         )
         return {
             "test_exit_code": result.returncode,

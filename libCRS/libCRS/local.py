@@ -163,7 +163,7 @@ class LocalCRSUtils(CRSUtils):
         self, endpoint: str, builder: str,
         files: dict | None = None,
         data: dict | None = None,
-        timeout: int = 600, poll_interval: int = 5,
+        timeout: int | None = 600, poll_interval: int = 5,
     ) -> dict | None:
         """Submit a job to the builder sidecar and poll until done.
 
@@ -188,7 +188,7 @@ class LocalCRSUtils(CRSUtils):
         logger.info("Submitted job %s to %s", job_id, endpoint)
 
         start = time.monotonic()
-        while time.monotonic() - start < timeout:
+        while timeout is None or time.monotonic() - start < timeout:
             try:
                 resp = http_requests.get(
                     f"{builder_url}/status/{job_id}", timeout=10,
@@ -205,7 +205,7 @@ class LocalCRSUtils(CRSUtils):
                 return result
             time.sleep(poll_interval)
 
-        logger.error("Job %s timed out after %ds", job_id, timeout)
+        logger.error("Job %s timed out after %ss", job_id, timeout)
         return None
 
     def apply_patch_build(
@@ -275,7 +275,7 @@ class LocalCRSUtils(CRSUtils):
     ) -> int:
         """Run the project's bundled test.sh via the builder sidecar."""
         data = {"build_id": build_id}
-        result = self._submit_and_poll("/run-test", builder, data=data, timeout=600)
+        result = self._submit_and_poll("/run-test", builder, data=data, timeout=None)
 
         response_dir.mkdir(parents=True, exist_ok=True)
         if result is None:
