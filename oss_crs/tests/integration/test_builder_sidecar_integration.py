@@ -178,12 +178,13 @@ def _append_summary_row(summary_path: Path, row: dict[str, str]) -> None:
 
 def _prepare_repo_path(repo_path: Path, dest_dir: Path) -> Path:
     if repo_path.is_file() and repo_path.name.endswith(".tar.gz"):
-        dest_dir.mkdir(parents=True, exist_ok=True)
+        extract_dir = dest_dir / "_extracted"
+        extract_dir.mkdir(parents=True, exist_ok=True)
         with tarfile.open(repo_path, "r:gz") as tar:
-            tar.extractall(dest_dir, filter="data")
+            tar.extractall(extract_dir, filter="data")
 
         source_name = repo_path.name[:-7]
-        extracted_repo_path = dest_dir / source_name
+        extracted_repo_path = extract_dir / source_name
         if not extracted_repo_path.exists():
             raise FileNotFoundError(f"Extracted source directory not found: {extracted_repo_path}")
         repo_path = extracted_repo_path
@@ -199,6 +200,37 @@ def _prepare_repo_path(repo_path: Path, dest_dir: Path) -> Path:
     if not (prepared_repo_path / ".git").exists():
         init_git_repo(prepared_repo_path)
     return prepared_repo_path
+
+
+def test_prepare_repo_path_copies_directory_input(tmp_path):
+    source_repo = tmp_path / "source-repo"
+    source_repo.mkdir()
+    (source_repo / "README").write_text("hello")
+
+    prepared_repo = _prepare_repo_path(source_repo, tmp_path / "prepared")
+
+    assert prepared_repo == tmp_path / "prepared" / "source-repo"
+    assert prepared_repo.exists()
+    assert (prepared_repo / "README").read_text() == "hello"
+    assert (prepared_repo / ".git").exists()
+
+
+def test_prepare_repo_path_extracts_tarball_without_self_copy(tmp_path):
+    source_root = tmp_path / "archive-src"
+    source_repo = source_root / "demo"
+    source_repo.mkdir(parents=True)
+    (source_repo / "README").write_text("from-tar")
+
+    tarball = tmp_path / "demo.tar.gz"
+    with tarfile.open(tarball, "w:gz") as tar:
+        tar.add(source_repo, arcname="demo")
+
+    prepared_repo = _prepare_repo_path(tarball, tmp_path / "prepared")
+
+    assert prepared_repo == tmp_path / "prepared" / "demo"
+    assert prepared_repo.exists()
+    assert (prepared_repo / "README").read_text() == "from-tar"
+    assert (prepared_repo / ".git").exists()
 
 
 def _reserve_local_port() -> int:
@@ -382,7 +414,9 @@ def test_builder_sidecar_host_harness(cli_runner, tmp_dir, work_dir, case, build
         assert base_test_rc == 0
         assert (base_test_dir / "test_exit_code").read_text() == "0"
 
-        probe_name = f"oss_crs_builder_probe_{benchmark_name.replace('-', '_')}.txt"
+        # Use a hidden probe file so the patch exercises incremental rebuilds
+        # without perturbing projects that treat new top-level files as inputs.
+        probe_name = f".oss_crs_builder_probe_{benchmark_name.replace('-', '_')}.txt"
         patch_path = tmp_dir / f"{benchmark_name}-probe.diff"
         patch_path.write_text(
             f"diff --git a/{probe_name} b/{probe_name}\n"
@@ -396,7 +430,11 @@ def test_builder_sidecar_host_harness(cli_runner, tmp_dir, work_dir, case, build
         build_response_dir = tmp_dir / f"{benchmark_name}-patch-build"
         patch_build_rc = client.apply_patch_build(patch_path, build_response_dir)
         summary["patch_build_exit_code"] = str(patch_build_rc)
-        assert patch_build_rc == 0
+        build_log = ""
+        build_log_path = build_response_dir / "build.log"
+        if build_log_path.exists():
+            build_log = build_log_path.read_text()
+        assert patch_build_rc == 0, build_log
         build_id_value = (build_response_dir / "build_id").read_text().strip()
         summary["patch_build_id"] = build_id_value
         assert build_id_value
