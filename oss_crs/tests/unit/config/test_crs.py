@@ -193,31 +193,27 @@ class TestSidecarDeploymentConditions:
         )
         bug_finding_ensemble = bug_finding_count > 1
         bug_fix_ensemble = any(c.is_bug_fixing_ensemble for c in configs)
-        needs_exchange = bug_finding_ensemble or bug_fix_ensemble
-        return bug_finding_ensemble, bug_fix_ensemble, needs_exchange
+        return bug_finding_ensemble, bug_fix_ensemble
 
-    def test_single_bug_fixing_no_sidecars(self):
-        """Single bug-fixing CRS needs no exchange or lifecycle."""
+    def test_single_bug_fixing_no_lifecycle(self):
+        """Single bug-fixing CRS needs no lifecycle."""
         configs = self._configs(["bug-fixing"])
-        bf_ens, bfix_ens, exchange = self._compute_conditions(configs)
+        bf_ens, bfix_ens = self._compute_conditions(configs)
         assert bf_ens is False
         assert bfix_ens is False
-        assert exchange is False
 
-    def test_multiple_bug_finding_gets_exchange_only(self):
-        """Multiple bug-finding CRSes need exchange but not lifecycle."""
+    def test_multiple_bug_finding_no_lifecycle(self):
+        """Multiple bug-finding CRSes do not need lifecycle."""
         configs = self._configs(["bug-finding"], ["bug-finding"])
-        bf_ens, bfix_ens, exchange = self._compute_conditions(configs)
+        bf_ens, bfix_ens = self._compute_conditions(configs)
         assert bf_ens is True
         assert bfix_ens is False
-        assert exchange is True
 
-    def test_bug_fix_ensemble_gets_exchange_and_lifecycle(self):
-        """Bug-fix ensemble scenario needs both exchange and lifecycle."""
+    def test_bug_fix_ensemble_gets_lifecycle(self):
+        """Bug-fix ensemble scenario needs lifecycle."""
         configs = self._configs(
             ["bug-fixing"], ["bug-fixing"], ["bug-fixing-ensemble"],
         )
-        bf_ens, bfix_ens, exchange = self._compute_conditions(configs)
+        bf_ens, bfix_ens = self._compute_conditions(configs)
         assert bf_ens is False
         assert bfix_ens is True
-        assert exchange is True
