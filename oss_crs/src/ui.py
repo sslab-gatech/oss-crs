@@ -17,6 +17,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+FRAMEWORK_HELPER_SERVICE_PREFIX = "oss-crs-"
+
 
 class TaskStatus(Enum):
     PENDING = "pending"
@@ -848,7 +850,10 @@ class MultiTaskProgress:
         for service_name, service_config in services.items():
             if not isinstance(service_config, dict):
                 continue
-            if service_name.startswith("oss-crs-"):
+            # Framework-managed helper sidecars must keep the reserved
+            # "oss-crs-" prefix so teardown classification can exempt their
+            # expected non-zero exits during compose shutdown.
+            if service_name.startswith(FRAMEWORK_HELPER_SERVICE_PREFIX):
                 helper_services.add(service_name)
                 continue
             if service_config.get("attach") is False and (
