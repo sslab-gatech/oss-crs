@@ -1,0 +1,437 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 344861586
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5a688d263698, 0x5a688d269ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5a688d269ec8,0x5a688d2d21c8), 
+MERGE-OUTER: 519 files, 0 in the initial corpus, 0 processed earlier
+MERGE-OUTER: attempt 1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 344873154
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x582b7bfea698, 0x582b7bff0ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x582b7bff0ec8,0x582b7c0591c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 519 total files; 0 processed earlier; will process 519 files now
+#1      pulse  cov: 2533 ft: 2534 exec/s: 0 rss: 46Mb
+#2      pulse  cov: 2536 ft: 2646 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2536 ft: 2646 exec/s: 0 rss: 49Mb
+#8      pulse  cov: 2536 ft: 2677 exec/s: 0 rss: 49Mb
+#16     pulse  cov: 2540 ft: 2726 exec/s: 0 rss: 49Mb
+#32     pulse  cov: 2609 ft: 2852 exec/s: 0 rss: 50Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105695==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x582b7bd90a6d bp 0x7ffef44d0af0 sp 0x7ffef44d0a40 T0)
+==2105695==The signal is caused by a WRITE memory access.
+==2105695==Hint: address points to the zero page.
+    #0 0x582b7bd90a6d in ngx_http_parse_complex_uri /src/nginx/src/http/ngx_http_parse.c:1277:14
+    #1 0x582b7bd7e3fd in ngx_http_process_request_uri /src/nginx/src/http/ngx_http_request.c:1268:13
+    #2 0x582b7bd84aea in ngx_http_process_request_line /src/nginx/src/http/ngx_http_request.c:1136:17
+    #3 0x582b7bd0b689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #4 0x582b7bc926a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #5 0x582b7bb465f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #6 0x582b7bb4fbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #7 0x582b7bb37175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #8 0x582b7bb625a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #9 0x71a39282a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #10 0x71a39282a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #11 0x582b7bb29a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:1277:14 in ngx_http_parse_complex_uri
+==2105695==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x47,0x45,0x54,0x20,0x6d,0x3a,0x2f,0x2f,0x3f,0x40,0xa,0xd,0x48,0x54,0x54,0x64,0x2f,0x31,0x69,0x31,0x66,0xa,
+GET m://?@\012\015HTTd/1i1f\012
+artifact_prefix='./'; Test unit written to ./crash-0716d9708d321ffb6a00818614779e779925365c
+Base64: R0VUIG06Ly8/QAoNSFRUZC8xaTFmCg==
+MERGE-OUTER: attempt 2
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 344964366
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5b217ce24698, 0x5b217ce2aec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5b217ce2aec8,0x5b217ce931c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/0720061be1c789aa' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 56 processed earlier; will process 463 files now
+#1      pulse  cov: 2536 ft: 2537 exec/s: 0 rss: 46Mb
+#2      pulse  cov: 2537 ft: 2628 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2537 ft: 2628 exec/s: 0 rss: 49Mb
+#8      pulse  cov: 2537 ft: 2686 exec/s: 0 rss: 49Mb
+#16     pulse  cov: 2593 ft: 2828 exec/s: 0 rss: 50Mb
+#32     pulse  cov: 2617 ft: 2890 exec/s: 0 rss: 51Mb
+#64     pulse  cov: 2672 ft: 2971 exec/s: 0 rss: 52Mb
+#128    pulse  cov: 3040 ft: 3527 exec/s: 0 rss: 55Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105699==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x5b217cbce3f2 bp 0x7fff68e6e560 sp 0x7fff68e6e500 T0)
+==2105699==The signal is caused by a READ memory access.
+==2105699==Hint: address points to the zero page.
+    #0 0x5b217cbce3f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x5b217cbdb051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x5b217cbdab0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x5b217cbadc72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x5b217cbb8f42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x5b217cb9abc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x5b217cb97af1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x5b217cb97af1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x5b217cbbb678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x5b217cbc0595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x5b217cb45689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x5b217cacc6a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x5b217c9805f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x5b217c989bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x5b217c971175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x5b217c99c5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x7d3be622a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x7d3be622a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x5b217c963a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105699==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x75,0x70,0x6c,0x6f,0x61,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xd,0xa,0xd,0xa,0x34,0xd,0xa,0x57,0x69,0x6b,0x69,0xd,0xa,0x35,0xd,0xa,0x70,0x65,0x64,0x69,0x61,0xd,0xa,0x30,0xd,0xa,0xd,0xa,
+POST /upload HTTP/1.1\015\012Host: localhost\015\012Transfer-Encoding: chunked\015\012\015\0124\015\012Wiki\015\0125\015\012pedia\015\0120\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-9e6a55b6b4563e652a23be9d623ca5055c356940
+Base64: UE9TVCAvdXBsb2FkIEhUVFAvMS4xDQpIb3N0OiBsb2NhbGhvc3QNClRyYW5zZmVyLUVuY29kaW5nOiBjaHVua2VkDQoNCjQNCldpa2kNCjUNCnBlZGlhDQowDQoNCg==
+MERGE-OUTER: attempt 3
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345094612
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x586ee6d30698, 0x586ee6d36ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x586ee6d36ec8,0x586ee6d9f1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/0855436b4ae93c44' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 279 processed earlier; will process 240 files now
+#1      pulse  cov: 2536 ft: 2537 exec/s: 0 rss: 46Mb
+#2      pulse  cov: 2539 ft: 2649 exec/s: 0 rss: 49Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105708==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x586ee6ada3f2 bp 0x7ffc766a3640 sp 0x7ffc766a35e0 T0)
+==2105708==The signal is caused by a READ memory access.
+==2105708==Hint: address points to the zero page.
+    #0 0x586ee6ada3f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x586ee6ae7051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x586ee6ae6b0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x586ee6ab9c72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x586ee6ac4f42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x586ee6aa6bc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x586ee6aa3af1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x586ee6aa3af1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x586ee6ac7678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x586ee6acc595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x586ee6a51689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x586ee69d86a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x586ee688c5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x586ee6895bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x586ee687d175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x586ee68a85a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x781a1e22a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x781a1e22a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x586ee686fa4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105708==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x34,0x30,0x30,0x75,0x70,0x6c,0x6f,0x61,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xd,0xa,0xd,0xa,0x34,0xd,0xa,0x57,0x69,0x6b,0x69,0xd,0xa,0x35,0xd,0xa,0x70,0x65,0x64,0x69,0x61,0xd,0x50,0x30,0xd,0x25,0xd,0xa,
+POST /400upload HTTP/1.1\015\012Host: localhost\015\012Transfer-Encoding: chunked\015\012\015\0124\015\012Wiki\015\0125\015\012pedia\015P0\015%\015\012
+artifact_prefix='./'; Test unit written to ./crash-b3f0c7f6bb763af1be91d9e74eabfeb199dc1f1f
+Base64: UE9TVCAvNDAwdXBsb2FkIEhUVFAvMS4xDQpIb3N0OiBsb2NhbGhvc3QNClRyYW5zZmVyLUVuY29kaW5nOiBjaHVua2VkDQoNCjQNCldpa2kNCjUNCnBlZGlhDVAwDSUNCg==
+MERGE-OUTER: attempt 4
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345176431
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5c49477c2698, 0x5c49477c8ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5c49477c8ec8,0x5c49478311c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/059e0b3811628220' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 282 processed earlier; will process 237 files now
+#1      pulse  cov: 2536 ft: 2537 exec/s: 0 rss: 46Mb
+#2      pulse  cov: 2537 ft: 2614 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2539 ft: 2758 exec/s: 0 rss: 49Mb
+#8      pulse  cov: 2544 ft: 2844 exec/s: 0 rss: 50Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105712==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x5c494756c3f2 bp 0x7ffdba9d69c0 sp 0x7ffdba9d6960 T0)
+==2105712==The signal is caused by a READ memory access.
+==2105712==Hint: address points to the zero page.
+    #0 0x5c494756c3f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x5c4947579051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x5c4947578b0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x5c494754bc72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x5c4947556f42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x5c4947538bc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x5c4947535af1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x5c4947535af1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x5c4947559678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x5c494755e595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x5c49474e3689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x5c494746a6a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x5c494731e5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x5c4947327bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x5c494730f175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x5c494733a5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x7365c4a2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x7365c4a2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x5c4947301a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105712==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x75,0x70,0x6c,0x6f,0x61,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xd,0xa,0xd,0xa,0x34,0xd,0xa,0x57,0x69,0x6b,0x68,0xd,0xa,0x35,0xd,0xa,0x70,0x65,0x64,0x69,0x61,0xd,0xa,0x30,0xd,0xa,0xd,0x65,0x65,0x65,0x65,0x65,0x65,0x65,0x65,0x65,0x65,0xa,
+POST /upload HTTP/1.1\015\012Host: localhost\015\012Transfer-Encoding: chunked\015\012\015\0124\015\012Wikh\015\0125\015\012pedia\015\0120\015\012\015eeeeeeeeee\012
+artifact_prefix='./'; Test unit written to ./crash-91032ad7bbcb6cf72875e8e8207dcfba80173f7c
+Base64: UE9TVCAvdXBsb2FkIEhUVFAvMS4xDQpIb3N0OiBsb2NhbGhvc3QNClRyYW5zZmVyLUVuY29kaW5nOiBjaHVua2VkDQoNCjQNCldpa2gNCjUNCnBlZGlhDQowDQoNZWVlZWVlZWVlZQo=
+MERGE-OUTER: attempt 5
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345259671
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x63dccee0a698, 0x63dccee10ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x63dccee10ec8,0x63dccee791c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/06f7a8866c70a3ed' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 291 processed earlier; will process 228 files now
+#1      pulse  cov: 2536 ft: 2537 exec/s: 0 rss: 46Mb
+#2      pulse  cov: 2593 ft: 2687 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2624 ft: 2732 exec/s: 0 rss: 49Mb
+#8      pulse  cov: 2652 ft: 2873 exec/s: 0 rss: 50Mb
+#16     pulse  cov: 2957 ft: 3592 exec/s: 0 rss: 50Mb
+#32     pulse  cov: 3013 ft: 3742 exec/s: 0 rss: 52Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105716==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x63dccebb43f2 bp 0x7ffdf7a62780 sp 0x7ffdf7a62720 T0)
+==2105716==The signal is caused by a READ memory access.
+==2105716==Hint: address points to the zero page.
+    #0 0x63dccebb43f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x63dccebc1051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x63dccebc0b0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x63dcceb93c72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x63dcceb9ef42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x63dcceb80bc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x63dcceb7daf1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x63dcceb7daf1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x63dcceba1678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x63dcceba6595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x63dcceb2b689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x63dcceab26a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x63dcce9665f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x63dcce96fbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x63dcce957175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x63dcce9825a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x71ecdc82a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x71ecdc82a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x63dcce949a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105716==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x75,0x70,0x64,0x6f,0x61,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0xa,0x6f,0x73,0x74,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0xa,0x6f,0x73,0x74,0x61,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xd,0xa,0xd,0xa,0x34,0xd,0xa,0x57,0x69,0x6b,0x69,0xd,0xa,0x35,0xd,0xa,0x70,0x65,0x9b,0x69,0x61,0xd,0xa,0x30,0xa,0xa,0x47,0x45,0x54,0x20,0x2f,0x2e,0x2f,0x2b,0xd0,0x2e,0x2e,0x2f,0x2e,0x2e,0xa,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x61,0xa,
+POST /updoad HTTP/1.1\015\012Host: local\012ostt: local\012osta\012Transfer-Encoding: chunked\015\012\015\0124\015\012Wiki\015\0125\015\012pe\233ia\015\0120\012\012GET /./+\320../..\012../../../.a\012
+artifact_prefix='./'; Test unit written to ./crash-472b07b9fcf2c2451e8781e944bf5f77cd8457c8
+Base64: UE9TVCAvdXBkb2FkIEhUVFAvMS4xDQpIb3N0OiBsb2NhbApvc3R0OiBsb2NhbApvc3RhClRyYW5zZmVyLUVuY29kaW5nOiBjaHVua2VkDQoNCjQNCldpa2kNCjUNCnBlm2lhDQowCgpHRVQgLy4vK9AuLi8uLgouLi8uLi8uLi8uYQo=
+MERGE-OUTER: attempt 6
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345350902
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x653a16305698, 0x653a1630bec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x653a1630bec8,0x653a163741c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/0d735edcabbbe885' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 331 processed earlier; will process 188 files now
+#1      pulse  cov: 2536 ft: 2537 exec/s: 0 rss: 47Mb
+#2      pulse  cov: 2537 ft: 2609 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2537 ft: 2700 exec/s: 0 rss: 49Mb
+#8      pulse  cov: 2622 ft: 2876 exec/s: 0 rss: 50Mb
+#16     pulse  cov: 2949 ft: 3882 exec/s: 0 rss: 50Mb
+#32     pulse  cov: 2949 ft: 3886 exec/s: 0 rss: 52Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105720==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x653a160af3f2 bp 0x7ffedd732640 sp 0x7ffedd7325e0 T0)
+==2105720==The signal is caused by a READ memory access.
+==2105720==Hint: address points to the zero page.
+    #0 0x653a160af3f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x653a160bc051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x653a160bbb0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x653a1608ec72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x653a16099f42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x653a1607bbc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x653a16078af1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x653a16078af1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x653a1609c678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x653a160a1595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x653a16026689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x653a15fad6a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x653a15e615f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x653a15e6abc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x653a15e52175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x653a15e7d5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x7ea99fc2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x7ea99fc2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x653a15e44a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105720==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x75,0x70,0x6c,0x6f,0x61,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xd,0xa,0x43,0x6f,0x6e,0x6e,0x65,0x63,0x74,0x69,0x6f,0x6e,0x3a,0x20,0x55,0x70,0x67,0x72,0x61,0x64,0x65,0x2c,0x20,0x48,0x54,0x54,0x50,0x32,0x2d,0x53,0x65,0x74,0x74,0x69,0x6e,0x67,0x73,0xd,0xa,0x55,0x70,0x67,0x72,0x61,0x64,0x65,0x3a,0x20,0x68,0x32,0x63,0xd,0xa,0x48,0x54,0x54,0x50,0x32,0x2d,0x53,0x65,0x74,0x74,0x69,0x6e,0x67,0x73,0x3a,0x20,0x41,0x41,0x4d,0x41,0x41,0x41,0x42,0x6b,0x41,0x41,0x51,0x43,0x41,0x41,0x41,0x41,0x41,0x41,0x49,0x41,0x41,0x41,0x41,0x41,0xd,0xa,0xd,0xa,0x34,0xd,0xa,0x57,0x69,0x6b,0x69,0xd,0xa,0x35,0xd,0xa,0x70,0x65,0x64,0x69,0x61,0xd,0xa,0x30,0xd,0xa,0xd,0xa,
+POST /upload HTTP/1.1\015\012Host: localhost\015\012Transfer-Encoding: chunked\015\012Connection: Upgrade, HTTP2-Settings\015\012Upgrade: h2c\015\012HTTP2-Settings: AAMAAABkAAQCAAAAAAIAAAAA\015\012\015\0124\015\012Wiki\015\0125\015\012pedia\015\0120\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-12c6fc06c99a462375eeb3f43dfd832b08ca9e17
+Base64: UE9TVCAvdXBsb2FkIEhUVFAvMS4xDQpIb3N0OiBsb2NhbGhvc3QNClRyYW5zZmVyLUVuY29kaW5nOiBjaHVua2VkDQpDb25uZWN0aW9uOiBVcGdyYWRlLCBIVFRQMi1TZXR0aW5ncw0KVXBncmFkZTogaDJjDQpIVFRQMi1TZXR0aW5nczogQUFNQUFBQmtBQVFDQUFBQUFBSUFBQUFBDQoNCjQNCldpa2kNCjUNCnBlZGlhDQowDQoNCg==
+MERGE-OUTER: attempt 7
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345445969
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5b8305bea698, 0x5b8305bf0ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5b8305bf0ec8,0x5b8305c591c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/0a9e2a797ab096c8' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 390 processed earlier; will process 129 files now
+#1      pulse  cov: 2549 ft: 2550 exec/s: 0 rss: 46Mb
+#2      pulse  cov: 2578 ft: 2692 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2835 ft: 3061 exec/s: 0 rss: 49Mb
+#8      pulse  cov: 2837 ft: 3112 exec/s: 0 rss: 50Mb
+#16     pulse  cov: 2953 ft: 3391 exec/s: 0 rss: 51Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105729==ERROR: AddressSanitizer: SEGV on unknown address 0x519000d3b5fd (pc 0x77a3cdb98926 bp 0x7ffed325b0f0 sp 0x7ffed325a8a8 T0)
+==2105729==The signal is caused by a READ memory access.
+    #0 0x77a3cdb98926 in __memcpy_evex_unaligned_erms string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:342
+    #1 0x5b8305850032 in __asan_memcpy /src/llvm-project/compiler-rt/lib/asan/asan_interceptors_memintrinsics.cpp:63:3
+    #2 0x5b8305a1b7b6 in ngx_http_userid_set_uid /src/nginx/src/http/modules/ngx_http_userid_filter_module.c:446:13
+    #3 0x5b8305a1b7b6 in ngx_http_userid_filter /src/nginx/src/http/modules/ngx_http_userid_filter_module.c:248:9
+    #4 0x5b8305a1cb22 in ngx_http_headers_filter /src/nginx/src/http/modules/ngx_http_headers_filter_module.c
+    #5 0x5b8305975378 in ngx_http_send_special_response /src/nginx/src/http/ngx_http_special_response.c:727:10
+    #6 0x5b8305973f0a in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:523:12
+    #7 0x5b830597ef42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #8 0x5b8305960bc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #9 0x5b830595daf1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #10 0x5b830595daf1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #11 0x5b8305981678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #12 0x5b8305986595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #13 0x5b830590b689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #14 0x5b83058926a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #15 0x5b83057465f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #16 0x5b830574fbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #17 0x5b8305737175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #18 0x5b83057625a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #19 0x77a3cda2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #20 0x77a3cda2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #21 0x5b8305729a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:342 in __memcpy_evex_unaligned_erms
+==2105729==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x47,0x45,0x54,0x20,0x2f,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x27,0x6c,0x6f,0x63,0x80,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x43,0x6f,0x6f,0x6b,0x69,0x65,0x3a,0x20,0x75,0x69,0x64,0x3d,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x69,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x68,0x59,0x57,0x4a,0x69,0x59,0x6d,0x4a,0x69,0x59,0x6d,0x4a,0x72,0x59,0x6d,0x4a,0x69,0x59,0x6d,0x4a,0x69,0x59,0x6d,0x4a,0x6a,0x59,0x32,0x4e,0x6a,0x59,0x48,0x54,0x54,0x50,0x2f,0x32,0x31,0x30,0x31,0xa,0xa,0x0,0x0,0x0,0x4,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x32,0x4e,0x6a,0x59,0x32,0x4e,0x6a,0x59,0x32,0x4e,0x6a,0x59,0x32,0x4e,0x6a,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x2f,0x31,0x2e,0x31,0xa,0x63,0x6f,0x6e,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x61,0x3b,0x3b,0xd,0xa,0xd,0xa,
+GET / HTTP/1.1\015\012Host:'loc\200lhost\015\012Cookie: uid=YWFhYWFiYWFhYWFhYWFhYWJiYmJiYmJrYmJiYmJiYmJjY2NjYHTTP/2101\012\012\000\000\000\004\000\000\000\000\000\000\0002NjY2NjY2NjY2Njaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/1.1\012conaaaaaaaaaaaaaaaaaaaaaaaa;;\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-d435a6cdd786300dff204ee7c2ef942d3e9034e2
+Base64: R0VUIC8gSFRUUC8xLjENCkhvc3Q6J2xvY4BsaG9zdA0KQ29va2llOiB1aWQ9WVdGaFlXRmlZV0ZoWVdGaFlXRmhZV0ppWW1KaVltSnJZbUppWW1KaVltSmpZMk5qWUhUVFAvMjEwMQoKAAAABAAAAAAAAAAyTmpZMk5qWTJOalkyTmphYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhLzEuMQpjb25hYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE7Ow0KDQo=
+MERGE-OUTER: attempt 8
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345536395
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x592665d37698, 0x592665d3dec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x592665d3dec8,0x592665da61c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/03c0a42d2c0ca110' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 417 processed earlier; will process 102 files now
+#1      pulse  cov: 2888 ft: 2889 exec/s: 0 rss: 47Mb
+#2      pulse  cov: 2892 ft: 3234 exec/s: 0 rss: 50Mb
+#4      pulse  cov: 2892 ft: 3275 exec/s: 0 rss: 50Mb
+#8      pulse  cov: 2916 ft: 3319 exec/s: 0 rss: 50Mb
+#16     pulse  cov: 2964 ft: 3528 exec/s: 0 rss: 51Mb
+#32     pulse  cov: 2989 ft: 3661 exec/s: 0 rss: 52Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105733==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x592665ae13f2 bp 0x7ffd8e72ab20 sp 0x7ffd8e72aac0 T0)
+==2105733==The signal is caused by a READ memory access.
+==2105733==Hint: address points to the zero page.
+    #0 0x592665ae13f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x592665aee051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x592665aedb0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x592665ac0c72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x592665acbf42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x592665aadbc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x592665aaaaf1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x592665aaaaf1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x592665ace678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x592665ad3595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x592665a58689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x5926659df6a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x5926658935f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x59266589cbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x592665884175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x5926658af5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x71c9ee22a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x71c9ee22a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x592665876a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105733==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+artifact_prefix='./'; Test unit written to ./crash-4d134bc072212ace2df385dae143139da74ec0ef
+MERGE-OUTER: attempt 9
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345630446
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x612013b7f698, 0x612013b85ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x612013b85ec8,0x612013bee1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/0b4da39073f913b9' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 451 processed earlier; will process 68 files now
+#1      pulse  cov: 2714 ft: 2715 exec/s: 0 rss: 47Mb
+#2      pulse  cov: 2795 ft: 2933 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2795 ft: 3027 exec/s: 0 rss: 50Mb
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==2105737==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x6120139293f2 bp 0x7fff88c23460 sp 0x7fff88c23400 T0)
+==2105737==The signal is caused by a READ memory access.
+==2105737==Hint: address points to the zero page.
+    #0 0x6120139293f2 in ngx_http_parse_chunked /src/nginx/src/http/ngx_http_parse.c:2171:18
+    #1 0x612013936051 in ngx_http_discard_request_body_filter /src/nginx/src/http/ngx_http_request_body.c:870:18
+    #2 0x612013935b0d in ngx_http_discard_request_body /src/nginx/src/http/ngx_http_request_body.c:672:14
+    #3 0x612013908c72 in ngx_http_special_response_handler /src/nginx/src/http/ngx_http_special_response.c:473:9
+    #4 0x612013913f42 in ngx_http_finalize_request /src/nginx/src/http/ngx_http_request.c:2565:38
+    #5 0x6120138f5bc5 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #6 0x6120138f2af1 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #7 0x6120138f2af1 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #8 0x612013916678 in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2138:5
+    #9 0x61201391b595 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1527:13
+    #10 0x6120138a0689 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #11 0x6120138276a4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:295:5
+    #12 0x6120136db5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #13 0x6120136e4bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #14 0x6120136cc175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #15 0x6120136f75a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #16 0x70ad5fe2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #17 0x70ad5fe2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #18 0x6120136bea4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /src/nginx/src/http/ngx_http_parse.c:2171:18 in ngx_http_parse_chunked
+==2105737==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+artifact_prefix='./'; Test unit written to ./crash-1574bddb75c78a6fd2251d61e2993b5146201319
+MERGE-OUTER: attempt 10
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 345714573
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x60abd7f7c698, 0x60abd7f82ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x60abd7f82ec8,0x60abd7feb1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2105692.txt'
+MERGE-INNER: 'examples/0332f9111da59d17' caused a failure at the previous merge step
+MERGE-INNER: 519 total files; 458 processed earlier; will process 61 files now
+#1      pulse  cov: 2544 ft: 2545 exec/s: 0 rss: 47Mb
+#2      pulse  cov: 2660 ft: 2743 exec/s: 0 rss: 49Mb
+#4      pulse  cov: 2663 ft: 2830 exec/s: 0 rss: 50Mb
+#8      pulse  cov: 2663 ft: 2830 exec/s: 0 rss: 51Mb
+#16     pulse  cov: 2925 ft: 3522 exec/s: 0 rss: 51Mb
+#32     pulse  cov: 2968 ft: 3677 exec/s: 0 rss: 52Mb
+#61     DONE   cov: 3053 ft: 3983 exec/s: 0 rss: 55Mb
+MERGE-OUTER: successful in 10 attempt(s)
+MERGE-OUTER: the control file has 404584 bytes
+MERGE-OUTER: consumed 0Mb (41Mb rss) to parse the control file
+MERGE-OUTER: 115 new files with 5065 new features added; 3300 new coverage edges

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seed-ensembler"
+version = "0.1.0"
+description = "Coverage-aware seed filtering for multi-CRS ensemble fuzzing"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "Team Atlanta"}
+]
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["seed_ensembler*"]
+
+[tool.setuptools.package-data]
+"seed_ensembler" = ["test_data/*.txt"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (require Docker)",
+]

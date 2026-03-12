@@ -1,0 +1,55 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 558364916
+INFO: Loaded 1 modules   (16 inline 8-bit counters): 16 [0x56018f5c2018, 0x56018f5c2028), 
+INFO: Loaded 1 PC tables (16 PCs): 16 [0x56018f5c2028,0x56018f5c2128), 
+MERGE-OUTER: 4 files, 0 in the initial corpus, 0 processed earlier
+MERGE-OUTER: attempt 1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 558374781
+INFO: Loaded 1 modules   (16 inline 8-bit counters): 16 [0x563caa990018, 0x563caa990028), 
+INFO: Loaded 1 PC tables (16 PCs): 16 [0x563caa990028,0x563caa990128), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2878796.txt'
+MERGE-INNER: 4 total files; 0 processed earlier; will process 4 files now
+ALARM: working on the last Unit for 1 seconds
+       and the timeout value is 1 (use -timeout=N to change)
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x63,0x63,0x63,0xa,0x5a,0x5a,0x5a,0xa,0xa,0x31,0xa,
+ccc\012ZZZ\012\0121\012
+artifact_prefix='./'; Test unit written to ./timeout-1fa7bc717eb4c4d0c7243aa2805059c4d358c8d2
+Base64: Y2NjClpaWgoKMQo=
+==2878799== ERROR: libFuzzer: timeout after 1 seconds
+    #0 0x563caa8f4ae1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x563caa7f9a78 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x563caa7dcd87 in fuzzer::Fuzzer::AlarmCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:304:5
+    #3 0x7f2a7044532f  (/lib/x86_64-linux-gnu/libc.so.6+0x4532f) (BuildId: 42c84c92e6f98126b3e2230ebfdead22c235b667)
+    #4 0x7f2a704ecade in clock_nanosleep time/../sysdeps/unix/sysv/linux/clock_nanosleep.c:78:7
+    #5 0x7f2a704f9a26 in __nanosleep posix/../sysdeps/unix/sysv/linux/nanosleep.c:25:13
+    #6 0x7f2a7050ec62 in sleep posix/../sysdeps/posix/sleep.c:55:11
+    #7 0x563caa9299ee in func_b /src/fuzz/../mock-cp-src/mock_vp.c:29:9
+    #8 0x563caa929d2f in LLVMFuzzerTestOneInput /src/fuzz/filein_harness.c:58:3
+    #9 0x563caa7de320 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #10 0x563caa7e78f0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #11 0x563caa7ceea5 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #12 0x563caa7fa2d2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #13 0x7f2a7042a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #14 0x7f2a7042a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #15 0x563caa7c177d in _start (/redacted/path/to/filein_harness+0x3e77d)
+
+SUMMARY: libFuzzer: timeout
+MERGE-OUTER: attempt 2
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 559446583
+INFO: Loaded 1 modules   (16 inline 8-bit counters): 16 [0x564f7d588018, 0x564f7d588028), 
+INFO: Loaded 1 PC tables (16 PCs): 16 [0x564f7d588028,0x564f7d588128), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2878796.txt'
+MERGE-INNER: 'dir2/input4.txt' caused a failure at the previous merge step
+MERGE-INNER: 4 total files; 1 processed earlier; will process 3 files now
+#1      pulse  cov: 7 ft: 8 exec/s: 0 rss: 31Mb
+#2      pulse  cov: 8 ft: 9 exec/s: 2 rss: 31Mb
+#3      DONE   cov: 8 ft: 9 exec/s: 3 rss: 31Mb
+MERGE-OUTER: successful in 2 attempt(s)
+MERGE-OUTER: the control file has 204 bytes
+MERGE-OUTER: consumed 0Mb (30Mb rss) to parse the control file
+MERGE-OUTER: 2 new files with 9 new features added; 8 new coverage edges

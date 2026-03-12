@@ -1,0 +1,481 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2112787084
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x594a3220e698, 0x594a32214ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x594a32214ec8,0x594a3227d1c8), 
+MERGE-OUTER: 15 files, 0 in the initial corpus, 0 processed earlier
+MERGE-OUTER: attempt 1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2112797903
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x587db8df4698, 0x587db8dfaec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x587db8dfaec8,0x587db8e631c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 15 total files; 0 processed earlier; will process 15 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368104== ERROR: libFuzzer: fuzz target exited
+    #0 0x587db8a66db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x587db896bd48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x587db894f19c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x74e799047a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x74e799047bbd in exit stdlib/exit.c:138:3
+    #5 0x587db8a9c2ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x587db8a9c735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x587db89505f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x587db8959bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x587db8941175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x587db896c5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x74e79902a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x74e79902a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x587db8933a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x20,0x2f,0x5b,0x5d,0x5b,0x5d,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xa,0xa,
+ /[][] HTTP/1.1\012\012
+artifact_prefix='./'; Test unit written to ./crash-356a192b7913b04c54574d18c28d46e6395428ab
+Base64: IC9bXVtdIEhUVFAvMS4xCgo=
+MERGE-OUTER: attempt 2
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2112874783
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x602b5d405698, 0x602b5d40bec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x602b5d40bec8,0x602b5d4741c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/00a7f52ad8faa266' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 1 processed earlier; will process 14 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368108== ERROR: libFuzzer: fuzz target exited
+    #0 0x602b5d077db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x602b5cf7cd48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x602b5cf6019c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7dc7f8c47a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7dc7f8c47bbd in exit stdlib/exit.c:138:3
+    #5 0x602b5d0ad2ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x602b5d0ad735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x602b5cf615f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x602b5cf6abc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x602b5cf52175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x602b5cf7d5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7dc7f8c2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7dc7f8c2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x602b5cf44a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x54,0x20,0x2f,0xa,0x33,0x46,0x25,0x32,0x32,0x46,0x25,0x30,0x30,0x25,0x30,0x31,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xa,0xa,
+T /\0123F%22F%00%01 HTTP/1.1\012\012
+artifact_prefix='./'; Test unit written to ./crash-da4b9237bacccdf19c0760cab7aec4a8359010b0
+Base64: VCAvCjNGJTIyRiUwMCUwMSBIVFRQLzEuMQoK
+MERGE-OUTER: attempt 3
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2112951818
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5ab88ae69698, 0x5ab88ae6fec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5ab88ae6fec8,0x5ab88aed81c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a0f378122dc768e' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 2 processed earlier; will process 13 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368117== ERROR: libFuzzer: fuzz target exited
+    #0 0x5ab88aadbdb1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x5ab88a9e0d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x5ab88a9c419c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x742358847a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x742358847bbd in exit stdlib/exit.c:138:3
+    #5 0x5ab88ab112ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x5ab88ab11735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x5ab88a9c55f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x5ab88a9cebc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x5ab88a9b6175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x5ab88a9e15a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x74235882a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x74235882a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x5ab88a9a8a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x20,0x2f,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xa,0x63,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x74,0x79,0x70,0x65,0x3a,0x6e,0x3b,0x74,0x3d,0x38,0xe2,0x90,0x8c,0xa,0xa,
+ / HTTP/1.1\012content-type:n;t=8\342\220\214\012\012
+artifact_prefix='./'; Test unit written to ./crash-77de68daecd823babbb58edb1c8e14d7106e83bb
+Base64: IC8gSFRUUC8xLjEKY29udGVudC10eXBlOm47dD044pCMCgo=
+MERGE-OUTER: attempt 4
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113025378
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5b48d97bf698, 0x5b48d97c5ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5b48d97c5ec8,0x5b48d982e1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a3f97c7b4dbe991' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 3 processed earlier; will process 12 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368121== ERROR: libFuzzer: fuzz target exited
+    #0 0x5b48d9431db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x5b48d9336d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x5b48d931a19c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7ec391447a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7ec391447bbd in exit stdlib/exit.c:138:3
+    #5 0x5b48d94672ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x5b48d9467735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x5b48d931b5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x5b48d9324bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x5b48d930c175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x5b48d93375a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7ec39142a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7ec39142a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x5b48d92fea4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x20,0x2f,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xa,0x41,0x75,0x74,0x68,0x6f,0x72,0x69,0x7a,0x61,0x74,0x69,0x6f,0x6e,0x3a,0x42,0x61,0x73,0x69,0x63,0x20,0x58,0x58,0x3d,0x6e,0xa,0xa,
+ / HTTP/1.1\012Authorization:Basic XX=n\012\012
+artifact_prefix='./'; Test unit written to ./crash-1b6453892473a467d07372d45eb05abc2031647a
+Base64: IC8gSFRUUC8xLjEKQXV0aG9yaXphdGlvbjpCYXNpYyBYWD1uCgo=
+MERGE-OUTER: attempt 5
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113099522
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5a77d38e6698, 0x5a77d38ecec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5a77d38ecec8,0x5a77d39551c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a24e99ad3ce6455' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 4 processed earlier; will process 11 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368125== ERROR: libFuzzer: fuzz target exited
+    #0 0x5a77d3558db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x5a77d345dd48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x5a77d344119c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x75ca1d647a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x75ca1d647bbd in exit stdlib/exit.c:138:3
+    #5 0x5a77d358e2ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x5a77d358e735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x5a77d34425f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x5a77d344bbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x5a77d3433175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x5a77d345e5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x75ca1d62a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x75ca1d62a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x5a77d3425a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x2,0x2f,0x68,0x0,0x2,0x0,0x8,0x0,0x41,0x2f,0x5a,0x48,0x54,0x54,0x50,0x2f,0x32,0x31,0x30,0x31,0xa,0xa,0x0,0x0,0x0,0x4,0x0,0x0,0x0,0x0,0x0,0x0,0x25,0x6e,0x5,0xfc,0x0,0x0,0x0,0x1,0x0,0x0,0x0,0x0,0x78,0x0,0x8d,0x5,0x0,0x97,0x97,0x75,0x4b,0x5d,0x93,0xb2,0x97,0x29,0x74,0x65,0x0,
+\002/h\000\002\000\010\000A/ZHTTP/2101\012\012\000\000\000\004\000\000\000\000\000\000%n\005\374\000\000\000\001\000\000\000\000x\000\215\005\000\227\227uK]\223\262\227)te\000
+artifact_prefix='./'; Test unit written to ./crash-ac3478d69a3c81fa62e60f5c3696165a4e5e6ac4
+Base64: Ai9oAAIACABBL1pIVFRQLzIxMDEKCgAAAAQAAAAAAAAlbgX8AAAAAQAAAAB4AI0FAJeXdUtdk7KXKXRlAA==
+MERGE-OUTER: attempt 6
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113176552
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x59bd4d5a3698, 0x59bd4d5a9ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x59bd4d5a9ec8,0x59bd4d6121c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a64ebe313ba2c0d' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 5 processed earlier; will process 10 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368129== ERROR: libFuzzer: fuzz target exited
+    #0 0x59bd4d215db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x59bd4d11ad48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x59bd4d0fe19c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7426d3047a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7426d3047bbd in exit stdlib/exit.c:138:3
+    #5 0x59bd4d24b2ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x59bd4d24b735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x59bd4d0ff5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x59bd4d108bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x59bd4d0f0175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x59bd4d11b5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7426d302a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7426d302a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x59bd4d0e2a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x47,0x45,0x54,0x20,0x2f,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x43,0x6f,0x6f,0x6b,0x69,0x65,0x3a,0xa,0x75,0x69,0x7a,0x3d,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x68,0x59,0x57,0x46,0x68,0x59,0x57,0x4a,0x69,0x59,0x6d,0x4a,0x69,0x59,0x6d,0x4a,0x69,0x59,0x6d,0x3d,0x3d,0xd,0xa,0xd,0xa,
+GET / HTTP/1.1\015\012Host: localhost\015\012Cookie:\012uiz=YWFhYWFhYWFhYWFhYWFhYWJiYmJiYmJiYm==\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-c1dfd96eea8cc2b62785275bca38ac261256e278
+Base64: R0VUIC8gSFRUUC8xLjENCkhvc3Q6IGxvY2FsaG9zdA0KQ29va2llOgp1aXo9WVdGaFlXRmhZV0ZoWVdGaFlXRmhZV0ppWW1KaVltSmlZbT09DQoNCg==
+MERGE-OUTER: attempt 7
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113251592
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x597fd0f8c698, 0x597fd0f92ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x597fd0f92ec8,0x597fd0ffb1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a6a460396775887' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 6 processed earlier; will process 9 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368133== ERROR: libFuzzer: fuzz target exited
+    #0 0x597fd0bfedb1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x597fd0b03d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x597fd0ae719c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x75abebc47a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x75abebc47bbd in exit stdlib/exit.c:138:3
+    #5 0x597fd0c342ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x597fd0c34735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x597fd0ae85f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x597fd0af1bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x597fd0ad9175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x597fd0b045a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x75abebc2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x75abebc2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x597fd0acba4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xa,0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x61,0x70,0x70,0x6c,0x69,0x63,0x61,0x74,0x69,0x6f,0x6e,0x2f,0x78,0x2d,0x77,0x77,0x77,0x2d,0x66,0x6f,0x72,0x6d,0x2d,0x75,0x72,0x6c,0x65,0x6e,0x63,0x6f,0x64,0x65,0x64,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xa,0xa,
+POST / HTTP/1.1\012Content-Type:application/x-www-form-urlencoded\012Transfer-Encoding:chunked\012\012
+artifact_prefix='./'; Test unit written to ./crash-902ba3cda1883801594b6e1b452790cc53948fda
+Base64: UE9TVCAvIEhUVFAvMS4xCkNvbnRlbnQtVHlwZTphcHBsaWNhdGlvbi94LXd3dy1mb3JtLXVybGVuY29kZWQKVHJhbnNmZXItRW5jb2Rpbmc6Y2h1bmtlZAoK
+MERGE-OUTER: attempt 8
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113325594
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x62a8c35be698, 0x62a8c35c4ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x62a8c35c4ec8,0x62a8c362d1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a2efe6896d60974' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 7 processed earlier; will process 8 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368141== ERROR: libFuzzer: fuzz target exited
+    #0 0x62a8c3230db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x62a8c3135d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x62a8c311919c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x74f064847a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x74f064847bbd in exit stdlib/exit.c:138:3
+    #5 0x62a8c32662ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x62a8c3266735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x62a8c311a5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x62a8c3123bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x62a8c310b175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x62a8c31365a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x74f06482a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x74f06482a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x62a8c30fda4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x65,0x78,0x70,0x65,0x72,0x69,0x6d,0x65,0x6e,0x74,0x73,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xa,0x48,0x6f,0x73,0x74,0x3a,0x34,0xf6,0x41,0x63,0x63,0x65,0x70,0x74,0x3a,0xa,0x41,0x75,0x74,0x68,0x6f,0x72,0x69,0x7a,0x61,0x74,0x69,0x6f,0x6e,0x3a,0x42,0x61,0x73,0x69,0x63,0x20,0x20,0x20,0x20,0x20,0x3d,0xa,0x41,0x63,0x63,0x65,0x70,0x74,0x2d,0x45,0x6e,0x63,0x6f,0x4f,0x69,0x6e,0x67,0x3a,0xa,0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x6e,0x2f,0x6c,0x3b,0x20,0x74,0x3d,0x38,0xa,0xa,0x3c,
+POST /experiments HTTP/1.1\012Host:4\366Accept:\012Authorization:Basic     =\012Accept-EncoOing:\012Content-Type:n/l; t=8\012\012<
+artifact_prefix='./'; Test unit written to ./crash-fe5dbbcea5ce7e2988b8c69bcfdfde8904aabc1f
+Base64: UE9TVCAvZXhwZXJpbWVudHMgSFRUUC8xLjEKSG9zdDo09kFjY2VwdDoKQXV0aG9yaXphdGlvbjpCYXNpYyAgICAgPQpBY2NlcHQtRW5jb09pbmc6CkNvbnRlbnQtVHlwZTpuL2w7IHQ9OAoKPA==
+MERGE-OUTER: attempt 9
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113401841
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x60e79dad8698, 0x60e79dadeec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x60e79dadeec8,0x60e79db471c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a73f2cfee837fa8' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 8 processed earlier; will process 7 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368145== ERROR: libFuzzer: fuzz target exited
+    #0 0x60e79d74adb1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x60e79d64fd48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x60e79d63319c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x709c13e47a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x709c13e47bbd in exit stdlib/exit.c:138:3
+    #5 0x60e79d7802ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x60e79d780735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x60e79d6345f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x60e79d63dbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x60e79d625175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x60e79d6505a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x709c13e2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x709c13e2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x60e79d617a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x55,0x54,0x20,0x2f,0x75,0x70,0x64,0x61,0x2e,0x65,0x20,0x48,0x54,0x54,0x50,0x61,0x31,0x2e,0x31,0xd,0x61,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x20,0x0,0x70,0x70,0x7a,0x69,0x63,0x61,0x74,0x69,0x6f,0x6e,0x2f,0x6a,0x73,0x6f,0x6e,0xd,0xa,0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x4c,0x65,0x6e,0x67,0x74,0x68,0x3a,0x20,0x32,0x30,0x6a,0xa,0xd,0xa,0x7b,0x22,0x6b,0x65,0x79,0x22,0x3a,0x20,0x22,0x61,0x66,0x76,0x5f,0x76,0x61,0x6c,0x75,0x65,0x22,0x7d,
+PUT /upda.e HTTPa1.1\015aHost: localhost\015\012Content-Type: \000ppzication/json\015\012Content-Length: 20j\012\015\012{\"key\": \"afv_value\"}
+artifact_prefix='./'; Test unit written to ./crash-0ade7c2cf97f75d009975f4d720d1fa6c19f4897
+Base64: UFVUIC91cGRhLmUgSFRUUGExLjENYUhvc3Q6IGxvY2FsaG9zdA0KQ29udGVudC1UeXBlOiAAcHB6aWNhdGlvbi9qc29uDQpDb250ZW50LUxlbmd0aDogMjBqCg0KeyJrZXkiOiAiYWZ2X3ZhbHVlIn0=
+MERGE-OUTER: attempt 10
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113482466
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5d31c81d0698, 0x5d31c81d6ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5d31c81d6ec8,0x5d31c823f1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a40ad06fb9d9fe8' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 9 processed earlier; will process 6 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368149== ERROR: libFuzzer: fuzz target exited
+    #0 0x5d31c7e42db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x5d31c7d47d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x5d31c7d2b19c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7fcf85047a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7fcf85047bbd in exit stdlib/exit.c:138:3
+    #5 0x5d31c7e782ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x5d31c7e78735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x5d31c7d2c5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x5d31c7d35bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x5d31c7d1d175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x5d31c7d485a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7fcf8502a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7fcf8502a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x5d31c7d0fa4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x2,0x2a,0x0,0x0,0x0,0x62,0x62,0x33,0x43,0xff,0x0,0x48,0x54,0x54,0x50,0x2f,0x32,0x31,0x30,0x31,0xa,0xa,0x0,0x0,0x0,0x4,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x64,0x1,0xfd,0x0,0x0,0x0,0x1,0x13,0x4,0x69,0x1,0x3,0x0,0x8d,0x97,0x97,0x75,0x3b,0x59,0x93,0xb2,0x97,0xbe,0x4e,0x4d,0xb2,0x80,0x80,0x77,0x77,0x77,0x77,0x77,0x77,0x77,0x77,0x77,0x77,0x80,0x80,0x80,0x80,0xe9,0xb2,0xa8,0xa8,0x51,0x57,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0x9e,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xa8,0xb5,0xb5,0xb5,0x2a,0xac,0xb5,0xb5,0xb5,0xb5,0xb5,0xb5,0xb5,
+\002*\000\000\000bb3C\377\000HTTP/2101\012\012\000\000\000\004\000\000\000\000\000\000\000d\001\375\000\000\000\001\023\004i\001\003\000\215\227\227u;Y\223\262\227\276NM\262\200\200wwwwwwwwww\200\200\200\200\351\262\250\250QW\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\250\236\236\236\236\236\236\236\236\236\236\236\236\236\236\236\250\250\250\250\250\250\250\250\250\265\265\265*\254\265\265\265\265\265\265\265
+artifact_prefix='./'; Test unit written to ./crash-b1d5781111d84f7b3fe45a0852e59758cd7a87e5
+Base64: AioAAABiYjND/wBIVFRQLzIxMDEKCgAAAAQAAAAAAAAAZAH9AAAAARMEaQEDAI2Xl3U7WZOyl75OTbKAgHd3d3d3d3d3d3eAgICA6bKoqFFXqKioqKioqKioqKioqKioqKioqKioqKienp6enp6enp6enp6enp6oqKioqKioqKi1tbUqrLW1tbW1tbU=
+MERGE-OUTER: attempt 11
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113559782
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x55a16f310698, 0x55a16f316ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x55a16f316ec8,0x55a16f37f1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a041fcef5eb3279' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 10 processed earlier; will process 5 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368153== ERROR: libFuzzer: fuzz target exited
+    #0 0x55a16ef82db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x55a16ee87d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x55a16ee6b19c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x784cc1447a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x784cc1447bbd in exit stdlib/exit.c:138:3
+    #5 0x55a16efb82ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x55a16efb8735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x55a16ee6c5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x55a16ee75bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x55a16ee5d175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x55a16ee885a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x784cc142a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x784cc142a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x55a16ee4fa4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x47,0x45,0x54,0x20,0x2f,0x68,0x74,0x74,0x70,0x5f,0x73,0x75,0x62,0x5f,0x6d,0x6f,0x64,0x75,0x6c,0x65,0x2f,0x74,0x65,0x73,0x74,0x34,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x55,0x73,0x65,0x72,0x2d,0x41,0x67,0x65,0x6e,0x74,0x3a,0x20,0x66,0x75,0x7a,0x7a,0x69,0x6e,0x67,0x2d,0x74,0x65,0x73,0x74,0x63,0x61,0x73,0x65,0x2d,0x34,0xd,0xa,0x41,0x63,0x63,0x65,0x70,0x74,0x3a,0x20,0x2a,0x2f,0x2a,0xd,0xa,0x43,0x6f,0x6e,0x74,0x65,0x6e,0x74,0x2d,0x54,0x79,0x70,0x65,0x3a,0x20,0x61,0x70,0x70,0x6c,0x69,0x63,0x61,0x74,0x69,0x6f,0x6e,0x2f,0x78,0x2d,0x77,0x77,0x77,0x2d,0x66,0x6f,0x72,0x6d,0x2d,0x75,0x72,0x6c,0x65,0x6e,0x63,0x6f,0x64,0x65,0x64,0xd,0xa,0xd,0xa,
+GET /http_sub_module/test4 HTTP/1.1\015\012Host: localhost\015\012User-Agent: fuzzing-testcase-4\015\012Accept: */*\015\012Content-Type: application/x-www-form-urlencoded\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-17ba0791499db908433b80f37c5fbc89b870084b
+Base64: R0VUIC9odHRwX3N1Yl9tb2R1bGUvdGVzdDQgSFRUUC8xLjENCkhvc3Q6IGxvY2FsaG9zdA0KVXNlci1BZ2VudDogZnV6emluZy10ZXN0Y2FzZS00DQpBY2NlcHQ6ICovKg0KQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi94LXd3dy1mb3JtLXVybGVuY29kZWQNCg0K
+MERGE-OUTER: attempt 12
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113633445
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x599ea7980698, 0x599ea7986ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x599ea7986ec8,0x599ea79ef1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a2d8644c70c850e' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 11 processed earlier; will process 4 files now
+2025/04/29 05:33:21 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368157== ERROR: libFuzzer: fuzz target exited
+    #0 0x599ea75f2db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x599ea74f7d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x599ea74db19c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7a18e5647a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7a18e5647bbd in exit stdlib/exit.c:138:3
+    #5 0x599ea76282ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x599ea7628735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x599ea74dc5f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x599ea74e5bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x599ea74cd175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x599ea74f85a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7a18e562a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7a18e562a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x599ea74bfa4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x47,0x45,0x54,0x20,0x2f,0x2b,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x2e,0x23,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x2e,0x2e,0x2f,0x65,0x74,0x63,0x2f,0x70,0x61,0x73,0x73,0x77,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x31,0x32,0x37,0x2e,0x30,0x2e,0x30,0x2e,0x31,0x3a,0x38,0x30,0x38,0x30,0xd,0xa,0x55,0x73,0x65,0x72,0x2d,0x41,0x67,0x65,0x6e,0x74,0x3a,0x2f,0x70,0x79,0x74,0x68,0x6f,0x6e,0x2d,0x72,0x65,0x71,0x2e,0x65,0x73,0x74,0x73,0x2f,0x32,0x2e,0x32,0x31,0x2e,0x30,0xd,0xa,0x41,0x63,0x63,0x65,0x70,0x74,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x67,0x7a,0x69,0x70,0x2c,0x20,0x64,0x65,0x4f,0x6c,0x61,0x74,0x65,0xd,0xa,0x41,0x63,0x63,0x65,0x70,0x74,0x3a,0x20,0x2a,0x2f,0x2a,0xd,0xa,0x43,0x6f,0x6e,0x6e,0x65,0x63,0x74,0x69,0x6f,0x6e,0x3a,0x20,0x6b,0x65,0x65,0x70,0x2d,0x61,0x4f,0x69,0x76,0x65,0xd,0xa,0xd,0xa,
+GET /+./../../..#../../../../../etc/passwd HTTP/1.1\015\012Host: 127.0.0.1:8080\015\012User-Agent:/python-req.ests/2.21.0\015\012Accept-Encoding: gzip, deOlate\015\012Accept: */*\015\012Connection: keep-aOive\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-7b52009b64fd0a2a49e6d8a939753077792b0554
+Base64: R0VUIC8rLi8uLi8uLi8uLiMuLi8uLi8uLi8uLi8uLi9ldGMvcGFzc3dkIEhUVFAvMS4xDQpIb3N0OiAxMjcuMC4wLjE6ODA4MA0KVXNlci1BZ2VudDovcHl0aG9uLXJlcS5lc3RzLzIuMjEuMA0KQWNjZXB0LUVuY29kaW5nOiBnemlwLCBkZU9sYXRlDQpBY2NlcHQ6ICovKg0KQ29ubmVjdGlvbjoga2VlcC1hT2l2ZQ0KDQo=
+MERGE-OUTER: attempt 13
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113706108
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5c8e5dcd7698, 0x5c8e5dcddec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5c8e5dcddec8,0x5c8e5dd461c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/00a1443f0917ebdb' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 12 processed earlier; will process 3 files now
+2025/04/29 05:33:22 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368161== ERROR: libFuzzer: fuzz target exited
+    #0 0x5c8e5d949db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x5c8e5d84ed48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x5c8e5d83219c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7e6c5b647a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7e6c5b647bbd in exit stdlib/exit.c:138:3
+    #5 0x5c8e5d97f2ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x5c8e5d97f735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x5c8e5d8335f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x5c8e5d83cbc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x5c8e5d824175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x5c8e5d84f5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7e6c5b62a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7e6c5b62a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x5c8e5d816a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+0x50,0x4f,0x53,0x54,0x20,0x2f,0x75,0x70,0x6c,0x6f,0x61,0x64,0x20,0x48,0x54,0x54,0x50,0x2f,0x31,0x2e,0x31,0xd,0xa,0x48,0x6f,0x73,0x74,0x3a,0x20,0x6c,0x6f,0x63,0x61,0x6c,0x68,0x6f,0x73,0x74,0xd,0xa,0x54,0x72,0x61,0x6e,0x73,0x66,0x65,0x72,0x2d,0x45,0x6e,0x63,0x6f,0x64,0x69,0x6e,0x67,0x3a,0x20,0x63,0x68,0x75,0x6e,0x6b,0x65,0x64,0xd,0xa,0x43,0x6f,0x6e,0x6e,0x65,0x63,0x74,0x69,0x6f,0x6e,0x3a,0x20,0x55,0x70,0x67,0x72,0x61,0x64,0x65,0x2c,0x20,0x48,0x54,0x54,0x50,0x32,0x2d,0x53,0x65,0x74,0x74,0x69,0x6e,0x67,0x73,0xd,0xa,0x55,0x70,0x67,0x72,0x61,0x64,0x65,0x3a,0x20,0x68,0x32,0x63,0xd,0xa,0x48,0x54,0x54,0x50,0x32,0x2d,0x53,0x65,0x74,0x74,0x69,0x6e,0x67,0x73,0x3a,0x20,0x41,0x41,0x4d,0x41,0x41,0x41,0x42,0x6b,0x41,0x41,0x51,0x43,0x41,0x41,0x41,0x41,0x41,0x41,0x49,0x41,0x41,0x41,0x41,0x41,0xd,0xa,0xd,0xa,0x34,0xd,0xa,0x57,0x69,0x6b,0x69,0xd,0xa,0x35,0xd,0xa,0x70,0x65,0x64,0x69,0x61,0xd,0xa,0x30,0xd,0xa,0xd,0xa,
+POST /upload HTTP/1.1\015\012Host: localhost\015\012Transfer-Encoding: chunked\015\012Connection: Upgrade, HTTP2-Settings\015\012Upgrade: h2c\015\012HTTP2-Settings: AAMAAABkAAQCAAAAAAIAAAAA\015\012\015\0124\015\012Wiki\015\0125\015\012pedia\015\0120\015\012\015\012
+artifact_prefix='./'; Test unit written to ./crash-bd307a3ec329e10a2cff8fb87480823da114f8f4
+Base64: UE9TVCAvdXBsb2FkIEhUVFAvMS4xDQpIb3N0OiBsb2NhbGhvc3QNClRyYW5zZmVyLUVuY29kaW5nOiBjaHVua2VkDQpDb25uZWN0aW9uOiBVcGdyYWRlLCBIVFRQMi1TZXR0aW5ncw0KVXBncmFkZTogaDJjDQpIVFRQMi1TZXR0aW5nczogQUFNQUFBQmtBQVFDQUFBQUFBSUFBQUFBDQoNCjQNCldpa2kNCjUNCnBlZGlhDQowDQoNCg==
+MERGE-OUTER: attempt 14
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113780764
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x58a0fb5c5698, 0x58a0fb5cbec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x58a0fb5cbec8,0x58a0fb6341c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a9e2a797ab096c8' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 13 processed earlier; will process 2 files now
+2025/04/29 05:33:22 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368165== ERROR: libFuzzer: fuzz target exited
+    #0 0x58a0fb237db1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x58a0fb13cd48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x58a0fb12019c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7d80a2a47a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7d80a2a47bbd in exit stdlib/exit.c:138:3
+    #5 0x58a0fb26d2ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x58a0fb26d735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x58a0fb1215f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x58a0fb12abc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x58a0fb112175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x58a0fb13d5a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7d80a2a2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7d80a2a2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x58a0fb104a4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+artifact_prefix='./'; Test unit written to ./crash-fa35e192121eabf3dabf9f5ea6abdbcbc107ac3b
+MERGE-OUTER: attempt 15
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 2113859827
+INFO: Loaded 1 modules   (26672 inline 8-bit counters): 26672 [0x5d93c1fec698, 0x5d93c1ff2ec8), 
+INFO: Loaded 1 PC tables (26672 PCs): 26672 [0x5d93c1ff2ec8,0x5d93c205b1c8), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge2368101.txt'
+MERGE-INNER: 'examples/0a07e6b152870cb0' caused a failure at the previous merge step
+MERGE-INNER: 15 total files; 14 processed earlier; will process 1 files now
+2025/04/29 05:33:22 [emerg] 0#0: open() "logs/nginx.pid" failed (2: No such file or directory)
+==2368188== ERROR: libFuzzer: fuzz target exited
+    #0 0x5d93c1c5edb1 in __sanitizer_print_stack_trace /src/llvm-project/compiler-rt/lib/asan/asan_stack.cpp:87:3
+    #1 0x5d93c1b63d48 in fuzzer::PrintStackTrace() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerUtil.cpp:210:5
+    #2 0x5d93c1b4719c in fuzzer::Fuzzer::ExitCallback() /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:248:3
+    #3 0x7a4378a47a75 in __run_exit_handlers stdlib/exit.c:108:8
+    #4 0x7a4378a47bbd in exit stdlib/exit.c:138:3
+    #5 0x5d93c1c942ed in InitializeNginx /src/nginx/src/fuzz/pov_harness.cc
+    #6 0x5d93c1c94735 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:273:21
+    #7 0x5d93c1b485f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #8 0x5d93c1b51bc0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #9 0x5d93c1b39175 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #10 0x5d93c1b645a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #11 0x7a4378a2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #12 0x7a4378a2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #13 0x5d93c1b2ba4d in _start (/redacted/path/to/pov_harness+0x151a4d)
+
+SUMMARY: libFuzzer: fuzz target exited
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+artifact_prefix='./'; Test unit written to ./crash-f1abd670358e036c31296e66b3b66c382ac00812
+MERGE-OUTER: the control file has 603 bytes
+MERGE-OUTER: consumed 0Mb (34Mb rss) to parse the control file
+MERGE-OUTER: 0 new files with 0 new features added; 0 new coverage edges

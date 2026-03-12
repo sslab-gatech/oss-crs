@@ -1,0 +1,107 @@
+WARNING: Error parsing config file (/root/.docker/config.json): read /root/.docker/config.json: is a directory
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 584951608
+INFO: Loaded 1 modules   (26937 inline 8-bit counters): 26937 [0x557a7fdeff20, 0x557a7fdf6859), 
+INFO: Loaded 1 PC tables (26937 PCs): 26937 [0x557a7fdf6860,0x557a7fe5fbf0), 
+MERGE-OUTER: 1 files, 0 in the initial corpus, 0 processed earlier
+MERGE-OUTER: attempt 1
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 584989044
+INFO: Loaded 1 modules   (26937 inline 8-bit counters): 26937 [0x564b3de8cf20, 0x564b3de93859), 
+INFO: Loaded 1 PC tables (26937 PCs): 26937 [0x564b3de93860,0x564b3defcbf0), 
+INFO: -max_len is not provided; libFuzzer will not generate inputs larger than 1048576 bytes
+MERGE-INNER: using the control file '/tmp/libFuzzerTemp.Merge1.txt'
+MERGE-INNER: 1 total files; 0 processed earlier; will process 1 files now
+=================================================================
+==9==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x503000038001 at pc 0x564b3dae1b77 bp 0x7ffda680fa60 sp 0x7ffda680fa58
+WRITE of size 1 at 0x503000038001 thread T0
+SCARINESS: 31 (1-byte-write-heap-buffer-overflow)
+    #0 0x564b3dae1b76 in ngx_decode_base64_internal /src/nginx/src/core/ngx_string.c:1330:14
+    #1 0x564b3db968f2 in ngx_http_auth_basic_user /src/nginx/src/http/ngx_http_core_module.c:1994:9
+    #2 0x564b3dbe260e in ngx_http_variable_remote_user /src/nginx/src/http/ngx_http_variables.c:1760:10
+    #3 0x564b3dbdc570 in ngx_http_get_indexed_variable /src/nginx/src/http/ngx_http_variables.c:647:9
+    #4 0x564b3dbcff7c in ngx_http_log_variable_getlen /src/nginx/src/http/modules/ngx_http_log_module.c:956:13
+    #5 0x564b3dbce526 in ngx_http_log_handler /src/nginx/src/http/modules/ngx_http_log_module.c:305:24
+    #6 0x564b3dbb3749 in ngx_http_log_request /src/nginx/src/http/ngx_http_request.c:3768:9
+    #7 0x564b3dbb3749 in ngx_http_free_request /src/nginx/src/http/ngx_http_request.c:3714:9
+    #8 0x564b3dbbf3ef in ngx_http_set_keepalive /src/nginx/src/http/ngx_http_request.c:3136:5
+    #9 0x564b3db94155 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #10 0x564b3db90c89 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #11 0x564b3db90c89 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #12 0x564b3dbb7e8d in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2133:5
+    #13 0x564b3dbbd267 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1529:13
+    #14 0x564b3db3ead9 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #15 0x564b3dac41b4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:356:5
+    #16 0x564b3d9771f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #17 0x564b3d9807c0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #18 0x564b3d967d75 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #19 0x564b3d9931a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #20 0x7f98dbe43082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0323ab4806bee6f846d9ad4bccfc29afdca49a58)
+    #21 0x564b3d95a64d in _start (/out/pov_harness+0x18064d)
+
+DEDUP_TOKEN: ngx_decode_base64_internal--ngx_http_auth_basic_user--ngx_http_variable_remote_user
+0x503000038001 is located 0 bytes after 17-byte region [0x503000037ff0,0x503000038001)
+allocated by thread T0 here:
+    #0 0x564b3da82fbf in malloc /src/llvm-project/compiler-rt/lib/asan/asan_malloc_linux.cpp:68:3
+    #1 0x564b3db4ce2f in ngx_alloc /src/nginx/src/os/unix/ngx_alloc.c:22:9
+    #2 0x564b3dace211 in ngx_palloc_large /src/nginx/src/core/ngx_palloc.c:220:9
+    #3 0x564b3db968dd in ngx_http_auth_basic_user /src/nginx/src/http/ngx_http_core_module.c:1989:17
+    #4 0x564b3dbe260e in ngx_http_variable_remote_user /src/nginx/src/http/ngx_http_variables.c:1760:10
+    #5 0x564b3dbdc570 in ngx_http_get_indexed_variable /src/nginx/src/http/ngx_http_variables.c:647:9
+    #6 0x564b3dbcff7c in ngx_http_log_variable_getlen /src/nginx/src/http/modules/ngx_http_log_module.c:956:13
+    #7 0x564b3dbce526 in ngx_http_log_handler /src/nginx/src/http/modules/ngx_http_log_module.c:305:24
+    #8 0x564b3dbb3749 in ngx_http_log_request /src/nginx/src/http/ngx_http_request.c:3768:9
+    #9 0x564b3dbb3749 in ngx_http_free_request /src/nginx/src/http/ngx_http_request.c:3714:9
+    #10 0x564b3dbbf3ef in ngx_http_set_keepalive /src/nginx/src/http/ngx_http_request.c:3136:5
+    #11 0x564b3db94155 in ngx_http_core_content_phase /src/nginx/src/http/ngx_http_core_module.c
+    #12 0x564b3db90c89 in ngx_http_core_run_phases /src/nginx/src/http/ngx_http_core_module.c:875:14
+    #13 0x564b3db90c89 in ngx_http_handler /src/nginx/src/http/ngx_http_core_module.c:858:5
+    #14 0x564b3dbb7e8d in ngx_http_process_request /src/nginx/src/http/ngx_http_request.c:2133:5
+    #15 0x564b3dbbd267 in ngx_http_process_request_headers /src/nginx/src/http/ngx_http_request.c:1529:13
+    #16 0x564b3db3ead9 in ngx_event_process_posted /src/nginx/src/event/ngx_event_posted.c:34:9
+    #17 0x564b3dac41b4 in LLVMFuzzerTestOneInput /src/nginx/src/fuzz/pov_harness.cc:356:5
+    #18 0x564b3d9771f0 in fuzzer::Fuzzer::ExecuteCallback(unsigned char const*, unsigned long) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerLoop.cpp:614:13
+    #19 0x564b3d9807c0 in fuzzer::Fuzzer::CrashResistantMergeInternalStep(std::__Fuzzer::basic_string<char, std::__Fuzzer::char_traits<char>, std::__Fuzzer::allocator<char>> const&, bool) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMerge.cpp:239:5
+    #20 0x564b3d967d75 in fuzzer::FuzzerDriver(int*, char***, int (*)(unsigned char const*, unsigned long)) /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerDriver.cpp:887:8
+    #21 0x564b3d9931a2 in main /src/llvm-project/compiler-rt/lib/fuzzer/FuzzerMain.cpp:20:10
+    #22 0x7f98dbe43082 in __libc_start_main (/lib/x86_64-linux-gnu/libc.so.6+0x24082) (BuildId: 0323ab4806bee6f846d9ad4bccfc29afdca49a58)
+
+DEDUP_TOKEN: __interceptor_malloc--ngx_alloc--ngx_palloc_large
+SUMMARY: AddressSanitizer: heap-buffer-overflow /src/nginx/src/core/ngx_string.c:1330:14 in ngx_decode_base64_internal
+Shadow bytes around the buggy address:
+  0x503000037d80: fd fd fd fd fa fa 00 00 00 00 fa fa 00 00 00 00
+  0x503000037e00: fa fa 00 00 00 00 fa fa 00 00 07 fa fa fa fd fd
+  0x503000037e80: fd fa fa fa 00 00 00 00 fa fa 00 00 00 fa fa fa
+  0x503000037f00: 00 00 00 fa fa fa 00 00 02 fa fa fa 00 00 02 fa
+  0x503000037f80: fa fa 00 00 00 fa fa fa 00 00 00 fa fa fa 00 00
+=>0x503000038000:[01]fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x503000038080: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x503000038100: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x503000038180: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x503000038200: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x503000038280: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==9==ABORTING
+MS: 0 ; base unit: 0000000000000000000000000000000000000000
+artifact_prefix='./'; Test unit written to ./crash-f6e1126cedebf23e1463aee73f9df08783640400
+MERGE-OUTER: the control file has 40 bytes
+MERGE-OUTER: consumed 0Mb (34Mb rss) to parse the control file
+MERGE-OUTER: 0 new files with 0 new features added; 0 new coverage edges
