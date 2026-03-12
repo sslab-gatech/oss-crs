@@ -75,12 +75,9 @@ uv run pytest tests/ -v
 
 Roughly follows the phased approach in #103.
 
-**Phase 2 — per-harness seed routing**
+Per-harness seed routing is already handled by the orchestrator (`workdir.py`).  Each harness gets its own compose stack, so `EXCHANGE_DIR` and `SUBMIT_DIR` are scoped per-harness at mount time.  No changes needed to libCRS or the exchange sidecar for this.
 
-- [ ] Update exchange data model so seeds are organized per-harness, not flat
-- [ ] Update libCRS `submit`/`fetch` APIs to match
-
-**Phase 3 — sidecar integration**
+**Sidecar integration**
 
 - [ ] `__main__.py` entry point (polling loop, similar to exchange sidecar)
 - [ ] Dockerfile using the oss-crs owned builder image (not an arbitrary CRS's BUILD_OUT_DIR)
@@ -91,6 +88,17 @@ Roughly follows the phased approach in #103.
 
 **Other**
 
-- [ ] Java/Jazzer support — Jazzer uses libfuzzer under the hood so the stderr parsing mostly works, but the execution environment needs JVM + classpath handling
+- [ ] Java/Jazzer support — Jazzer uses `jazzer_driver` (libfuzzer wrapper) so stderr parsing mostly works, but harnesses are shell scripts (not ELF binaries), and the container needs JVM + classpath + the whole `$OUT/` directory
 - [ ] Direct execution mode (skip Docker when the sidecar image already has the runtime)
 - [ ] Metrics / logging integration for the future WebUI dashboard
+
+## E2e testing plan
+
+Unit tests cover the parsing and path logic, but we can't know this actually works until we run it against a real harness with real seeds.  Rough plan:
+
+1. Pick a small C target from oss-fuzz (something that builds fast and crashes easily).  Build it once, stash the `$OUT/` dir as a test fixture.
+2. Write a test that feeds a handful of seeds (some good, some junk, one crash-triggering) through `LibfuzzerPool` with a real Docker container.  Assert: coverage-adding seeds end up in the corpus, crash seeds land in the crash queue, junk gets dropped.
+3. Once the sidecar entry point exists, run it inside a minimal compose stack (one CRS, one harness) and verify seeds flow through `SUBMIT_DIR` -> ensembler -> `EXCHANGE_DIR` correctly.
+4. For Java/Jazzer: same approach but with a JVM target.  Needs `base-builder-jvm` image and a Jazzer harness fixture.
+
+Tests in steps 2-4 need Docker, so they should be marked `@pytest.mark.skipif(not docker_available())` like the existing integration tests in `oss_crs/tests/integration/`.
