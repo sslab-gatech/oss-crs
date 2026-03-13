@@ -47,12 +47,16 @@ class CRSUtils(ABC):
         pass
 
     @abstractmethod
-    def download_source(self, source_type: SourceType, dst_path: Path) -> None:
+    def download_source(self, source_type: SourceType, dst_path: Path) -> Path:
         """Download source tree to local destination path.
 
         source_type:
             - target: OSS_CRS_PROJ_PATH
             - repo: OSS_CRS_REPO_PATH
+
+        Returns:
+            The primary source directory inside ``dst_path`` that callers should
+            operate on after the copy completes.
         """
         pass
 
