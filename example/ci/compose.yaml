@@ -1,0 +1,34 @@
+##############################################################################
+#                        CRS Compose Configuration                           #
+#              CI Smoke Tests (GitHub-hosted runners: 4 vCPUs, 16GB)         #
+##############################################################################
+
+# --- General Settings -------------------------------------------------------
+run_env: local
+docker_registry: local
+
+# --- Infrastructure ---------------------------------------------------------
+oss_crs_infra:
+  cpuset: "0-1"
+  memory: "4G"
+
+# --- CRS (crs-libfuzzer) - Bugfinding ---------------------------------------
+crs-libfuzzer:
+  cpuset: "2-3"
+  memory: "6G"
+
+# --- CRS (crs-claude-code) - Bugfixing/Patching -----------------------------
+crs-claude-code:
+  cpuset: "2-3"
+  memory: "6G"
+  llm_budget: 5
+  additional_env:
+    CRS_AGENT: claude_code
+    ANTHROPIC_MODEL: claude-sonnet-4-20250514
+
+# --- LLM Configuration (for patching CRS) ----------------------------------
+llm_config:
+  litellm:
+    mode: internal
+    internal:
+      config_path: ./example/ci/litellm-config.yaml
