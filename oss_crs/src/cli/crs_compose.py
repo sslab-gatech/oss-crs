@@ -202,6 +202,12 @@ def add_run_command(subparsers):
         default=None,
         help="Directory of initial seed files, pre-populated into FETCH_DIR before containers start. Accessible via: libCRS fetch seed <local_path>",
     )
+    run.add_argument(
+        "--early-exit",
+        action="store_true",
+        default=False,
+        help="Stop run when first artifact is discovered (POV for bug-finding, patch for bug-fixing CRSs)",
+    )
 
 
 def add_artifacts_command(subparsers):
@@ -400,6 +406,7 @@ def cli() -> bool:
             seed_dir=args.seed_dir,
             bug_candidate=bug_candidate,
             bug_candidate_dir=bug_candidate_dir,
+            early_exit=args.early_exit,
         ):
             return False
     elif args.command == "artifacts":

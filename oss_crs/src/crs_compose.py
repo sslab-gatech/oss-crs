@@ -9,7 +9,7 @@ from typing import Optional
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
 from .llm import LLM
 from .crs import CRS
-from .ui import MultiTaskProgress, TaskResult
+from .ui import MultiTaskProgress, TaskResult, EarlyExitConfig
 from .target import Target
 from .templates import renderer
 from .utils import TmpDockerCompose, normalize_run_id, generate_run_id, rm_with_docker, log_success, log_warning, log_dim
@@ -462,6 +462,7 @@ class CRSCompose:
         seed_dir: Optional[Path] = None,
         bug_candidate: Optional[Path] = None,
         bug_candidate_dir: Optional[Path] = None,
+        early_exit: bool = False,
     ) -> bool:
         resolved_options = self._resolve_target_build_options(
             target,
@@ -580,6 +581,7 @@ class CRSCompose:
             seed_dir=seed_dir,
             cgroup_parent=cgroup_parent,
             bug_candidate=bug_candidate if bug_candidate else bug_candidate_dir,
+            early_exit=early_exit,
         )
 
     def _validate_required_inputs(
@@ -698,6 +700,7 @@ class CRSCompose:
         seed_dir: Optional[Path] = None,
         cgroup_parent: bool = False,
         bug_candidate: Optional[Path] = None,
+        early_exit: bool = False,
     ) -> bool:
         if self.crs_compose_env.run_env == RunEnv.LOCAL:
             return self.__run_local(
@@ -707,9 +710,10 @@ class CRSCompose:
                 sanitizer=sanitizer,
                 pov_files=pov_files or [],
                 diff_path=diff_path,
-                seed_dir=seed_dir, 
+                seed_dir=seed_dir,
                 cgroup_parent=cgroup_parent,
                 bug_candidate=bug_candidate,
+                early_exit=early_exit,
             )
         else:
             print(f"TODO: Support run env {self.crs_compose_env.run_env}")
@@ -726,6 +730,7 @@ class CRSCompose:
         seed_dir: Optional[Path] = None,
         cgroup_parent: bool = False,
         bug_candidate: Optional[Path] = None,
+        early_exit: bool = False,
     ) -> bool:
         # Create cgroups if cgroup_parent mode is enabled
         worker_cgroup_path: Optional[Path] = None
@@ -742,11 +747,39 @@ class CRSCompose:
                 log_warning("Falling back to per-container resource limits.")
                 cgroup_parents = None
 
+        # Build early exit configuration if enabled
+        early_exit_config: Optional[EarlyExitConfig] = None
+        if early_exit:
+            # Bug-fixing CRSs watch for patches, bug-finding watch for POVs
+            has_bug_fixing = any(crs.config.is_bug_fixing for crs in self.crs_list)
+            artifact_subdir = "patches" if has_bug_fixing else "povs"
+            # Collect SUBMIT_DIR paths for all CRSs
+            watch_dirs: list[Path] = [
+                self.work_dir.get_submit_dir(
+                    crs.name, target, run_id, sanitizer, create=False
+                )
+                for crs in self.crs_list
+            ]
+            # Also watch exchange dir when multiple CRSs (shared artifact location)
+            if len(self.crs_list) > 1:
+                exchange_dir = self.work_dir.get_exchange_dir(
+                    target, run_id, sanitizer, create=False
+                )
+                watch_dirs.append(exchange_dir)
+            early_exit_config = EarlyExitConfig(
+                watch_dirs=watch_dirs,
+                artifact_subdir=artifact_subdir,
+            )
+
         with MultiTaskProgress(
             tasks=[],
             title="CRS Compose Run",
             deadline=self.deadline,
+            early_exit_config=early_exit_config,
         ) as progress:
+            # Start early exit monitor thread if configured
+            if early_exit_config:
+                progress._start_early_exit_monitor()
             with TmpDockerCompose(
                 progress, "crs_compose", run_id=run_id, auto_cleanup=False
             ) as tmp_docker_compose:
