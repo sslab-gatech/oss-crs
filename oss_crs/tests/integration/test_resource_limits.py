@@ -160,7 +160,7 @@ def test_run_enforces_memory_limits_in_active_mode(
 
     for log_path in memory_logs:
         text = log_path.read_text()
-        assert "env_memory_limit: \"192M\"" in text
+        assert "env_memory_limit: 192M" in text
         assert "ALLOCATED chunk" in text
         observed_max_values.append(_extract_field(text, "memory.max"))
 
