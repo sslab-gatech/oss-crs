@@ -2,6 +2,7 @@ import json
 import subprocess
 import time
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -18,6 +19,15 @@ from rich.table import Table
 from rich.text import Text
 
 FRAMEWORK_HELPER_SERVICE_PREFIX = "oss-crs-"
+
+
+@dataclass
+class EarlyExitConfig:
+    """Configuration for early exit artifact monitoring."""
+
+    watch_dirs: list[Path]  # SUBMIT_DIR paths to monitor
+    artifact_subdir: str  # "povs" or "patches"
+    poll_interval: float = 2.0  # seconds between checks
 
 
 class TaskStatus(Enum):
@@ -61,12 +71,15 @@ class MultiTaskProgress:
         title: str = "Task Progress",
         console: Optional[Console] = None,
         deadline: Optional[float] = None,
+        early_exit_config: Optional[EarlyExitConfig] = None,
     ):
         self.tasks = tasks
         self.task_names = [name for name, _ in tasks]
         self.title = title
         self.console = console or get_console()
         self.deadline: Optional[float] = deadline
+        self.early_exit_config = early_exit_config
+        self._early_exit_triggered = threading.Event()
         self.statuses: dict[str, TaskStatus] = {
             name: TaskStatus.PENDING for name in self.task_names
         }
@@ -101,6 +114,36 @@ class MultiTaskProgress:
             if task_id in children:
                 return parent
         return None
+
+    def _check_early_exit(self) -> bool:
+        """Check if any artifact files exist in watched directories."""
+        if not self.early_exit_config:
+            return False
+        for watch_dir in self.early_exit_config.watch_dirs:
+            artifact_dir = watch_dir / self.early_exit_config.artifact_subdir
+            if artifact_dir.exists():
+                files = [
+                    f
+                    for f in artifact_dir.iterdir()
+                    if f.is_file() and not f.name.startswith(".")
+                ]
+                if files:
+                    return True
+        return False
+
+    def _start_early_exit_monitor(self) -> threading.Thread:
+        """Start background thread that monitors for early exit condition."""
+
+        def monitor():
+            while not self._early_exit_triggered.is_set():
+                if self._check_early_exit():
+                    self._early_exit_triggered.set()
+                    return
+                time.sleep(self.early_exit_config.poll_interval)
+
+        thread = threading.Thread(target=monitor, daemon=True)
+        thread.start()
+        return thread
 
     def _get_status_icon(self, status: TaskStatus) -> str:
         icons = {
@@ -392,6 +435,15 @@ class MultiTaskProgress:
                     result = self._task_funcs[task_id](self)
                     if result.success:
                         self.set_status(task_id, TaskStatus.SUCCESS)
+                        if result.interrupted:
+                            # Early exit: success + interrupted, just log it
+                            self._current_task = prev_task
+                            main_result = TaskResult(
+                                success=True,
+                                output=result.output,
+                                interrupted=True,
+                            )
+                            break  # Stop on early exit, continue to cleanup
                     elif result.interrupted:
                         self.set_status(task_id, TaskStatus.STOPPED)
                     else:
@@ -530,6 +582,15 @@ class MultiTaskProgress:
             output_lines.append(line)
             self.add_output_line(line)
 
+        def _graceful_terminate(proc: subprocess.Popen, timeout: int = 20) -> None:
+            """Gracefully terminate a process: SIGTERM, wait, then SIGKILL if needed."""
+            proc.terminate()
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+
         try:
             process = subprocess.Popen(
                 cmd,
@@ -542,17 +603,14 @@ class MultiTaskProgress:
             )
 
             timed_out = threading.Event()
+            early_exited = threading.Event()
             timer = None
+            early_exit_thread = None
 
             if self.deadline is not None:
                 remaining = self.deadline - time.monotonic()
                 if remaining <= 0:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=20)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
+                    _graceful_terminate(process)
                     error_msg = (
                         f"Deadline already exceeded before running:\n{' '.join(cmd)}"
                     )
@@ -562,15 +620,28 @@ class MultiTaskProgress:
 
                 def _on_timeout():
                     timed_out.set()
-                    process.terminate()
-                    try:
-                        process.wait(timeout=20)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
+                    # Stop the early exit monitor thread
+                    self._early_exit_triggered.set()
+                    _graceful_terminate(process)
 
                 timer = threading.Timer(remaining, _on_timeout)
                 timer.daemon = True
                 timer.start()
+
+            # Early exit uses a thread that waits for the trigger event
+            if self.early_exit_config is not None:
+
+                def _on_early_exit():
+                    self._early_exit_triggered.wait()  # Block until artifact found
+                    if timed_out.is_set():
+                        return  # Timeout already handled it
+                    # Confirm it's a real artifact (not just signaled by timeout)
+                    if self._check_early_exit():
+                        early_exited.set()
+                        _graceful_terminate(process, timeout=30)
+
+                early_exit_thread = threading.Thread(target=_on_early_exit, daemon=True)
+                early_exit_thread.start()
 
             try:
                 for line in iter(process.stdout.readline, ""):
@@ -579,12 +650,7 @@ class MultiTaskProgress:
                         process_output(line)
                 process.wait()
             except KeyboardInterrupt:
-                process.terminate()
-                try:
-                    process.wait(timeout=20)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
+                _graceful_terminate(process)
                 error = "\n".join(output_lines)
                 error += "\n\n📝 Process interrupted by user"
                 return TaskResult(success=False, error=error, interrupted=True)
@@ -598,6 +664,11 @@ class MultiTaskProgress:
                 if task_name:
                     self.set_error_info(task_name, error_msg)
                 return TaskResult(success=False, error=error_msg, interrupted=True)
+
+            if early_exited.is_set():
+                output = "\n".join(output_lines)
+                output += "\n\n■ Early exit: artifact discovered. Containers gracefully stopped."
+                return TaskResult(success=True, output=output, interrupted=True)
 
             if process.returncode == 0:
                 return TaskResult(success=True, output="\n".join(output_lines))
@@ -778,7 +849,8 @@ class MultiTaskProgress:
             ignored_helper_exit_services = running_helpers_before_stop
 
         # If compose returned success, double-check no containers failed
-        if result.success:
+        # Skip if interrupted (early exit) since we intentionally killed the containers
+        if result.success and not result.interrupted:
             check_result = self._check_failed_containers(
                 project_name, docker_compose_path, ignored_helper_exit_services
             )
