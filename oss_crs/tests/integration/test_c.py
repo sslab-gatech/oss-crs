@@ -41,7 +41,7 @@ def test_run_mock_c(cli_runner, mock_project_path, mock_repo_path, compose_file,
     )
     assert build_result.returncode == 0, f"build-target failed: {build_result.stderr}"
 
-    # Run with timeout
+    # Run with early-exit (stops on first artifact)
     run_result = cli_runner(
         "run",
         "--compose-file", str(compose_file),
@@ -49,12 +49,14 @@ def test_run_mock_c(cli_runner, mock_project_path, mock_repo_path, compose_file,
         "--fuzz-proj-path", str(mock_project_path),
         "--target-source-path", str(mock_repo_path),
         "--target-harness", "fuzz_parse_buffer",
-        "--timeout", "10",
+        "--timeout", "600",
         "--build-id", "mock-c-test",
         "--run-id", "mock-c-run",
-        timeout=60,
+        "--early-exit",
+        timeout=900,
     )
-    assert run_result.returncode in (0, 1), f"run failed: {run_result.stderr}"
+    # early-exit returns 0 when artifact found, non-zero on timeout
+    assert run_result.returncode == 0, f"run failed: {run_result.stderr}"
 
     # Verify artifacts
     artifacts_result = cli_runner(
