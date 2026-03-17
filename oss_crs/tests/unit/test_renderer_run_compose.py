@@ -69,6 +69,9 @@ def test_single_bug_fixing_run_keeps_fetch_mount_and_exchange_sidecar(
         snapshot_image_tag="",
         get_target_env=lambda: {"harness": "fuzz_parse_buffer"},
         get_docker_image_name=lambda: "target:latest",
+        proj_path=tmp_path / "proj",
+        repo_path=tmp_path / "repo",
+        _has_repo=False,
     )
     tmp_compose = SimpleNamespace(dir=tmp_path / "tmp-compose")
 
