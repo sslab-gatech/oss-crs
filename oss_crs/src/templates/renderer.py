@@ -74,6 +74,7 @@ def render_build_target_docker_compose(
     build_id: str,
     sanitizer: str,
     build_fetch_dir: Optional[Path] = None,
+    target_source_path: Optional[Path] = None,
 ) -> tuple[str, list[str]]:
     """Render the docker-compose file for building a target.
 
@@ -85,6 +86,8 @@ def render_build_target_docker_compose(
         build_id (str): Build identifier.
         sanitizer (str): Sanitizer to use (e.g., "address", "undefined").
         build_fetch_dir: Optional path to build-time fetch directory.
+        target_source_path: Resolved path to the target source directory.
+            If provided, used directly. Otherwise falls back to target.repo_path.
 
     Returns:
         tuple[str, list[str]]: Rendered docker-compose content and warning notes.
@@ -108,7 +111,6 @@ def render_build_target_docker_compose(
         build_additional_env=build_config.additional_env,
         harness=target_env.get("harness"),
         include_fetch_dir=bool(build_fetch_dir),
-        include_target_source=target._has_repo,
         scope=f"{crs.name}:build:{build_config.name}",
     )
     context = {
@@ -130,7 +132,7 @@ def render_build_target_docker_compose(
         },
         "build_fetch_dir": str(build_fetch_dir) if build_fetch_dir else None,
         "fuzz_proj_path": str(target.proj_path.resolve()),
-        "target_source_path": str(target.repo_path.resolve()) if target._has_repo else None,
+        "target_source_path": str(target_source_path) if target_source_path else str(target.repo_path.resolve()),
     }
     return render_template(template_path, context), env_plan.warnings
 
@@ -260,7 +262,9 @@ def render_run_crs_compose_docker_compose(
         "bug_fix_ensemble": bug_fix_ensemble,
         "cgroup_parents": cgroup_parents,  # Dict mapping CRS name to cgroup_parent path
         "fuzz_proj_path": str(target.proj_path.resolve()),
-        "target_source_path": str(target.repo_path.resolve()) if target._has_repo else None,
+        "target_source_path": str(target.repo_path.resolve()) if target._has_repo else str(
+            crs_compose.work_dir.get_target_source_dir(target, build_id, sanitizer, create=False)
+        ),
     }
 
     llm_context = prepare_llm_context(tmp_docker_compose, crs_compose)
@@ -306,7 +310,6 @@ def render_run_crs_compose_docker_compose(
                 crs_additional_env=resource.additional_env,
                 harness=target_env.get("harness"),
                 include_fetch_dir=bool(fetch_dir),
-                include_target_source=target._has_repo,
                 include_snapshot_image=include_snapshot,
                 llm_api_url=llm_url,
                 llm_api_key=llm_key,
