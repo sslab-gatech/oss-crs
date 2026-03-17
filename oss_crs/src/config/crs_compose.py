@@ -3,7 +3,7 @@ import re
 import json
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 import yaml
 
@@ -212,9 +212,9 @@ class CRSComposeConfig(BaseModel):
         return cls.from_dict(data)
 
     @classmethod
-    def from_yaml_file(cls, filepath: str) -> "CRSComposeConfig":
+    def from_yaml_file(cls, filepath: str | Path) -> "CRSComposeConfig":
         """Parse CRS Compose config from YAML file."""
-        with open(filepath, "r") as f:
+        with open(Path(filepath), "r") as f:
             return cls.from_yaml(f.read())
 
     @classmethod
@@ -247,13 +247,14 @@ class CRSComposeConfig(BaseModel):
             key: value for key, value in data.items() if key not in reserved_keys
         }
 
-        config = cls(
-            run_env=run_env,  # Pydantic will convert string to enum automatically
-            docker_registry=docker_registry,
-            oss_crs_infra=oss_crs_infra,
-            crs_entries=crs_entries,
-            llm_config=llm_config,
-        )
+        payload: dict[str, Any] = {
+            RUN_ENV: run_env,
+            DOCKER_REGISTRY: docker_registry,
+            OSS_CRS_INFRA: oss_crs_infra,
+            "crs_entries": crs_entries,
+            LLM_CONFIG: llm_config,
+        }
+        config = cls.model_validate(payload)
 
         # Resolve missing sources from registry
         for name, entry in config.crs_entries.items():

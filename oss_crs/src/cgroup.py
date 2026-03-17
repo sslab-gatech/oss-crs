@@ -609,6 +609,8 @@ def create_run_cgroups(
     # Create per-CRS cgroups and collect docker cgroup_parent strings
     cgroup_parents: dict[str, str] = {}
     for crs in crs_list:
+        if crs.resource is None:
+            raise ValueError(f"CRS '{crs.name}' is missing resource configuration")
         memory_bytes = parse_memory_to_bytes(crs.resource.memory)
         crs_cgroup_path = create_crs_cgroup(
             worker_path,

@@ -85,7 +85,7 @@ class BuildConfig(BaseModel):
 class TargetBuildPhase(BaseModel):
     """Configuration for the target build phase."""
 
-    builds: list[BuildConfig] = Field(default_factory=[])
+    builds: list[BuildConfig] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -274,5 +274,5 @@ class CRSConfig(BaseModel):
 if __name__ == "__main__":
     import sys
 
-    config = CRSConfig.from_yaml_file(sys.argv[1])
+    config = CRSConfig.from_yaml_file(Path(sys.argv[1]))
     print(config)

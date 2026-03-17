@@ -83,26 +83,32 @@ class CRS:
         crs_compose_env: CRSComposeEnv,
         skip_init: bool = False,
     ) -> "CRS":
-        if entry.source.local_path:
-            return cls(
-                name, Path(entry.source.local_path), work_dir, entry, crs_compose_env
-            )
-        else:
-            # crs_src is a sibling directory to the work_dir
-            path = work_dir.path / "../crs_src" / name
-            init_result = init_crs_repo(
-                name,
-                entry.source.url,
-                entry.source.ref,
-                path,
-                skip_if_exists=skip_init,
-            )
-            if init_result.success:
-                return cls(name, path, work_dir, entry, crs_compose_env)
-            detail = init_result.error or "unknown repository initialization error"
+        source = entry.source
+        if source is None:
+            raise ValueError(f"CRS entry '{name}' is missing source configuration")
+        if source.local_path:
+            return cls(name, Path(source.local_path), work_dir, entry, crs_compose_env)
+        repo_url = source.url
+        branch = source.ref
+        if repo_url is None or branch is None:
             raise ValueError(
-                f"Failed to initialize CRS from entry: {name}; reason: {detail}"
+                f"CRS entry '{name}' must define either local_path or both url and ref"
             )
+        # crs_src is a sibling directory to the work_dir
+        path = work_dir.path / "../crs_src" / name
+        init_result = init_crs_repo(
+            name,
+            repo_url,
+            branch,
+            path,
+            skip_if_exists=skip_init,
+        )
+        if init_result.success:
+            return cls(name, path, work_dir, entry, crs_compose_env)
+        detail = init_result.error or "unknown repository initialization error"
+        raise ValueError(
+            f"Failed to initialize CRS from entry: {name}; reason: {detail}"
+        )
 
     def __init__(
         self,
@@ -121,9 +127,9 @@ class CRS:
 
     def prepare(
         self,
+        multi_task_progress: MultiTaskProgress,
         publish: bool = False,
         docker_registry: Optional[str] = None,
-        multi_task_progress: Optional[MultiTaskProgress] = None,
     ) -> "TaskResult":
         """
         Run docker buildx bake to prepare CRS images.
@@ -131,7 +137,7 @@ class CRS:
         Args:
             publish: If True, push baked images to the docker registry.
             docker_registry: Override registry for push/cache. If set, overrides config.
-            multi_task_progress: Optional progress tracker. If not provided, creates one.
+            multi_task_progress: Progress tracker used by the compose-level prepare flow.
 
         Returns:
             True if bake succeeded, False otherwise.
@@ -139,8 +145,6 @@ class CRS:
         if self.config.prepare_phase is None:
             return TaskResult(success=True)
 
-        # Create a single-task progress if not provided
-        standalone = multi_task_progress is None
         # Determine the registry to use (parameter overrides config)
         registry = docker_registry if docker_registry else self.config.docker_registry
         version = self.config.version
@@ -189,7 +193,7 @@ class CRS:
             scope=f"{self.name}:prepare",
         )
         env = env_plan.effective_env
-        if multi_task_progress and hasattr(multi_task_progress, "add_note"):
+        if hasattr(multi_task_progress, "add_note"):
             for warning in env_plan.warnings:
                 multi_task_progress.add_note(warning)
 
@@ -201,13 +205,9 @@ class CRS:
             f"Publish: {publish}"
         )
 
-        if standalone:
-            # TODO
-            pass
-        else:
-            return multi_task_progress.run_command_with_streaming_output(
-                cmd=cmd, cwd=self.crs_path, env=env, info_text=info_text
-            )
+        return multi_task_progress.run_command_with_streaming_output(
+            cmd=cmd, cwd=self.crs_path, env=env, info_text=info_text
+        )
 
     def __is_supported_target(self, target: Target) -> bool:
         _ = target
@@ -363,6 +363,8 @@ class CRS:
         def prepare_docker_compose_file(
             progress, project_name: str, tmp_docker_compose: TmpDockerCompose
         ) -> "TaskResult":
+            docker_compose_path = tmp_docker_compose.docker_compose
+            assert docker_compose_path is not None
             rendered, warnings = renderer.render_build_target_docker_compose(
                 self,
                 target,
@@ -375,7 +377,7 @@ class CRS:
             )
             for warning in warnings:
                 progress.add_note(warning)
-            tmp_docker_compose.docker_compose.write_text(rendered)
+            docker_compose_path.write_text(rendered)
             return TaskResult(success=True)
 
         def build_docker_compose(
@@ -425,6 +427,9 @@ class CRS:
 
         with TmpDockerCompose(progress, "crs") as tmp_docker_compose:
             project_name = tmp_docker_compose.project_name
+            docker_compose_path = tmp_docker_compose.docker_compose
+            assert project_name is not None
+            assert docker_compose_path is not None
             progress.add_task(
                 "Prepare docker compose file",
                 lambda p: prepare_docker_compose_file(
@@ -447,7 +452,7 @@ class CRS:
             result = progress.run_added_tasks()
             if result.success:
                 return TaskResult(success=True)
-            docker_compose_contents = tmp_docker_compose.docker_compose.read_text()
+            docker_compose_contents = docker_compose_path.read_text()
             error = result.error or ""
             error += "\n"
             if docker_compose_output:
@@ -475,6 +480,8 @@ def get_image_content_hash(
         cwd=None,
     )
     if not ret.success:
+        return None
+    if ret.output is None:
         return None
     layers_json = ret.output.strip()
     return hashlib.sha256(layers_json.encode()).hexdigest()[:12]

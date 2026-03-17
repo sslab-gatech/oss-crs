@@ -280,7 +280,7 @@ class CRSCompose:
         return build_fetch_dir
 
     def __prepare_oss_crs_infra(
-        self, publish: bool = False, docker_registry: str = None
+        self, publish: bool = False, docker_registry: Optional[str] = None
     ) -> "TaskResult":
         # TODO
         return TaskResult(success=True)
@@ -1065,6 +1065,10 @@ class CRSCompose:
         cgroup_parents: Optional[dict[str, str]] = None,
         bug_candidate: Optional[Path] = None,
     ) -> TaskResult:
+        docker_compose_path = tmp_docker_compose.docker_compose
+        assert docker_compose_path is not None
+        pov_file_list: list[Path] = pov_files or []
+
         def prepare_docker_compose(progress: MultiTaskProgress) -> TaskResult:
             content, warnings = renderer.render_run_crs_compose_docker_compose(
                 self,
@@ -1078,7 +1082,7 @@ class CRSCompose:
             )
             for warning in warnings:
                 progress.add_note(warning)
-            tmp_docker_compose.docker_compose.write_text(content)
+            docker_compose_path.write_text(content)
             return TaskResult(success=True)
 
         def cleanup_exchange_dir(progress: MultiTaskProgress) -> TaskResult:
@@ -1108,17 +1112,19 @@ class CRSCompose:
         def copy_povs(progress: MultiTaskProgress) -> TaskResult:
             pov_subdir = _get_exchange_dir() / "povs"
             pov_subdir.mkdir(parents=True, exist_ok=True)
-            for f in pov_files:
+            for f in pov_file_list:
                 shutil.copy2(f, pov_subdir / f.name)
             return TaskResult(success=True)
 
         def copy_diff(progress: MultiTaskProgress) -> TaskResult:
+            assert diff_path is not None
             diff_subdir = _get_exchange_dir() / "diffs"
             diff_subdir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(diff_path, diff_subdir / "ref.diff")
             return TaskResult(success=True)
 
         def copy_seeds(progress: MultiTaskProgress) -> TaskResult:
+            assert seed_dir is not None
             seed_subdir = _get_exchange_dir() / "seeds"
             seed_subdir.mkdir(parents=True, exist_ok=True)
             for f in seed_dir.iterdir():
@@ -1127,6 +1133,7 @@ class CRSCompose:
             return TaskResult(success=True)
 
         def copy_bug_candidates(progress: MultiTaskProgress) -> TaskResult:
+            assert bug_candidate is not None
             bc_subdir = _get_exchange_dir() / "bug-candidates"
             bc_subdir.mkdir(parents=True, exist_ok=True)
             if bug_candidate.is_file():
@@ -1163,7 +1170,7 @@ class CRSCompose:
         progress.add_task(
             "Build docker images in the combined docker compose file",
             lambda progress: progress.docker_compose_build(
-                project_name, tmp_docker_compose.docker_compose
+                project_name, docker_compose_path
             ),
         )
 
@@ -1175,10 +1182,13 @@ class CRSCompose:
         tmp_docker_compose: TmpDockerCompose,
         progress: MultiTaskProgress,
     ) -> TaskResult:
-        ret = progress.docker_compose_up(
-            project_name, tmp_docker_compose.docker_compose
-        )
+        docker_compose_path = tmp_docker_compose.docker_compose
+        assert docker_compose_path is not None
+        ret = progress.docker_compose_up(project_name, docker_compose_path)
         if ret.success:
             return ret
-        ret.error += "\n\n📝 Depending on your Dockerfile, You might need to run `uv run oss-crs prepare` to apply your changes."
+        ret.error = (ret.error or "") + (
+            "\n\n📝 Depending on your Dockerfile, You might need to run "
+            "`uv run oss-crs prepare` to apply your changes."
+        )
         return ret

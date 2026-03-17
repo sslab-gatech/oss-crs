@@ -144,13 +144,15 @@ class MultiTaskProgress:
 
     def _start_early_exit_monitor(self) -> threading.Thread:
         """Start background thread that monitors for early exit condition."""
+        assert self.early_exit_config is not None
+        early_exit_config = self.early_exit_config
 
         def monitor():
             while not self._early_exit_triggered.is_set():
                 if self._check_early_exit():
                     self._early_exit_triggered.set()
                     return
-                time.sleep(self.early_exit_config.poll_interval)
+                time.sleep(early_exit_config.poll_interval)
 
         thread = threading.Thread(target=monitor, daemon=True)
         thread.start()
@@ -613,9 +615,10 @@ class MultiTaskProgress:
             True if command succeeded, False otherwise.
         """
         task_name = self._current_task
-        if info_text:
+        if info_text and task_name is not None:
             self.__set_task_info(task_name, info_text)
-        self.__set_cmd_info(self._current_task, " ".join(cmd), str(cwd) if cwd else ".")
+        if task_name is not None:
+            self.__set_cmd_info(task_name, " ".join(cmd), str(cwd) if cwd else ".")
         output_lines = []
 
         def process_output(line: str) -> None:
@@ -685,6 +688,7 @@ class MultiTaskProgress:
                 early_exit_thread.start()
 
             try:
+                assert process.stdout is not None
                 for line in iter(process.stdout.readline, ""):
                     line = line.rstrip()
                     if line:
@@ -811,7 +815,7 @@ class MultiTaskProgress:
         if ret.success:
             return ret
         docker_compose_contents = docker_compose_path.read_text()
-        ret.error += (
+        ret.error = (ret.error or "") + (
             f"\n📝 Docker compose file contents:\n---\n{docker_compose_contents}\n---"
         )
         return ret
@@ -898,7 +902,9 @@ class MultiTaskProgress:
                 project_name, docker_compose_path, ignored_helper_exit_services
             )
             if not check_result.success:
-                check_result.error = result.output + "\n\n" + check_result.error
+                check_result.error = (
+                    (result.output or "") + "\n\n" + (check_result.error or "")
+                )
                 return check_result
 
         return result

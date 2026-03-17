@@ -5,13 +5,20 @@ on:
     branches:
       - main
 
+env:
+  RUFF_PATHS: oss_crs oss-crs-infra libCRS
+  PYRIGHT_PATHS: oss_crs/src libCRS/libCRS oss-crs-infra
+
 jobs:
   lint:
     name: Lint (ruff check)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv run ruff check $RUFF_PATHS
 
   format:
     name: Format check (ruff format)
@@ -21,7 +28,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv run ruff format --check .
+      - run: uv run ruff format --check $RUFF_PATHS
 
   typecheck:
     name: Type check (pyright)
@@ -32,7 +39,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen --dev
-      - run: uv run pyright
+      - run: uv run pyright $PYRIGHT_PATHS
 
   test:
     name: Unit tests

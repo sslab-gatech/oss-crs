@@ -233,8 +233,11 @@ class LLM:
             return None
 
         model_entries = payload.get("data", [])
-        return {
-            entry.get("id")
-            for entry in model_entries
-            if isinstance(entry, dict) and entry.get("id")
-        }
+        models: set[str] = set()
+        for entry in model_entries:
+            if not isinstance(entry, dict):
+                continue
+            model_id = entry.get("id")
+            if isinstance(model_id, str):
+                models.add(model_id)
+        return models

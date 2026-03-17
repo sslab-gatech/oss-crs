@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: reportMissingImports=false
 """HTTP builder server for incremental patch builds.
 
 Endpoints:
