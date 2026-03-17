@@ -138,6 +138,15 @@ jobs:
           git add .
           git commit -m "initial"
 
+      - name: Prepare CRSs
+        run: |
+          uv run oss-crs prepare \
+            --compose-file /tmp/ci-config/compose-libfuzzer.yaml \
+            --work-dir /tmp/oss-crs-work
+          uv run oss-crs prepare \
+            --compose-file /tmp/ci-config/compose-claude.yaml \
+            --work-dir /tmp/oss-crs-work
+
       - name: Build mock-c target
         run: |
           uv run oss-crs build-target \
@@ -299,6 +308,15 @@ jobs:
           git config user.name "CI"
           git add .
           git commit -m "initial"
+
+      - name: Prepare CRSs
+        run: |
+          uv run oss-crs prepare \
+            --compose-file /tmp/ci-config/compose-jazzer.yaml \
+            --work-dir /tmp/oss-crs-work
+          uv run oss-crs prepare \
+            --compose-file /tmp/ci-config/compose-claude.yaml \
+            --work-dir /tmp/oss-crs-work
 
       - name: Build mock-java target
         run: |
