@@ -4,6 +4,7 @@ This module provides functions to create and manage cgroup v2 hierarchies
 for Docker container resource management using cgroup-parent.
 """
 
+import json
 import os
 import re
 import secrets
@@ -146,8 +147,6 @@ def read_docker_daemon_config() -> dict | None:
     Returns:
         Parsed JSON config or None if file doesn't exist or is invalid
     """
-    import json
-
     config_path = get_docker_daemon_config_path()
     if not config_path.exists():
         return None
@@ -163,8 +162,6 @@ def generate_docker_config_commands() -> list[tuple[str, str]]:
     Returns:
         List of (description, command) tuples
     """
-    import json
-
     config_path = get_docker_daemon_config_path()
     current_config = read_docker_daemon_config() or {}
 
@@ -313,8 +310,6 @@ def cleanup_worker_cgroups(
     Returns:
         List of (cgroup_path, success, message) tuples
     """
-    import time
-
     base_path = get_user_cgroup_base()
     if not base_path.exists():
         return []
