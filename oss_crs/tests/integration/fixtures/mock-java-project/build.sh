@@ -38,4 +38,4 @@ LD_LIBRARY_PATH=\"$JVM_LD_LIBRARY_PATH\":\$this_dir \
   chmod +x $OUT/$fuzzer_basename
 done
 
-cp -r $SRC/src $OUT/src
+cp -r "$SRC/mock_java" "$OUT/mock_java"
