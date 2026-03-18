@@ -10,20 +10,46 @@ from pathlib import Path
 def should_include(path: Path) -> bool:
     posix = path.as_posix()
     return (
-        "/builds/" in posix
-        and posix.endswith("/BUILD_OUT_DIR/build")
+        ("/builds/" in posix and posix.endswith("/BUILD_OUT_DIR/build"))
         or posix.endswith("/logs")
         or posix.endswith("/EXCHANGE_DIR")
-        or "/runs/" in posix
-        and "/crs/" in posix
-        and posix.endswith("/SUBMIT_DIR")
+        or ("/runs/" in posix and "/crs/" in posix and posix.endswith("/SUBMIT_DIR"))
     )
 
 
 def find_roots(workdir_root: Path) -> list[Path]:
-    return sorted(
-        path for path in workdir_root.rglob("*") if path.is_dir() and should_include(path)
-    )
+    roots: set[Path] = set()
+
+    def ignore_walk_error(_: OSError) -> None:
+        return None
+
+    for dirpath, dirnames, _filenames in os.walk(
+        workdir_root, topdown=True, followlinks=False, onerror=ignore_walk_error
+    ):
+        current = Path(dirpath)
+        current_posix = current.as_posix()
+
+        if "/builds/" in current_posix and current.name == "BUILD_OUT_DIR":
+            if "build" in dirnames:
+                roots.add(current / "build")
+            dirnames[:] = []
+            continue
+
+        matched_dirnames = []
+        for dirname in dirnames:
+            candidate = current / dirname
+            if should_include(candidate):
+                roots.add(candidate)
+                matched_dirnames.append(dirname)
+
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if dirname not in matched_dirnames
+            and not (current.name == "BUILD_OUT_DIR" and dirname == "src")
+        ]
+
+    return sorted(roots)
 
 
 def write_note_tarball(output: Path, message: str) -> None:
