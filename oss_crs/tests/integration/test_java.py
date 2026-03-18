@@ -26,6 +26,7 @@ def mock_java_repo_path(tmp_dir):
     return dst
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not docker_available(), reason="Docker not available")
 def test_run_mock_java(
     cli_runner, mock_java_project_path, mock_java_repo_path, compose_file, work_dir
