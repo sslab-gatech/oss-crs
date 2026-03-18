@@ -10,6 +10,7 @@ def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line("markers", "integration: mark test as integration test")
     config.addinivalue_line("markers", "docker: mark test as requiring Docker")
+    config.addinivalue_line("markers", "smoke: mark test as a smoke test")
 
 
 @pytest.fixture

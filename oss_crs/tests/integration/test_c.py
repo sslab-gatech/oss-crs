@@ -26,6 +26,7 @@ def mock_repo_path(tmp_dir):
     return dst
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not docker_available(), reason="Docker not available")
 def test_run_mock_c(
     cli_runner, mock_project_path, mock_repo_path, compose_file, work_dir
