@@ -91,6 +91,17 @@ class MultiTaskProgress:
         self._cleanup_tasks: dict[Optional[str], list[str]] = {}
         # Set of parent task IDs whose cleanup is complete (errors should be shown)
         self._cleanup_complete: set[Optional[str]] = set()
+        self._headless = not self.console.is_interactive
+        self._entered = False
+
+    def _print_headless(self, message) -> None:
+        """Emit plain progress logs when Live rendering is disabled."""
+        if self._headless:
+            self.console.print(message)
+
+    def _task_label(self, task_name: str) -> str:
+        """Return the display label for a task."""
+        return escape(self._display_names.get(task_name, task_name))
 
     def _get_task_parent(self, task_id: str) -> Optional[str]:
         """Find the parent of a given task ID."""
@@ -252,6 +263,15 @@ class MultiTaskProgress:
     def set_status(self, task_name: str, status: TaskStatus) -> None:
         """Update the status of a task."""
         self.statuses[task_name] = status
+        if self._headless and self._entered:
+            status_prefix = {
+                TaskStatus.PENDING: "[dim]PENDING[/dim]",
+                TaskStatus.IN_PROGRESS: "[yellow]START[/yellow]",
+                TaskStatus.SUCCESS: "[green]OK[/green]",
+                TaskStatus.FAILED: "[red]FAIL[/red]",
+                TaskStatus.STOPPED: "[yellow]STOP[/yellow]",
+            }[status]
+            self._print_headless(f"{status_prefix} {self._task_label(task_name)}")
         if status != TaskStatus.IN_PROGRESS:
             # Clear output and cmd_info when task completes
             self.current_output_lines = []
@@ -263,18 +283,28 @@ class MultiTaskProgress:
     def __set_task_info(self, task_name: str, info: str) -> None:
         """Set info text for a task (shown when task is in progress)."""
         self.task_info[task_name] = info
+        if self._headless:
+            self._print_headless(f"[dim]Info:[/dim] {escape(info)}")
         if self._live:
             self._live.update(self._build_display())
 
     def __set_cmd_info(self, task_name: str, cmd: str, cwd: str) -> None:
         """Set command info for a task (shown in command progress panel)."""
         self.cmd_info[task_name] = (cmd, cwd)
+        if self._headless:
+            self._print_headless(
+                f"[bold]Command:[/bold] {escape(cmd)}\n[bold]CWD:[/bold] {escape(cwd)}"
+            )
         if self._live:
             self._live.update(self._build_display())
 
     def set_error_info(self, task_name: str, error: str) -> None:
         """Set error message for a failed task."""
         self.error_info[task_name] = error
+        if self._headless:
+            self._print_headless(
+                f"[bold red]Error ({self._task_label(task_name)}):[/bold red] {escape(error)}"
+            )
         if self._live:
             self._live.update(self._build_display())
 
@@ -284,6 +314,8 @@ class MultiTaskProgress:
             if self._current_task not in self.task_notes:
                 self.task_notes[self._current_task] = []
             self.task_notes[self._current_task].append(note)
+            if self._headless:
+                self._print_headless(f"[dim cyan]Note:[/dim cyan] {escape(note)}")
             if self._live:
                 self._live.update(self._build_display())
 
@@ -484,10 +516,18 @@ class MultiTaskProgress:
     def add_output_line(self, line: str) -> None:
         """Add an output line for the current in-progress task."""
         self.current_output_lines.append(line)
+        if self._headless:
+            self._print_headless(escape(line))
         if self._live:
             self._live.update(self._build_display())
 
     def __enter__(self) -> "MultiTaskProgress":
+        self._entered = True
+        if self._headless:
+            self._print_headless(f"[bold]{escape(self.title)}[/bold]")
+            for item in self._head:
+                self._print_headless(item)
+            return self
         self._live = Live(
             self._build_display(),
             console=self.console,
@@ -500,6 +540,7 @@ class MultiTaskProgress:
         if self._live:
             self._live.__exit__(*args)
             self._live = None
+        self._entered = False
 
     def run_command_with_streaming_output(
         self,
@@ -673,6 +714,8 @@ class MultiTaskProgress:
             border_style="green",
         )
         self._tail.append(result_panel)
+        if self._headless:
+            self._print_headless(result_panel)
         if self._live:
             self._live.update(self._build_display())
 
