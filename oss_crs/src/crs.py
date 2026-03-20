@@ -1,7 +1,9 @@
 from pathlib import Path
 from typing import Optional
 import hashlib
+import json
 import os
+import subprocess
 
 from .config.crs import CRSConfig
 from .config.crs_compose import CRSEntry, CRSComposeEnv
@@ -9,7 +11,7 @@ from .env_policy import build_prepare_env
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target, file_lock
 from .templates import renderer
-from .utils import TmpDockerCompose
+from .utils import TmpDockerCompose, log_dim
 from .workdir import WorkDir
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
@@ -125,6 +127,74 @@ class CRS:
         self.resource = resource
         self.crs_compose_env = crs_compose_env
 
+    def _try_pull_prebuilt_images(
+        self, hcl_path: Path, env: dict
+    ) -> Optional[list[str]]:
+        """Try to pull all prebuilt images defined in the bake plan.
+
+        Returns a list of pulled images on success, or None if any pull fails.
+        """
+        # Get the resolved build plan as JSON
+        result = subprocess.run(
+            ["docker", "buildx", "bake", "-f", str(hcl_path), "--print"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=self.crs_path,
+        )
+        if result.returncode != 0:
+            return None
+
+        try:
+            plan = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return None
+
+        targets = plan.get("target", {})
+        if not targets:
+            return None
+
+        pulled: list[str] = []
+        for target_name, target_conf in targets.items():
+            tags = target_conf.get("tags", [])
+            if not tags:
+                continue
+
+            # Find the first registry tag (contains a domain with a dot)
+            registry_tag = None
+            for tag in tags:
+                parts = tag.split("/")
+                if len(parts) >= 2 and "." in parts[0]:
+                    registry_tag = tag
+                    break
+
+            if registry_tag is None:
+                log_dim(f"No registry tag for target {target_name}, skipping pull")
+                return None
+
+            # Pull from registry
+            pull_result = subprocess.run(
+                ["docker", "pull", registry_tag],
+                capture_output=True,
+                text=True,
+            )
+            if pull_result.returncode != 0:
+                log_dim(f"Failed to pull {registry_tag}, falling back to bake")
+                return None
+
+            pulled.append(registry_tag)
+
+            # Tag with remaining tags
+            for tag in tags:
+                if tag != registry_tag:
+                    subprocess.run(
+                        ["docker", "tag", registry_tag, tag],
+                        capture_output=True,
+                        text=True,
+                    )
+
+        return pulled
+
     def prepare(
         self,
         multi_task_progress: MultiTaskProgress,
@@ -133,6 +203,10 @@ class CRS:
     ) -> "TaskResult":
         """
         Run docker buildx bake to prepare CRS images.
+
+        When not publishing, first tries to pull prebuilt images from the
+        registry (based on tags defined in the HCL). Falls back to a full
+        bake build if any pull fails.
 
         Args:
             publish: If True, push baked images to the docker registry.
@@ -152,39 +226,6 @@ class CRS:
         # Build HCL file path (relative to crs_path)
         hcl_path = self.crs_path / self.config.prepare_phase.hcl
 
-        # Build the base command
-        cmd = ["docker", "buildx", "bake", "-f", str(hcl_path)]
-
-        # Add cache-from options (buildx silently ignores unavailable sources)
-        if registry:
-            cache_ref_version = f"{registry}/{self.name}:{version}"
-            cache_ref_latest = f"{registry}/{self.name}:latest"
-            cmd.extend(
-                [
-                    f"--set=*.cache-from=type=registry,ref={cache_ref_version}",
-                    f"--set=*.cache-from=type=registry,ref={cache_ref_latest}",
-                ]
-            )
-
-        # Add push and cache-to options if publishing
-        if publish:
-            if not registry:
-                error_msg = (
-                    "Cannot publish without a docker registry. "
-                    "Provide docker_registry parameter or set it in config."
-                )
-                return TaskResult(success=False, error=error_msg)
-
-            cmd.append("--push")
-            cache_ref_version = f"{registry}/{self.name}:{version}"
-            cache_ref_latest = f"{registry}/{self.name}:latest"
-            cmd.extend(
-                [
-                    f"--set=*.cache-to=type=registry,ref={cache_ref_version},mode=max",
-                    f"--set=*.cache-to=type=registry,ref={cache_ref_latest},mode=max",
-                ]
-            )
-
         # Set up environment for bake with centralized merge policy.
         env_plan = build_prepare_env(
             base_env=os.environ.copy(),
@@ -197,7 +238,33 @@ class CRS:
             for warning in env_plan.warnings:
                 multi_task_progress.add_note(warning)
 
-        # Display command info
+        # When not publishing, try to pull prebuilt images first.
+        # This avoids expensive local builds when images are already in a registry.
+        if not publish:
+            pulled = self._try_pull_prebuilt_images(hcl_path, env)
+            if pulled:
+                info_text = (
+                    f"Pulled {len(pulled)} prebuilt images from registry\n"
+                    + "\n".join(f"  - {img}" for img in pulled)
+                )
+                if hasattr(multi_task_progress, "add_note"):
+                    multi_task_progress.add_note(info_text)
+                return TaskResult(success=True)
+
+        # Fall back to building via bake.
+        # NOTE: cache-from/cache-to are NOT set here. Each CRS's HCL file
+        # defines per-target cache refs with the correct image names.
+        cmd = ["docker", "buildx", "bake", "-f", str(hcl_path)]
+
+        if publish:
+            if not registry:
+                error_msg = (
+                    "Cannot publish without a docker registry. "
+                    "Provide docker_registry parameter or set it in config."
+                )
+                return TaskResult(success=False, error=error_msg)
+            cmd.append("--push")
+
         info_text = (
             f"HCL: {hcl_path}\n"
             f"Version: {version}\n"
