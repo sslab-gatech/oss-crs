@@ -9,8 +9,6 @@ the full rendering pipeline including context propagation from Target objects.
 
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import tempfile
 
 REPO_ROOT = Path(__file__).parent.parent.parent.parent
 

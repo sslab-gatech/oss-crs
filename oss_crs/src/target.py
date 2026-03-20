@@ -591,6 +591,7 @@ class Target:
             )
             if create_result.returncode != 0:
                 from .utils import log_error
+
                 log_error(
                     f"docker create failed for {image_tag}: {create_result.stderr}"
                 )
@@ -609,6 +610,7 @@ class Target:
             )
             if cp_result.returncode != 0:
                 from .utils import log_error
+
                 log_error(
                     f"docker cp failed for {image_tag} (workdir={workdir}): {cp_result.stderr}"
                 )
@@ -617,6 +619,7 @@ class Target:
             # Log a warning if dest_dir is empty — some projects legitimately have an empty WORKDIR
             if not any(dest_dir.iterdir()):
                 from .utils import log_warning
+
                 log_warning(
                     f"docker cp succeeded but {dest_dir} is empty for {image_tag} (workdir={workdir})"
                 )

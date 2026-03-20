@@ -1,8 +1,7 @@
 """Unit tests for Target.extract_workdir_to_host() and _resolve_effective_workdir_with_inspect_fallback()."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 
 class _MockTarget:
@@ -13,7 +12,9 @@ class _MockTarget:
         self.proj_path = proj_path
 
 
-def _make_target(name: str = "test-proj", dockerfile_content: str = None, tmp_path: Path = None):
+def _make_target(
+    name: str = "test-proj", dockerfile_content: str = None, tmp_path: Path = None
+):
     """Build a minimal Target using Target.__new__ to avoid full __init__ side-effects."""
     from oss_crs.src.target import Target
 
@@ -32,8 +33,7 @@ class TestExtractWorkdirToHost:
     def test_calls_docker_create_cp_rm_in_order(self, tmp_path):
         """extract_workdir_to_host calls docker create with image_tag, docker cp with /. source, docker rm -f."""
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
         )
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
@@ -69,8 +69,7 @@ class TestExtractWorkdirToHost:
     def test_returns_false_when_docker_create_fails(self, tmp_path):
         """extract_workdir_to_host returns False when docker create fails (returncode != 0)."""
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
         )
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
@@ -84,7 +83,7 @@ class TestExtractWorkdirToHost:
         success_result.returncode = 0
 
         # First call (docker create) fails; subsequent calls (docker rm -f in finally) succeed
-        with patch("subprocess.run", side_effect=[fail_result, success_result]) as mock_run:
+        with patch("subprocess.run", side_effect=[fail_result, success_result]):
             result = target.extract_workdir_to_host(dest_dir, "test-proj:abc123")
 
         assert result is False
@@ -92,8 +91,7 @@ class TestExtractWorkdirToHost:
     def test_returns_false_when_docker_cp_fails(self, tmp_path):
         """extract_workdir_to_host returns False when docker cp fails (returncode != 0)."""
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
         )
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
@@ -118,8 +116,7 @@ class TestExtractWorkdirToHost:
     def test_always_calls_docker_rm_even_when_cp_fails(self, tmp_path):
         """extract_workdir_to_host always calls docker rm -f even when docker cp fails (cleanup in finally)."""
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
         )
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
@@ -136,7 +133,9 @@ class TestExtractWorkdirToHost:
         rm_result = MagicMock()
         rm_result.returncode = 0
 
-        with patch("subprocess.run", side_effect=[create_success, cp_fail, rm_result]) as mock_run:
+        with patch(
+            "subprocess.run", side_effect=[create_success, cp_fail, rm_result]
+        ) as mock_run:
             result = target.extract_workdir_to_host(dest_dir, "test-proj:abc123")
 
         assert result is False
@@ -152,13 +151,14 @@ class TestResolveEffectiveWorkdirWithInspectFallback:
     def test_returns_dockerfile_value_when_not_src(self, tmp_path):
         """_resolve_effective_workdir_with_inspect_fallback returns Dockerfile-parsed value when not '/src'."""
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\nWORKDIR /app\n"
         )
 
         # Should return /app without calling docker inspect
         with patch("subprocess.run") as mock_run:
-            result = target._resolve_effective_workdir_with_inspect_fallback("test-proj:abc123")
+            result = target._resolve_effective_workdir_with_inspect_fallback(
+                "test-proj:abc123"
+            )
 
         assert result == "/app"
         # docker inspect should NOT be called since /app != /src
@@ -168,8 +168,7 @@ class TestResolveEffectiveWorkdirWithInspectFallback:
         """_resolve_effective_workdir_with_inspect_fallback calls docker inspect when Dockerfile returns '/src'."""
         # Dockerfile with no WORKDIR → defaults to /src
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\n"
         )
 
         inspect_result = MagicMock()
@@ -177,7 +176,9 @@ class TestResolveEffectiveWorkdirWithInspectFallback:
         inspect_result.stdout = "/custom/workdir\n"
 
         with patch("subprocess.run", return_value=inspect_result) as mock_run:
-            result = target._resolve_effective_workdir_with_inspect_fallback("test-proj:abc123")
+            result = target._resolve_effective_workdir_with_inspect_fallback(
+                "test-proj:abc123"
+            )
 
         assert result == "/custom/workdir"
         # docker inspect should have been called
@@ -192,8 +193,7 @@ class TestResolveEffectiveWorkdirWithInspectFallback:
         """_resolve_effective_workdir_with_inspect_fallback returns '/src' when both Dockerfile and inspect return empty/src."""
         # Dockerfile with no WORKDIR → defaults to /src
         target = _make_target(
-            tmp_path=tmp_path,
-            dockerfile_content="FROM ubuntu:20.04\n"
+            tmp_path=tmp_path, dockerfile_content="FROM ubuntu:20.04\n"
         )
 
         inspect_result = MagicMock()
@@ -201,6 +201,8 @@ class TestResolveEffectiveWorkdirWithInspectFallback:
         inspect_result.stdout = ""  # empty → fall back to /src
 
         with patch("subprocess.run", return_value=inspect_result):
-            result = target._resolve_effective_workdir_with_inspect_fallback("test-proj:abc123")
+            result = target._resolve_effective_workdir_with_inspect_fallback(
+                "test-proj:abc123"
+            )
 
         assert result == "/src"

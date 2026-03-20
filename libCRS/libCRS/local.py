@@ -46,9 +46,7 @@ class LocalCRSUtils(CRSUtils):
             raise ValueError(f"Unsupported source type: {source_type}")
 
         if not src.exists():
-            raise RuntimeError(
-                f"download-source {source_type}: {src} does not exist"
-            )
+            raise RuntimeError(f"download-source {source_type}: {src} does not exist")
         rsync_copy(src, Path(dst_path))
 
     def submit_build_output(self, src_path: str, dst_path: Path) -> None:

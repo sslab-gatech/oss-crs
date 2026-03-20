@@ -1,8 +1,5 @@
 """Unit tests for WorkDir.get_target_source_dir()."""
 
-import pytest
-from pathlib import Path
-
 from oss_crs.src.workdir import WorkDir
 
 
@@ -56,14 +53,23 @@ class TestGetTargetSourceDir:
         idx_target_key = parts.index(target_key)
         idx_target_source = parts.index("target-source")
 
-        assert idx_sanitizer < idx_builds < idx_build_id < idx_targets < idx_target_key < idx_target_source
+        assert (
+            idx_sanitizer
+            < idx_builds
+            < idx_build_id
+            < idx_targets
+            < idx_target_key
+            < idx_target_source
+        )
 
     def test_create_true_creates_directory(self, tmp_path):
         """get_target_source_dir with create=True creates the directory on disk."""
         workdir = WorkDir(tmp_path)
         mock_target = _MockTarget(name="test-proj", image_hash="abc123")
 
-        path = workdir.get_target_source_dir(mock_target, "build-001", "address", create=True)
+        path = workdir.get_target_source_dir(
+            mock_target, "build-001", "address", create=True
+        )
 
         assert path.is_dir()
 
@@ -73,6 +79,8 @@ class TestGetTargetSourceDir:
         workdir.path.mkdir(parents=True, exist_ok=True)
         mock_target = _MockTarget(name="test-proj", image_hash="abc123")
 
-        path = workdir.get_target_source_dir(mock_target, "build-001", "address", create=False)
+        path = workdir.get_target_source_dir(
+            mock_target, "build-001", "address", create=False
+        )
 
         assert not path.exists()

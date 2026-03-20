@@ -17,7 +17,11 @@ def jinja_env():
     return Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
 
 
-def _build_target_context(fuzz_proj_path="/proj/test", target_source_path="/default/source", build_fetch_dir=None):
+def _build_target_context(
+    fuzz_proj_path="/proj/test",
+    target_source_path="/default/source",
+    build_fetch_dir=None,
+):
     """Build a minimal context dict for build-target template rendering."""
     return {
         "crs": {
@@ -99,7 +103,9 @@ class TestMountInfrastructure:
             "sanitizer": "address",
             "oss_crs_infra_root_path": "/oss-crs-infra",
             "snapshot_image_tag": "",
-            "resolve_dockerfile": lambda crs_path, dockerfile: str(crs_path) + "/" + str(dockerfile),
+            "resolve_dockerfile": lambda crs_path, dockerfile: (
+                str(crs_path) + "/" + str(dockerfile)
+            ),
             "fetch_dir": "",
             "exchange_dir": "",
             "bug_finding_ensemble": False,
@@ -152,7 +158,9 @@ class TestMountInfrastructure:
             "sanitizer": "address",
             "oss_crs_infra_root_path": "/oss-crs-infra",
             "snapshot_image_tag": "",
-            "resolve_dockerfile": lambda crs_path, dockerfile: str(crs_path) + "/" + str(dockerfile),
+            "resolve_dockerfile": lambda crs_path, dockerfile: (
+                str(crs_path) + "/" + str(dockerfile)
+            ),
             "fetch_dir": "",
             "exchange_dir": "",
             "bug_finding_ensemble": False,

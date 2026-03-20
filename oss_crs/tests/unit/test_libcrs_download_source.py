@@ -8,7 +8,9 @@ from libCRS.libCRS.base import SourceType
 from libCRS.libCRS.local import LocalCRSUtils
 
 
-def test_download_source_fuzz_proj_calls_rsync_copy(monkeypatch, tmp_path: Path) -> None:
+def test_download_source_fuzz_proj_calls_rsync_copy(
+    monkeypatch, tmp_path: Path
+) -> None:
     mount = tmp_path / "fuzz-proj"
     mount.mkdir()
     (mount / "file.txt").write_text("ok")
@@ -30,7 +32,9 @@ def test_download_source_fuzz_proj_calls_rsync_copy(monkeypatch, tmp_path: Path)
     assert calls["dst"] == tmp_path / "dst"
 
 
-def test_download_source_fuzz_proj_raises_when_mount_missing(monkeypatch, tmp_path: Path) -> None:
+def test_download_source_fuzz_proj_raises_when_mount_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
     missing = tmp_path / "nonexistent"
     monkeypatch.setattr("libCRS.libCRS.local._FUZZ_PROJ_MOUNT", missing)
 
@@ -39,7 +43,9 @@ def test_download_source_fuzz_proj_raises_when_mount_missing(monkeypatch, tmp_pa
         utils.download_source(SourceType.FUZZ_PROJ, tmp_path / "dst")
 
 
-def test_download_source_target_source_calls_rsync_copy(monkeypatch, tmp_path: Path) -> None:
+def test_download_source_target_source_calls_rsync_copy(
+    monkeypatch, tmp_path: Path
+) -> None:
     mount = tmp_path / "target-source"
     mount.mkdir()
 
@@ -60,7 +66,9 @@ def test_download_source_target_source_calls_rsync_copy(monkeypatch, tmp_path: P
     assert calls["dst"] == tmp_path / "dst"
 
 
-def test_download_source_target_source_raises_when_mount_missing(monkeypatch, tmp_path: Path) -> None:
+def test_download_source_target_source_raises_when_mount_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
     missing = tmp_path / "nonexistent"
     monkeypatch.setattr("libCRS.libCRS.local._TARGET_SOURCE_MOUNT", missing)
 
