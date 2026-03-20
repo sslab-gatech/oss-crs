@@ -108,9 +108,9 @@ def add_prepare_command(subparsers):
     add_common_arguments(prepare)
     prepare.add_argument(
         "--publish",
-        type=bool,
+        action="store_true",
         default=False,
-        help="Publish prepared CRS docker images to the specified docker resgistry",
+        help="Publish prepared CRS docker images to the specified docker registry",
     )
 
 
