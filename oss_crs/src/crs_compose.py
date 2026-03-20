@@ -285,7 +285,7 @@ class CRSCompose:
         # TODO
         return TaskResult(success=True)
 
-    def prepare(self, publish: bool = False) -> bool:
+    def prepare(self, publish: bool = False, no_pull: bool = False) -> bool:
         # Collect task names (infra + all CRS)
         tasks = [
             (
@@ -303,6 +303,7 @@ class CRSCompose:
                         publish=publish,
                         docker_registry=self.config.docker_registry,
                         multi_task_progress=progress,
+                        no_pull=no_pull,
                     ),
                 )
             )

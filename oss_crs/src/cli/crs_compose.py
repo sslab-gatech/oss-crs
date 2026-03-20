@@ -112,6 +112,12 @@ def add_prepare_command(subparsers):
         default=False,
         help="Publish prepared CRS docker images to the specified docker registry",
     )
+    prepare.add_argument(
+        "--no-pull",
+        action="store_true",
+        default=False,
+        help="Skip pulling prebuilt images and always build locally",
+    )
 
 
 def add_build_target_command(subparsers):
@@ -358,7 +364,7 @@ def cli() -> bool:
     )
 
     if args.command == "prepare":
-        if not crs_compose.prepare(publish=args.publish):
+        if not crs_compose.prepare(publish=args.publish, no_pull=args.no_pull):
             return False
     elif args.command == "build-target":
         target = init_target_from_args(args)

@@ -200,6 +200,7 @@ class CRS:
         multi_task_progress: MultiTaskProgress,
         publish: bool = False,
         docker_registry: Optional[str] = None,
+        no_pull: bool = False,
     ) -> "TaskResult":
         """
         Run docker buildx bake to prepare CRS images.
@@ -212,6 +213,7 @@ class CRS:
             publish: If True, push baked images to the docker registry.
             docker_registry: Override registry for push/cache. If set, overrides config.
             multi_task_progress: Progress tracker used by the compose-level prepare flow.
+            no_pull: If True, skip pulling prebuilt images and always build locally.
 
         Returns:
             True if bake succeeded, False otherwise.
@@ -238,9 +240,9 @@ class CRS:
             for warning in env_plan.warnings:
                 multi_task_progress.add_note(warning)
 
-        # When not publishing, try to pull prebuilt images first.
+        # When not publishing and pull is enabled, try to pull prebuilt images first.
         # This avoids expensive local builds when images are already in a registry.
-        if not publish:
+        if not publish and not no_pull:
             pulled = self._try_pull_prebuilt_images(hcl_path, env)
             if pulled:
                 info_text = (
