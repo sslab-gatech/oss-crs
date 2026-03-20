@@ -11,6 +11,14 @@ stricter subset of Keep a Changelog).
 - GitHub Actions CI pipeline with lint (ruff check), format check (ruff format), type check (pyright), unit tests, and parallel C/Java smoke tests
 - atlantis-java-main to registry/ and example/
 - atlantis-c-deepgen to registry/ and example/
+- Volume mounts `/OSS_CRS_FUZZ_PROJ` (read-only) and `/OSS_CRS_TARGET_SOURCE`
+  in both build-target and run compose templates.
+- Automatic WORKDIR extraction from built Docker images when
+  `--target-source-path` is not provided — target source is always available at
+  `/OSS_CRS_TARGET_SOURCE` in both build and run phases.
+- `libCRS download-source fuzz-proj <dest>` — copies fuzz project from mount.
+- `libCRS download-source target-source <dest>` — copies target source from
+  mount.
 
 ### Changed
 - Clarified that target env `repo_path` is the effective in-container source
@@ -22,11 +30,14 @@ stricter subset of Keep a Changelog).
 - `OSS_CRS_REPO_PATH` resolution is documented as: final `WORKDIR` -> `$SRC` ->
   `/src` fallback chain.
 - Target build-option resolution now uses precedence:
-  CLI `--sanitizer` flag -> `additional_env` override (SANITIZER at CRS-entry scope) 
-  -> `project.yaml` fallback (uses address if provided, else first) 
+  CLI `--sanitizer` flag -> `additional_env` override (SANITIZER at CRS-entry scope)
+  -> `project.yaml` fallback (uses address if provided, else first)
   -> framework defaults.
 - `artifacts --sanitizer` is now optional; when omitted, sanitizer is resolved
   using the same contract (compose/project/default) used by build/run flows.
+- **Breaking:** `libCRS download-source` API replaced — `target`/`repo`
+  subcommands removed, use `fuzz-proj`/`target-source` instead. Python API
+  `download_source()` now returns `None` instead of `Path`.
 
 ### Deprecated
 - Deprecated CLI aliases:
@@ -37,14 +48,17 @@ stricter subset of Keep a Changelog).
 
 ### Removed
 - Removed legacy CLI alias `--target-repo-path`; use `--target-source-path`.
+- Removed `libCRS download-source target` and `download-source repo` commands.
+- Removed `SourceType.TARGET` and `SourceType.REPO` enum values from libCRS.
+- Removed ~140 lines of fallback resolution logic from libCRS
+  (`_resolve_repo_source_path`, `_normalize_repo_source_path`,
+  `_translate_repo_hint_to_build_output`, `_resolve_downloaded_repo_path`,
+  `_relative_repo_hint`).
 
 ### Fixed
 - The local run path now passes a `Path` compose-file object consistently into
   `docker_compose_up()`, so helper-sidecar teardown classification applies on
   the main local run path.
-- `libCRS download-source repo` now prefers the live runtime source workspace
-  (`$SRC` / `/src`) over build-output snapshots and preserves workspace layout
-  consistently for nested `WORKDIR` targets.
 
 ### Security
 - N/A
