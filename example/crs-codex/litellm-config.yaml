@@ -62,3 +62,9 @@ model_list:
       model: openai/gpt-5.2-codex
       api_base: os.environ/EXTERNAL_LITELLM_API_BASE
       api_key: os.environ/EXTERNAL_LITELLM_API_KEY
+
+  - model_name: gpt-5.4
+    litellm_params:
+      model: openai/gpt-5.4
+      api_base: os.environ/EXTERNAL_LITELLM_API_BASE
+      api_key: os.environ/EXTERNAL_LITELLM_API_KEY
