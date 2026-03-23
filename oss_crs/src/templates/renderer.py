@@ -89,6 +89,12 @@ def render_build_target_docker_compose(
     Returns:
         tuple[str, list[str]]: Rendered docker-compose content and warning notes.
     """
+    if crs.crs_compose_env is None or crs.resource is None:
+        raise ValueError(
+            f"CRS '{crs.name}' is missing compose environment or resource configuration"
+        )
+    crs_compose_env = crs.crs_compose_env
+    resource = crs.resource
     template_path = CUR_DIR / "build-target.docker-compose.yaml.j2"
     target_env = target.get_target_env()
     target_env["image"] = target_base_image
@@ -96,9 +102,9 @@ def render_build_target_docker_compose(
     target_env["sanitizer"] = sanitizer
     env_plan = build_target_builder_env(
         target_env=target_env,
-        run_env_type=crs.crs_compose_env.get_env()["type"],
+        run_env_type=crs_compose_env.get_env()["type"],
         build_id=build_id,
-        crs_additional_env=crs.resource.additional_env if crs.resource else None,
+        crs_additional_env=resource.additional_env,
         build_additional_env=build_config.additional_env,
         harness=target_env.get("harness"),
         include_fetch_dir=bool(build_fetch_dir),
@@ -115,11 +121,11 @@ def render_build_target_docker_compose(
         "target": target_env,
         "build_out_dir": str(build_out_dir),
         "build_id": build_id,
-        "crs_compose_env": crs.crs_compose_env.get_env(),
+        "crs_compose_env": crs_compose_env.get_env(),
         "libCRS_path": str(LIBCRS_PATH),
         "resource": {
-            "cpuset": crs.resource.cpuset if crs.resource else None,
-            "memory": crs.resource.memory if crs.resource else None,
+            "cpuset": resource.cpuset,
+            "memory": resource.memory,
         },
         "build_fetch_dir": str(build_fetch_dir) if build_fetch_dir else None,
     }
@@ -131,6 +137,9 @@ def prepare_llm_context(
 ) -> Optional[dict]:
     if not crs_compose.llm.exists():
         return None
+    llm_config = crs_compose.llm.llm_config
+    if llm_config is None:
+        raise RuntimeError("LLM mode is enabled but llm_config is missing")
 
     if crs_compose.llm.mode == "external":
         url = crs_compose.llm.get_crs_api_url()
@@ -152,6 +161,9 @@ def prepare_llm_context(
 
     if crs_compose.llm.mode == "internal":
         # Prepare LiteLLM environment variables for internal sidecar mode
+        tmp_dir = tmp_docker_compose.dir
+        if tmp_dir is None:
+            raise RuntimeError("Temporary docker compose directory was not initialized")
         litellm_env = {}
         for name in crs_compose.llm.extract_envs():
             tmp = os.environ.get(name)
@@ -166,6 +178,10 @@ def prepare_llm_context(
         for crs in crs_compose.crs_list:
             if crs.config.is_builder:
                 continue
+            if crs.resource is None:
+                raise RuntimeError(
+                    f"CRS '{crs.name}' is missing resource configuration for LiteLLM"
+                )
             key = "sk-" + _generate_random_key(16)
             keys[crs.name] = key
             key_info[crs.name] = {
@@ -173,7 +189,7 @@ def prepare_llm_context(
                 "required_llms": crs.config.required_llms,
                 "llm_budget": crs.resource.llm_budget,
             }
-        key_gen_request_path = tmp_docker_compose.dir / "key_gen_request.yaml"
+        key_gen_request_path = tmp_dir / "key_gen_request.yaml"
         key_gen_request_path.write_text(
             yaml.dump(key_info, default_flow_style=False, sort_keys=False)
         )
@@ -183,9 +199,8 @@ def prepare_llm_context(
             "llm_api_url": "http://litellm.oss-crs:4000",
             "litellm_master_key": "sk-" + _generate_random_key(16),
             "postgres_password": _generate_random_key(16),
-            "litellm_config_path": crs_compose.llm.llm_config.litellm.internal.config_path
-            if crs_compose.llm.llm_config.litellm.internal
-            and crs_compose.llm.llm_config.litellm.internal.config_path
+            "litellm_config_path": llm_config.litellm.internal.config_path
+            if llm_config.litellm.internal and llm_config.litellm.internal.config_path
             else str(DEFAULT_LITELLM_CONFIG_PATH),
             "api_keys": keys,
             "litellm_env": litellm_env,
@@ -206,6 +221,7 @@ def render_run_crs_compose_docker_compose(
     cgroup_parents: Optional[dict[str, str]] = None,
 ) -> tuple[str, list[str]]:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
+    compose_env = crs_compose.crs_compose_env
 
     # Deployment conditions for infra sidecars
     bug_finding_crs_count = sum(
@@ -225,7 +241,7 @@ def render_run_crs_compose_docker_compose(
         "libCRS_path": str(LIBCRS_PATH),
         "crs_compose_name": crs_compose_name,
         "crs_list": crs_compose.crs_list,
-        "crs_compose_env": crs_compose.crs_compose_env.get_env(),
+        "crs_compose_env": compose_env.get_env(),
         "target_env": target_env,
         "target": target,
         "work_dir": crs_compose.work_dir,
@@ -252,6 +268,11 @@ def render_run_crs_compose_docker_compose(
         for module_name, module_config in crs.config.crs_run_phase.modules.items():
             if not module_config.dockerfile:
                 continue
+            if crs.resource is None:
+                raise ValueError(
+                    f"CRS '{crs.name}' is missing resource configuration for run compose"
+                )
+            resource = crs.resource
             service_name = f"{crs.name}_{module_name}"
             include_snapshot = (
                 target.snapshot_image_tag
@@ -270,14 +291,14 @@ def render_run_crs_compose_docker_compose(
             env_plan = build_run_service_env(
                 target_env=target_env,
                 sanitizer=sanitizer,
-                run_env_type=crs_compose.crs_compose_env.get_env()["type"],
+                run_env_type=compose_env.get_env()["type"],
                 crs_name=crs.name,
                 module_name=module_name,
                 run_id=run_id,
-                cpuset=crs.resource.cpuset,
-                memory_limit=crs.resource.memory,
+                cpuset=resource.cpuset,
+                memory_limit=resource.memory,
                 module_additional_env=module_config.additional_env,
-                crs_additional_env=crs.resource.additional_env,
+                crs_additional_env=resource.additional_env,
                 harness=target_env.get("harness"),
                 include_fetch_dir=bool(fetch_dir),
                 include_snapshot_image=include_snapshot,
