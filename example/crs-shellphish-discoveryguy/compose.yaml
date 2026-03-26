@@ -1,0 +1,43 @@
+##############################################################################
+#                        CRS Compose Configuration                           #
+#              Shellphish DiscoveryGuy (LLM-driven bug-finding)              #
+##############################################################################
+
+# --- General Settings -------------------------------------------------------
+run_env: local
+docker_registry: local
+
+# --- Infrastructure ---------------------------------------------------------
+oss_crs_infra:
+  cpuset: "0-7"
+  memory: "32G"
+
+# --- LLM Configuration -----------------------------------------------------
+# External litellm server. Before running, source your .env file:
+#   source /path/to/shellphish-oss-crs/.env
+# Required env vars: AIXCC_LITELLM_HOSTNAME, LITELLM_KEY
+llm_config:
+  litellm:
+    mode: external
+    model_check: false
+    external:
+      url: "${AIXCC_LITELLM_HOSTNAME}"
+      key: "${LITELLM_KEY}"
+
+# --- CRS (Shellphish DiscoveryGuy) -----------------------------------------
+# LLM-driven vulnerability discovery: analyzes code with LLM, generates
+# exploit scripts, verifies crashes, submits PoVs.
+#
+# With registry (auto-clones from GitHub):
+#   crs-shellphish-discoveryguy:
+#     cpuset: "0-7"
+#     memory: "24G"
+#     llm_budget: 10
+#
+# With local path (for development):
+crs-shellphish-discoveryguy:
+  source:
+    local_path: /project/shellphish-oss-crs
+  cpuset: "0-7"
+  memory: "24G"
+  llm_budget: 10
