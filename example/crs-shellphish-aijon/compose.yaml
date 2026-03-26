@@ -1,0 +1,36 @@
+##############################################################################
+#                        CRS Compose Configuration                           #
+#         Shellphish AIJON (IJON-enhanced AFL++ fuzzing with LLM)            #
+##############################################################################
+
+# --- General Settings -------------------------------------------------------
+run_env: local
+docker_registry: local
+
+# --- Infrastructure ---------------------------------------------------------
+oss_crs_infra:
+  cpuset: "0-7"
+  memory: "32G"
+
+# --- LLM Configuration -----------------------------------------------------
+# External litellm server. Set AIXCC_LITELLM_HOSTNAME and LITELLM_KEY
+# environment variables before running (source your .env file).
+llm_config:
+  litellm:
+    mode: external
+    model_check: false
+    external:
+      url: "${AIXCC_LITELLM_HOSTNAME}"
+      key: "${LITELLM_KEY}"
+
+# --- CRS (Shellphish AIJON) ------------------------------------------------
+# Pipeline: AFL++ fuzzer + coverage tracer (→ AG) + AIJON instrumentation
+# (LLM → IJON patch) + AIJON builder (compile with IJON) + AIJON fuzzer.
+#
+# With local path (for development):
+crs-shellphish-aijon:
+  source:
+    local_path: /project/shellphish-oss-crs
+  cpuset: "0-7"
+  memory: "24G"
+  llm_budget: 10
