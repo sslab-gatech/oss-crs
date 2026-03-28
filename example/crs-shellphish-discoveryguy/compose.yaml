@@ -21,8 +21,8 @@ llm_config:
     mode: external
     model_check: false
     external:
-      url: "${AIXCC_LITELLM_HOSTNAME}"
-      key: "${LITELLM_KEY}"
+      url_env: AIXCC_LITELLM_HOSTNAME
+      key_env: LITELLM_KEY
 
 # --- CRS (Shellphish DiscoveryGuy) -----------------------------------------
 # LLM-driven vulnerability discovery: analyzes code with LLM, generates
