@@ -37,7 +37,7 @@ import docker.errors
 # Sidecar module imports
 # ---------------------------------------------------------------------------
 
-from docker_ops import get_build_image, get_test_image, next_rebuild_id, run_ephemeral_build, run_ephemeral_test
+from docker_ops import get_build_image, get_test_image, next_rebuild_id, rebuild_output_dir, run_ephemeral_build, run_ephemeral_test
 
 # ---------------------------------------------------------------------------
 # Test-wide builder name constant

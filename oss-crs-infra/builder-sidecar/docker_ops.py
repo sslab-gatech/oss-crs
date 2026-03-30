@@ -96,6 +96,11 @@ def get_test_image(client: "docker.DockerClient", rebuild_id: int, base_image: s
         return base_image
 
 
+def rebuild_output_dir(rebuild_out_dir: Path, crs_name: str, rebuild_id: int) -> Path:
+    """Resolve the output directory for a specific CRS rebuild."""
+    return rebuild_out_dir / crs_name / str(rebuild_id)
+
+
 def next_rebuild_id(rebuild_out_dir: Path, crs_name: str) -> int:
     """Determine next rebuild ID by scanning existing {N} directories under {crs_name}/.
 
@@ -138,7 +143,7 @@ def run_ephemeral_build(
     client = docker.from_env()
     container = None
 
-    output_dir = rebuild_out_dir / crs_name / str(rebuild_id)
+    output_dir = rebuild_output_dir(rebuild_out_dir, crs_name, rebuild_id)
 
     snapshot_tag = f"oss-crs-snapshot:build-{builder_name}-{rebuild_id}"
     try:

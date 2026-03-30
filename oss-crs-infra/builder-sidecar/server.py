@@ -33,7 +33,7 @@ from pathlib import Path
 
 from docker_ops import (
     get_build_image, get_test_image,
-    next_rebuild_id, run_ephemeral_build, run_ephemeral_test,
+    next_rebuild_id, rebuild_output_dir, run_ephemeral_build, run_ephemeral_test,
 )
 import docker
 
@@ -158,6 +158,26 @@ async def run_test(
     return JobResponse(id=job_id, status="queued")
 
 
+@app.post("/upload-build-output")
+async def upload_build_output(
+    file: UploadFile = File(...),
+    crs_name: str = Form(...),
+    rebuild_id: int = Form(...),
+):
+    """Upload a file to the rebuild output directory."""
+    rebuild_out_dir = Path(os.environ.get("REBUILD_OUT_DIR", "/rebuild_out"))
+    output_dir = rebuild_output_dir(rebuild_out_dir, crs_name, rebuild_id)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = file.filename or "output"
+    dst = output_dir / filename
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    dst.write_bytes(content)
+
+    return {"status": "ok", "path": str(dst.relative_to(rebuild_out_dir))}
+
+
 @app.get("/download-build-output")
 def download_build_output(crs_name: str, rebuild_id: int):
     """Download rebuild artifacts as a zip archive.
@@ -167,7 +187,7 @@ def download_build_output(crs_name: str, rebuild_id: int):
         rebuild_id: Rebuild ID integer.
     """
     rebuild_out_dir = Path(os.environ.get("REBUILD_OUT_DIR", "/rebuild_out"))
-    output_dir = rebuild_out_dir / crs_name / str(rebuild_id)
+    output_dir = rebuild_output_dir(rebuild_out_dir, crs_name, rebuild_id)
 
     if not output_dir.exists():
         return JSONResponse(
