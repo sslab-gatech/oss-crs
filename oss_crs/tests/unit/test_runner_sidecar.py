@@ -75,11 +75,11 @@ class TestRunPOVEndpoint:
     @patch("runner_server.os.path.exists", return_value=True)
     def test_successful_pov_returns_exit_code(self, mock_exists, mock_run):
         """Successful reproduce returns exit_code and stderr."""
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         assert response.status_code == 200
@@ -91,11 +91,11 @@ class TestRunPOVEndpoint:
     @patch("runner_server.os.path.exists", return_value=True)
     def test_crash_returns_nonzero(self, mock_exists, mock_run):
         """Non-zero exit code from reproduce indicates crash (POV-03)."""
-        mock_run.return_value = MagicMock(returncode=1, stderr="SUMMARY: AddressSanitizer: heap-buffer-overflow")
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="SUMMARY: AddressSanitizer: heap-buffer-overflow")
         client = _make_test_client()
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         body = response.json()
@@ -110,7 +110,7 @@ class TestRunPOVEndpoint:
         client = _make_test_client()
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         body = response.json()
@@ -125,7 +125,7 @@ class TestRunPOVEndpoint:
         client = _make_test_client()
         response = client.post("/run-pov", data={
             "harness_name": "nonexistent_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         assert response.status_code == 404
@@ -139,7 +139,7 @@ class TestRunPOVEndpoint:
         client = _make_test_client()
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         assert response.status_code == 404
@@ -157,11 +157,11 @@ class TestRunPOV:
     @patch("runner_server.os.path.exists", return_value=True)
     def test_invokes_reproduce_with_harness_name(self, mock_exists, mock_run):
         """reproduce is called with the harness_name as argument (POV-01)."""
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
         client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         mock_run.assert_called_once()
@@ -173,12 +173,12 @@ class TestRunPOV:
     @patch("runner_server.os.path.exists", return_value=True)
     def test_uses_out_dir(self, mock_exists, mock_run):
         """OUT env var is set to the configured out directory (POV-02)."""
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
         with patch.dict("os.environ", {"OUT_DIR": "/custom/out"}):
             client.post("/run-pov", data={
                 "harness_name": "my_fuzzer",
-                "build_id": "build123",
+                "rebuild_id": "1",
                 "pov_path": "/povs/crash.bin",
             })
         call_kwargs = mock_run.call_args[1]
@@ -188,11 +188,11 @@ class TestRunPOV:
     @patch("runner_server.os.path.exists", return_value=True)
     def test_sets_testcase_env(self, mock_exists, mock_run):
         """TESTCASE env var is set to pov_path."""
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
         client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         call_kwargs = mock_run.call_args[1]
@@ -202,11 +202,11 @@ class TestRunPOV:
     @patch("runner_server.os.path.exists", return_value=True)
     def test_sets_fuzzer_args_default(self, mock_exists, mock_run):
         """FUZZER_ARGS defaults to OSS-Fuzz standard values."""
-        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
         client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
-            "build_id": "build123",
+            "rebuild_id": "1",
             "pov_path": "/povs/crash.bin",
         })
         call_kwargs = mock_run.call_args[1]

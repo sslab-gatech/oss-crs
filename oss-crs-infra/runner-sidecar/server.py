@@ -27,6 +27,7 @@ app = FastAPI(title="Runner Sidecar", description="POV reproduction service usin
 
 class POVResult(BaseModel):
     exit_code: int
+    stdout: str = ""
     stderr: str
 
 
@@ -39,7 +40,7 @@ def health():
 @app.post("/run-pov")
 def run_pov(
     harness_name: str = Form(...),
-    build_id: str = Form(...),  # noqa: accepted but unused — for API parity with libCRS
+    rebuild_id: int = Form(...),
     pov_path: str = Form(...),
 ):
     """Execute POV reproduction via OSS-Fuzz reproduce script.
@@ -84,7 +85,7 @@ def run_pov(
             env=env,
             cwd=out_dir,
         )
-        return POVResult(exit_code=result.returncode, stderr=result.stderr)
+        return POVResult(exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr)
     except subprocess.TimeoutExpired:
         return POVResult(exit_code=124, stderr="POV execution timed out")
 
