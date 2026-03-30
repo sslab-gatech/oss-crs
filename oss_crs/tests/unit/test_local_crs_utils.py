@@ -80,8 +80,8 @@ class TestApplyPatchBuild:
             exit_code = crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
 
         assert exit_code == 0
-        assert (response_dir / "build_exit_code").read_text() == "0"
-        assert (response_dir / "build_stdout.log").read_text() == "Build OK"
+        assert (response_dir / "retcode").read_text() == "0"
+        assert (response_dir / "stdout.log").read_text() == "Build OK"
         assert (response_dir / "rebuild_id").read_text() == "build-abc"
 
     @patch("libCRS.libCRS.local.http_requests")
@@ -108,8 +108,8 @@ class TestApplyPatchBuild:
             exit_code = crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
 
         assert exit_code == 1
-        assert (response_dir / "build_exit_code").read_text() == "1"
-        assert (response_dir / "build_stderr.log").read_text() == "compile error"
+        assert (response_dir / "retcode").read_text() == "1"
+        assert (response_dir / "stderr.log").read_text() == "compile error"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_sends_builder_name_in_form_data(self, mock_requests, crs_utils, tmp_path):
@@ -150,7 +150,7 @@ class TestApplyPatchBuild:
         exit_code = crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
 
         assert exit_code == 1
-        assert (response_dir / "build_exit_code").read_text() == "1"
+        assert (response_dir / "retcode").read_text() == "1"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_stores_last_builder_and_build_id_on_success(self, mock_requests, crs_utils, tmp_path):
@@ -248,7 +248,7 @@ class TestRunPov:
         mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
         response_dir = tmp_path / "response"
 
-        crs_utils.run_pov(Path("/pov/crash"), "fuzzer", "build-abc", response_dir, "test-runner")
+        crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
 
         # Verify POST was to the runner URL (test-runner service)
         call_url = mock_requests.post.call_args[0][0]
@@ -259,7 +259,7 @@ class TestRunPov:
         mock_requests.post.return_value = _mock_response(json_data={"exit_code": 1, "stderr": "CRASH"})
         response_dir = tmp_path / "response"
 
-        crs_utils.run_pov(Path("/pov/crash"), "fuzzer", "build-abc", response_dir, "test-runner")
+        crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
 
         call_kwargs = mock_requests.post.call_args
         data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
@@ -275,7 +275,7 @@ class TestRunPov:
         response_dir = tmp_path / "response"
         pov_path = Path("/container/pov/testcase")
 
-        crs_utils.run_pov(pov_path, "fuzzer", "build-abc", response_dir, "test-runner")
+        crs_utils.run_pov(pov_path, "fuzzer", 1, response_dir, "test-runner")
 
         call_kwargs = mock_requests.post.call_args
         data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
@@ -288,21 +288,21 @@ class TestRunPov:
         )
         response_dir = tmp_path / "response"
 
-        exit_code = crs_utils.run_pov(Path("/pov/crash"), "fuzzer", "build-abc", response_dir, "test-runner")
+        exit_code = crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
 
         assert exit_code == 1
-        assert (response_dir / "pov_exit_code").read_text() == "1"
-        assert (response_dir / "pov_stderr.log").read_text() == "AddressSanitizer"
+        assert (response_dir / "retcode").read_text() == "1"
+        assert (response_dir / "stderr.log").read_text() == "AddressSanitizer"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_pov_success_writes_exit_code_0(self, mock_requests, crs_utils, tmp_path):
         mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
         response_dir = tmp_path / "response"
 
-        exit_code = crs_utils.run_pov(Path("/pov/crash"), "fuzzer", "build-abc", response_dir, "test-runner")
+        exit_code = crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
 
         assert exit_code == 0
-        assert (response_dir / "pov_exit_code").read_text() == "0"
+        assert (response_dir / "retcode").read_text() == "0"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_does_not_use_submit_and_poll(self, mock_requests, crs_utils, tmp_path):
@@ -310,7 +310,7 @@ class TestRunPov:
         mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
         response_dir = tmp_path / "response"
 
-        crs_utils.run_pov(Path("/pov/crash"), "fuzzer", "build-abc", response_dir, "test-runner")
+        crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
 
         # Only one POST call (the /run-pov call), no GET for /status/{job_id}
         assert mock_requests.post.call_count == 1
@@ -345,11 +345,11 @@ class TestApplyPatchTest:
         patch_file = tmp_path / "test.diff"
         patch_file.write_text("patch content")
 
-        exit_code = crs_utils.apply_patch_test(patch_file, "b1", response_dir, "test-builder")
+        exit_code = crs_utils.apply_patch_test(patch_file, response_dir, "test-builder")
 
         assert exit_code == 0
-        assert (response_dir / "test_exit_code").read_text() == "0"
-        assert (response_dir / "test_stdout.log").read_text() == "tests passed"
+        assert (response_dir / "retcode").read_text() == "0"
+        assert (response_dir / "stdout.log").read_text() == "tests passed"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_failed_test_writes_exit_code_1(self, mock_requests, crs_utils, tmp_path):
@@ -370,11 +370,11 @@ class TestApplyPatchTest:
         patch_file = tmp_path / "test.diff"
         patch_file.write_text("patch content")
 
-        exit_code = crs_utils.apply_patch_test(patch_file, "b2", response_dir, "test-builder")
+        exit_code = crs_utils.apply_patch_test(patch_file, response_dir, "test-builder")
 
         assert exit_code == 1
-        assert (response_dir / "test_exit_code").read_text() == "1"
-        assert (response_dir / "test_stderr.log").read_text() == "test failure"
+        assert (response_dir / "retcode").read_text() == "1"
+        assert (response_dir / "stderr.log").read_text() == "test failure"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_sends_builder_name_and_build_id(self, mock_requests, crs_utils, tmp_path):
@@ -389,7 +389,7 @@ class TestApplyPatchTest:
         patch_file = tmp_path / "test.diff"
         patch_file.write_text("patch content")
 
-        crs_utils.apply_patch_test(patch_file, "build-99", response_dir, "test-builder")
+        crs_utils.apply_patch_test(patch_file, response_dir, "test-builder")
 
         call_kwargs = mock_requests.post.call_args
         data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
@@ -410,7 +410,7 @@ class TestApplyPatchTest:
         patch_file = tmp_path / "test.diff"
         patch_file.write_text("real patch content")
 
-        crs_utils.apply_patch_test(patch_file, "build-99", response_dir, "test-builder")
+        crs_utils.apply_patch_test(patch_file, response_dir, "test-builder")
 
         # Verify files dict was passed with a "patch" key
         call_kwargs = mock_requests.post.call_args
@@ -451,9 +451,9 @@ class TestResponseDirCompat:
             crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
 
         # Verify exact file names that CRS modules expect
-        assert (response_dir / "build_exit_code").exists()
-        assert (response_dir / "build_stdout.log").exists()
-        assert (response_dir / "build_stderr.log").exists()
+        assert (response_dir / "retcode").exists()
+        assert (response_dir / "stdout.log").exists()
+        assert (response_dir / "stderr.log").exists()
         assert (response_dir / "rebuild_id").exists()
 
     @patch("libCRS.libCRS.local.http_requests")
@@ -463,10 +463,10 @@ class TestResponseDirCompat:
         )
         response_dir = tmp_path / "resp"
 
-        crs_utils.run_pov(Path("/pov"), "fuzz", "b1", response_dir, "test-runner")
+        crs_utils.run_pov(Path("/pov"), "fuzz", 1, response_dir, "test-runner")
 
-        assert (response_dir / "pov_exit_code").exists()
-        assert (response_dir / "pov_stderr.log").exists()
+        assert (response_dir / "retcode").exists()
+        assert (response_dir / "stderr.log").exists()
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_test_response_files(self, mock_requests, crs_utils, tmp_path):
@@ -487,10 +487,10 @@ class TestResponseDirCompat:
         patch_file = tmp_path / "test.diff"
         patch_file.write_text("")
 
-        crs_utils.apply_patch_test(patch_file, "b1", response_dir, "test-builder")
+        crs_utils.apply_patch_test(patch_file, response_dir, "test-builder")
 
-        assert (response_dir / "test_exit_code").exists()
-        assert (response_dir / "test_stdout.log").exists()
+        assert (response_dir / "retcode").exists()
+        assert (response_dir / "stdout.log").exists()
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_build_exit_code_is_string_integer(self, mock_requests, crs_utils, tmp_path):
@@ -511,7 +511,7 @@ class TestResponseDirCompat:
         with patch.dict("os.environ", {"OSS_CRS_BUILD_ID": "b3"}):
             crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
 
-        content = (response_dir / "build_exit_code").read_text()
+        content = (response_dir / "retcode").read_text()
         assert content == "0"
         int(content)  # Must be parseable as int
 
@@ -520,8 +520,8 @@ class TestResponseDirCompat:
         mock_requests.post.return_value = _mock_response(json_data={"exit_code": 77, "stderr": ""})
         response_dir = tmp_path / "resp"
 
-        crs_utils.run_pov(Path("/pov"), "fuzz", "b1", response_dir, "test-runner")
+        crs_utils.run_pov(Path("/pov"), "fuzz", 1, response_dir, "test-runner")
 
-        content = (response_dir / "pov_exit_code").read_text()
+        content = (response_dir / "retcode").read_text()
         assert content == "77"
         int(content)  # Must be parseable as int

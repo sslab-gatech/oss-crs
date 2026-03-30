@@ -201,10 +201,35 @@ class LocalCRSUtils(CRSUtils):
                 return hinted_src.relative_to(source_root)
         return None
 
-    def submit_build_output(self, src_path: str, dst_path: Path) -> None:
+    def submit_build_output(self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None) -> None:
+        phase = os.environ.get("OSS_CRS_CURRENT_PHASE", "build-target")
+        if phase == "run" and rebuild_id is None:
+            raise ValueError("rebuild_id is required during run phase")
+        if phase == "build-target" and rebuild_id is not None:
+            raise ValueError("rebuild_id must not be set during build-target phase")
+
         src = Path(src_path)
-        dst = _get_build_out_dir() / dst_path
-        rsync_copy(src, dst)
+        if rebuild_id is not None:
+            # Run phase: upload to sidecar rebuild output dir
+            self._submit_to_sidecar(src, dst_path, rebuild_id)
+        else:
+            # Build-target phase: write to local build output dir
+            dst = _get_build_out_dir() / dst_path
+            rsync_copy(src, dst)
+
+    def _submit_to_sidecar(self, src: Path, dst_path: Path, rebuild_id: int) -> None:
+        """Upload build output to the sidecar's rebuild output directory."""
+        crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
+        builder = self._resolve_builder(None)
+        builder_url = self._get_service_url(builder)
+        with open(src, "rb") as f:
+            resp = http_requests.post(
+                f"{builder_url}/upload-build-output",
+                files={"file": (str(dst_path), f)},
+                data={"crs_name": crs_name, "rebuild_id": str(rebuild_id)},
+                timeout=120,
+            )
+        resp.raise_for_status()
 
     def skip_build_output(self, dst_path: str) -> None:
         with tempfile.NamedTemporaryFile() as tmp_file:
@@ -272,6 +297,22 @@ class LocalCRSUtils(CRSUtils):
 
     def _get_builder_url(self, builder: str) -> str:
         return self._get_service_url(builder)
+
+    def _resolve_builder(self, builder: "str | None") -> str:
+        if builder:
+            return builder
+        default = os.environ.get("BUILDER_MODULE")
+        if default:
+            return default
+        raise ValueError(
+            "builder not specified and BUILDER_MODULE env var not set. "
+            "Pass --builder explicitly or set BUILDER_MODULE in crs.yaml additional_env."
+        )
+
+    def _resolve_runner(self, runner: "str | None") -> str:
+        if runner:
+            return runner
+        return os.environ.get("RUNNER_MODULE", "runner-sidecar")
 
     def _wait_for_service_health(
         self,
@@ -387,20 +428,12 @@ class LocalCRSUtils(CRSUtils):
         self,
         patch_path: Path,
         response_dir: Path,
-        builder: str,
+        builder: "str | None" = None,
+        builder_name: "str | None" = None,
         rebuild_id: "int | None" = None,
     ) -> int:
-        """Apply a patch and rebuild via the builder sidecar.
-
-        Args:
-            patch_path: Path to unified diff file.
-            response_dir: Directory to receive results.
-            builder: Builder sidecar module name.
-            rebuild_id: Optional rebuild ID (auto-increments if None, overwrites if provided).
-
-        Returns:
-            Build exit code (0 = success).
-        """
+        """Apply a patch and rebuild via the builder sidecar."""
+        builder = self._resolve_builder(builder)
         crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
         cpuset = os.environ.get("OSS_CRS_CPUSET", "")
         mem_limit = os.environ.get("OSS_CRS_MEMORY_LIMIT", "")
@@ -408,7 +441,7 @@ class LocalCRSUtils(CRSUtils):
             files = {"patch": patch_file}
             data = {
                 "crs_name": crs_name,
-                "builder_name": builder,
+                "builder_name": builder_name or builder,
                 "cpuset": cpuset,
                 "mem_limit": mem_limit,
             }
@@ -418,47 +451,48 @@ class LocalCRSUtils(CRSUtils):
 
         response_dir.mkdir(parents=True, exist_ok=True)
         if result is None:
-            (response_dir / "build_exit_code").write_text("1")
-            (response_dir / "build.log").write_text("Builder unavailable or timed out")
+            (response_dir / "retcode").write_text("1")
+            (response_dir / "stderr.log").write_text("Builder unavailable or timed out")
             return 1
 
         inner = result.get("result") or {}
-        build_exit_code = inner.get("exit_code", 1)
-        (response_dir / "build_exit_code").write_text(str(build_exit_code))
+        exit_code = inner.get("exit_code", 1)
+        (response_dir / "retcode").write_text(str(exit_code))
         stdout = inner.get("stdout", "")
         stderr = inner.get("stderr", "")
         if stdout:
-            (response_dir / "build_stdout.log").write_text(stdout)
+            (response_dir / "stdout.log").write_text(stdout)
         if stderr:
-            (response_dir / "build_stderr.log").write_text(stderr)
-        if build_exit_code == 0:
+            (response_dir / "stderr.log").write_text(stderr)
+        if exit_code == 0:
             rid = inner.get("rebuild_id")
             if rid is not None:
                 (response_dir / "rebuild_id").write_text(str(rid))
             self._last_rebuild_id = rid
 
-        return build_exit_code
+        return exit_code
 
     def run_pov(
         self,
         pov_path: Path,
         harness_name: str,
-        build_id: str,
+        rebuild_id: int,
         response_dir: Path,
-        builder: str,
+        builder: "str | None" = None,
     ) -> int:
-        """Run a POV binary via the runner sidecar."""
+        """Run a POV binary against a specific rebuild's output via the runner sidecar."""
+        builder = self._resolve_runner(builder)
         if not self._wait_for_service_health(builder):
             response_dir.mkdir(parents=True, exist_ok=True)
-            (response_dir / "pov_exit_code").write_text("1")
-            (response_dir / "pov_stderr.log").write_text("Runner unavailable")
+            (response_dir / "retcode").write_text("1")
+            (response_dir / "stderr.log").write_text("Runner unavailable")
             return 1
 
         runner_url = self._get_service_url(builder)
         data = {
             "harness_name": harness_name,
-            "build_id": build_id,
-            "pov_path": str(pov_path),  # container-internal path
+            "rebuild_id": str(rebuild_id),
+            "pov_path": str(pov_path),
         }
         try:
             resp = http_requests.post(
@@ -471,27 +505,30 @@ class LocalCRSUtils(CRSUtils):
         except (http_requests.ConnectionError, http_requests.Timeout, http_requests.HTTPError) as e:
             logger.error("Failed to run POV: %s", e)
             response_dir.mkdir(parents=True, exist_ok=True)
-            (response_dir / "pov_exit_code").write_text("1")
-            (response_dir / "pov_stderr.log").write_text(str(e))
+            (response_dir / "retcode").write_text("1")
+            (response_dir / "stderr.log").write_text(str(e))
             return 1
 
         response_dir.mkdir(parents=True, exist_ok=True)
-        pov_exit_code = result.get("exit_code", 1)
-        (response_dir / "pov_exit_code").write_text(str(pov_exit_code))
+        exit_code = result.get("exit_code", 1)
+        (response_dir / "retcode").write_text(str(exit_code))
+        stdout = result.get("stdout", "")
         stderr = result.get("stderr", "")
+        if stdout:
+            (response_dir / "stdout.log").write_text(stdout)
         if stderr:
-            (response_dir / "pov_stderr.log").write_text(stderr)
+            (response_dir / "stderr.log").write_text(stderr)
 
-        return pov_exit_code
+        return exit_code
 
     def apply_patch_test(
         self,
         patch_path: Path,
-        build_id: str,
         response_dir: Path,
-        builder: str,
+        builder: "str | None" = None,
     ) -> int:
         """Apply a patch and run the project's bundled test.sh via the builder sidecar."""
+        builder = self._resolve_builder(builder)
         crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
         cpuset = os.environ.get("OSS_CRS_CPUSET", "")
         mem_limit = os.environ.get("OSS_CRS_MEMORY_LIMIT", "")
@@ -506,21 +543,21 @@ class LocalCRSUtils(CRSUtils):
 
         response_dir.mkdir(parents=True, exist_ok=True)
         if result is None:
-            (response_dir / "test_exit_code").write_text("1")
-            (response_dir / "test_stderr.log").write_text("Builder unavailable or timed out")
+            (response_dir / "retcode").write_text("1")
+            (response_dir / "stderr.log").write_text("Builder unavailable or timed out")
             return 1
 
         inner = result.get("result") or {}
-        test_exit_code = inner.get("exit_code", 1)
-        (response_dir / "test_exit_code").write_text(str(test_exit_code))
+        exit_code = inner.get("exit_code", 1)
+        (response_dir / "retcode").write_text(str(exit_code))
         stdout = inner.get("stdout", "")
         stderr = inner.get("stderr", "")
         if stdout:
-            (response_dir / "test_stdout.log").write_text(stdout)
+            (response_dir / "stdout.log").write_text(stdout)
         if stderr:
-            (response_dir / "test_stderr.log").write_text(stderr)
+            (response_dir / "stderr.log").write_text(stderr)
 
-        return test_exit_code
+        return exit_code
 
     def download_build_output(self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None) -> None:
         """Download build artifacts.
