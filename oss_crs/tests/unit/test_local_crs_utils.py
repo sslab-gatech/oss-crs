@@ -66,8 +66,7 @@ class TestApplyPatchBuild:
                 "exit_code": 0,
                 "stdout": "Build OK",
                 "stderr": "",
-                "build_id": "build-abc",
-                "artifacts_version": "v1",
+                "rebuild_id": "build-abc",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -83,7 +82,7 @@ class TestApplyPatchBuild:
         assert exit_code == 0
         assert (response_dir / "build_exit_code").read_text() == "0"
         assert (response_dir / "build_stdout.log").read_text() == "Build OK"
-        assert (response_dir / "build_id").read_text() == "build-abc"
+        assert (response_dir / "rebuild_id").read_text() == "build-abc"
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_failed_build(self, mock_requests, crs_utils, tmp_path):
@@ -95,8 +94,7 @@ class TestApplyPatchBuild:
                 "exit_code": 1,
                 "stdout": "",
                 "stderr": "compile error",
-                "build_id": "b1",
-                "artifacts_version": "v1",
+                "rebuild_id": "b1",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -123,8 +121,7 @@ class TestApplyPatchBuild:
                 "exit_code": 0,
                 "stdout": "",
                 "stderr": "",
-                "build_id": "b1",
-                "artifacts_version": "v1",
+                "rebuild_id": "b1",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -165,8 +162,7 @@ class TestApplyPatchBuild:
                 "exit_code": 0,
                 "stdout": "",
                 "stderr": "",
-                "build_id": "stored-build-id",
-                "artifacts_version": "v1",
+                "rebuild_id": "stored-build-id",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -179,8 +175,7 @@ class TestApplyPatchBuild:
         with patch.dict("os.environ", {"OSS_CRS_BUILD_ID": "stored-build-id"}):
             crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
 
-        assert crs_utils._last_builder == "test-builder"
-        assert crs_utils._last_build_id == "stored-build-id"
+        assert crs_utils._last_rebuild_id == "stored-build-id"
 
 
 # ---------------------------------------------------------------------------
@@ -189,56 +184,55 @@ class TestApplyPatchBuild:
 
 
 class TestDownloadBuildOutput:
-    """INT-02: download_build_output retrieves artifacts via HTTP."""
+    """download_build_output copies build-target artifacts from local filesystem."""
+
+    def test_copies_from_build_out_dir(self, crs_utils, tmp_path):
+        build_out = tmp_path / "build_out"
+        build_out.mkdir()
+        (build_out / "fuzzer_binary").write_bytes(b"ELF")
+
+        dst = tmp_path / "dst"
+        with patch.dict("os.environ", {"OSS_CRS_BUILD_OUT_DIR": str(tmp_path)}):
+            crs_utils.download_build_output("build_out/fuzzer_binary", dst)
+
+
+class TestDownloadBuildOutputWithRebuildId:
+    """download_build_output with rebuild_id fetches from sidecar via HTTP."""
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_downloads_and_extracts_zip(self, mock_requests, crs_utils, tmp_path):
-        # Set up state from prior build
-        crs_utils._last_builder = "test-builder"
-        crs_utils._last_build_id = "build-abc"
-
-        # Create a mock zip file
+    def test_fetches_from_sidecar_with_rebuild_id(self, mock_requests, crs_utils, tmp_path):
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w") as zf:
             zf.writestr("fuzzer_binary", b"ELF binary content")
-        zip_bytes = zip_buf.getvalue()
-
-        mock_requests.get.return_value = _mock_response(content=zip_bytes)
+        mock_requests.get.return_value = _mock_response(content=zip_buf.getvalue())
 
         dst = tmp_path / "artifacts"
-        crs_utils.download_build_output("v1", dst)
+        with patch.dict("os.environ", {"OSS_CRS_NAME": "test-crs", "BUILDER_MODULE": "builder-sidecar"}):
+            crs_utils.download_build_output("", dst, rebuild_id=1)
 
         assert (dst / "fuzzer_binary").exists()
-        mock_requests.get.assert_called_once()
         call_url = mock_requests.get.call_args[0][0]
         assert "download-build-output" in call_url
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_passes_version_and_build_id_as_params(self, mock_requests, crs_utils, tmp_path):
-        crs_utils._last_builder = "test-builder"
-        crs_utils._last_build_id = "build-xyz"
-
+    def test_ephemeral_container_tries_sidecar_first(self, mock_requests, crs_utils, tmp_path):
+        """When OSS_CRS_REBUILD_ID is set, tries sidecar before local filesystem."""
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w") as zf:
             zf.writestr("artifact.txt", b"content")
         mock_requests.get.return_value = _mock_response(content=zip_buf.getvalue())
 
-        crs_utils.download_build_output("v2", tmp_path / "dst")
+        dst = tmp_path / "artifacts"
+        with patch.dict("os.environ", {
+            "OSS_CRS_REBUILD_ID": "2",
+            "OSS_CRS_NAME": "test-crs",
+            "BUILDER_MODULE": "builder-sidecar",
+        }):
+            crs_utils.download_build_output("", dst)
 
-        call_kwargs = mock_requests.get.call_args
-        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params", {})
-        assert params.get("build_id") == "build-xyz"
-        assert params.get("version") == "v2"
-
-    def test_raises_without_prior_build(self, crs_utils, tmp_path):
-        with pytest.raises(RuntimeError, match="prior successful apply_patch_build"):
-            crs_utils.download_build_output("v1", tmp_path / "dst")
-
-    def test_raises_when_build_id_missing(self, crs_utils, tmp_path):
-        crs_utils._last_builder = "test-builder"
-        # No _last_build_id set
-        with pytest.raises(RuntimeError, match="prior successful apply_patch_build"):
-            crs_utils.download_build_output("v1", tmp_path / "dst")
+        mock_requests.get.assert_called_once()
+        params = mock_requests.get.call_args.kwargs.get("params", {})
+        assert params.get("rebuild_id") == "2"
 
 
 # ---------------------------------------------------------------------------
@@ -342,8 +336,7 @@ class TestApplyPatchTest:
                 "exit_code": 0,
                 "stdout": "tests passed",
                 "stderr": "",
-                "build_id": "b1",
-                "artifacts_version": None,
+                "rebuild_id": "b1",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -368,8 +361,7 @@ class TestApplyPatchTest:
                 "exit_code": 1,
                 "stdout": "",
                 "stderr": "test failure",
-                "build_id": "b2",
-                "artifacts_version": None,
+                "rebuild_id": "b2",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -390,7 +382,6 @@ class TestApplyPatchTest:
         poll_resp = _mock_response(json_data={
             "id": "t3",
             "status": "done",
-            "result": {"exit_code": 0, "stdout": "", "stderr": "", "build_id": None, "artifacts_version": None},
         })
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
@@ -402,8 +393,8 @@ class TestApplyPatchTest:
 
         call_kwargs = mock_requests.post.call_args
         data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
-        assert data.get("builder_name") == "test-builder"
-        assert data.get("build_id") == "build-99"
+        assert "crs_name" in data
+        assert "builder_name" not in data  # test endpoint no longer needs builder_name
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_sends_patch_file_to_test_endpoint(self, mock_requests, crs_utils, tmp_path):
@@ -412,7 +403,6 @@ class TestApplyPatchTest:
         poll_resp = _mock_response(json_data={
             "id": "t4",
             "status": "done",
-            "result": {"exit_code": 0, "stdout": "", "stderr": "", "build_id": None, "artifacts_version": None},
         })
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
@@ -447,8 +437,7 @@ class TestResponseDirCompat:
                 "exit_code": 0,
                 "stdout": "ok",
                 "stderr": "warn",
-                "build_id": "bid",
-                "artifacts_version": "v2",
+                "rebuild_id": "bid",
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -465,7 +454,7 @@ class TestResponseDirCompat:
         assert (response_dir / "build_exit_code").exists()
         assert (response_dir / "build_stdout.log").exists()
         assert (response_dir / "build_stderr.log").exists()
-        assert (response_dir / "build_id").exists()
+        assert (response_dir / "rebuild_id").exists()
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_pov_response_files(self, mock_requests, crs_utils, tmp_path):
@@ -489,8 +478,7 @@ class TestResponseDirCompat:
                 "exit_code": 0,
                 "stdout": "pass",
                 "stderr": "",
-                "build_id": None,
-                "artifacts_version": None,
+                "rebuild_id": None,
             },
         })
         mock_requests.post.return_value = submit_resp
@@ -511,7 +499,7 @@ class TestResponseDirCompat:
         poll_resp = _mock_response(json_data={
             "id": "j3",
             "status": "done",
-            "result": {"exit_code": 0, "stdout": "", "stderr": "", "build_id": "b3", "artifacts_version": "v1"},
+            "result": {"exit_code": 0, "stdout": "", "stderr": "", "rebuild_id": 1},
         })
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp

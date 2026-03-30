@@ -120,15 +120,17 @@ class CRSUtils(ABC):
         patch_path: Path,
         response_dir: Path,
         builder: str,
+        rebuild_id: "int | None" = None,
     ) -> int:
-        """Apply a patch to the snapshot image and rebuild.
+        """Apply a patch and rebuild via the builder sidecar.
 
         Args:
             patch_path: Path to a unified diff file.
             response_dir: Directory to receive results:
-                - build_exit_code, build.log, build_stdout.log, build_stderr.log
-                - build_id (present only when build_exit_code is 0)
+                - build_exit_code, build_stdout.log, build_stderr.log
+                - rebuild_id (present only when exit_code is 0)
             builder: Builder sidecar module name (resolved to URL internally).
+            rebuild_id: Optional rebuild ID. Auto-increments if None, overwrites if provided.
 
         Returns:
             Build exit code (0 = success).

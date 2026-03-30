@@ -388,12 +388,32 @@ class LocalCRSUtils(CRSUtils):
         patch_path: Path,
         response_dir: Path,
         builder: str,
+        rebuild_id: "int | None" = None,
     ) -> int:
-        """Apply a patch and rebuild via the builder sidecar."""
-        build_id = os.environ.get("OSS_CRS_BUILD_ID", "unknown")
+        """Apply a patch and rebuild via the builder sidecar.
+
+        Args:
+            patch_path: Path to unified diff file.
+            response_dir: Directory to receive results.
+            builder: Builder sidecar module name.
+            rebuild_id: Optional rebuild ID (auto-increments if None, overwrites if provided).
+
+        Returns:
+            Build exit code (0 = success).
+        """
+        crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
+        cpuset = os.environ.get("OSS_CRS_CPUSET", "")
+        mem_limit = os.environ.get("OSS_CRS_MEMORY_LIMIT", "")
         with open(patch_path, "rb") as patch_file:
             files = {"patch": patch_file}
-            data = {"build_id": build_id, "builder_name": builder}
+            data = {
+                "crs_name": crs_name,
+                "builder_name": builder,
+                "cpuset": cpuset,
+                "mem_limit": mem_limit,
+            }
+            if rebuild_id is not None:
+                data["rebuild_id"] = str(rebuild_id)
             result = self._submit_and_poll("/build", builder, files, data)
 
         response_dir.mkdir(parents=True, exist_ok=True)
@@ -412,12 +432,10 @@ class LocalCRSUtils(CRSUtils):
         if stderr:
             (response_dir / "build_stderr.log").write_text(stderr)
         if build_exit_code == 0:
-            bid = inner.get("build_id")
-            if bid:
-                (response_dir / "build_id").write_text(bid)
-            # Store builder context for download_build_output
-            self._last_builder = builder
-            self._last_build_id = bid
+            rid = inner.get("rebuild_id")
+            if rid is not None:
+                (response_dir / "rebuild_id").write_text(str(rid))
+            self._last_rebuild_id = rid
 
         return build_exit_code
 
@@ -474,9 +492,16 @@ class LocalCRSUtils(CRSUtils):
         builder: str,
     ) -> int:
         """Apply a patch and run the project's bundled test.sh via the builder sidecar."""
+        crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
+        cpuset = os.environ.get("OSS_CRS_CPUSET", "")
+        mem_limit = os.environ.get("OSS_CRS_MEMORY_LIMIT", "")
         with open(patch_path, "rb") as patch_file:
             files = {"patch": patch_file}
-            data = {"build_id": build_id, "builder_name": builder}
+            data = {
+                "crs_name": crs_name,
+                "cpuset": cpuset,
+                "mem_limit": mem_limit,
+            }
             result = self._submit_and_poll("/test", builder, files, data, timeout=600)
 
         response_dir.mkdir(parents=True, exist_ok=True)
@@ -497,22 +522,48 @@ class LocalCRSUtils(CRSUtils):
 
         return test_exit_code
 
-    def download_build_output(self, src_path: str, dst_path: Path) -> None:
-        """Download build output from the builder sidecar via HTTP."""
+    def download_build_output(self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None) -> None:
+        """Download build artifacts.
+
+        Args:
+            src_path: Relative path within the build output directory.
+            dst_path: Local destination path.
+            rebuild_id: If provided, fetch rebuild artifacts from the sidecar.
+                        If None, copy build-target artifacts from local filesystem.
+
+        Inside an ephemeral container (OSS_CRS_REBUILD_ID set), tries sidecar first
+        then falls back to local filesystem.
+        """
+        # If no explicit rebuild_id, check if we're inside an ephemeral container
+        if rebuild_id is None:
+            env_rid = os.environ.get("OSS_CRS_REBUILD_ID")
+            if env_rid:
+                try:
+                    self._download_from_sidecar(src_path, dst_path, int(env_rid))
+                    return
+                except Exception:
+                    pass  # fall through to local
+
+        if rebuild_id is not None:
+            self._download_from_sidecar(src_path, dst_path, rebuild_id)
+            return
+
+        # Local filesystem (build-target artifacts)
+        src = _get_build_out_dir() / src_path
+        dst = Path(dst_path)
+        rsync_copy(src, dst)
+
+    def _download_from_sidecar(self, src_path: str, dst_path: Path, rebuild_id: int) -> None:
+        """Fetch rebuild artifacts from the builder sidecar via HTTP."""
         import io
         import zipfile
 
-        builder = getattr(self, "_last_builder", None)
-        build_id = getattr(self, "_last_build_id", None)
-        if not builder or not build_id:
-            raise RuntimeError(
-                "download_build_output requires a prior successful apply_patch_build call"
-            )
-
+        crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
+        builder = os.environ.get("BUILDER_MODULE", "builder-sidecar")
         builder_url = self._get_service_url(builder)
         resp = http_requests.get(
             f"{builder_url}/download-build-output",
-            params={"build_id": build_id, "version": src_path},
+            params={"crs_name": crs_name, "rebuild_id": str(rebuild_id)},
             timeout=120,
         )
         resp.raise_for_status()

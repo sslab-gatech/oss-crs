@@ -37,7 +37,7 @@ import docker.errors
 # Sidecar module imports
 # ---------------------------------------------------------------------------
 
-from docker_ops import get_build_image, get_test_image, next_version, run_ephemeral_build, run_ephemeral_test
+from docker_ops import get_build_image, get_test_image, next_rebuild_id, run_ephemeral_build, run_ephemeral_test
 
 # ---------------------------------------------------------------------------
 # Test-wide builder name constant
@@ -65,31 +65,32 @@ def _make_test_client():
 # TestNextVersion
 # ===========================================================================
 
-class TestNextVersion:
-    """Tests for docker_ops.next_version() filesystem version counter."""
+class TestNextRebuildId:
+    """Tests for docker_ops.next_rebuild_id() filesystem counter."""
 
     def test_nonexistent_dir_returns_1(self, tmp_path):
-        assert next_version(tmp_path / "nonexistent") == 1
+        assert next_rebuild_id(tmp_path, "my-crs") == 1
 
-    def test_empty_dir_returns_1(self, tmp_path):
-        assert next_version(tmp_path) == 1
+    def test_empty_crs_dir_returns_1(self, tmp_path):
+        (tmp_path / "my-crs").mkdir()
+        assert next_rebuild_id(tmp_path, "my-crs") == 1
 
-    def test_with_v1_returns_2(self, tmp_path):
-        (tmp_path / "v1").mkdir()
-        assert next_version(tmp_path) == 2
+    def test_with_1_returns_2(self, tmp_path):
+        (tmp_path / "my-crs" / "1").mkdir(parents=True)
+        assert next_rebuild_id(tmp_path, "my-crs") == 2
 
-    def test_with_v1_v2_v3_returns_4(self, tmp_path):
-        for v in ["v1", "v2", "v3"]:
-            (tmp_path / v).mkdir()
-        assert next_version(tmp_path) == 4
+    def test_with_1_2_3_returns_4(self, tmp_path):
+        for v in ["1", "2", "3"]:
+            (tmp_path / "my-crs" / v).mkdir(parents=True)
+        assert next_rebuild_id(tmp_path, "my-crs") == 4
 
-    def test_ignores_non_version_dirs(self, tmp_path):
-        (tmp_path / "v1").mkdir()
-        (tmp_path / "temp").mkdir()
-        (tmp_path / "latest").mkdir()
-        (tmp_path / "v2").mkdir()
-        # Only v1 and v2 are valid; max is 2, so next is 3
-        assert next_version(tmp_path) == 3
+    def test_ignores_non_numeric_dirs(self, tmp_path):
+        crs_dir = tmp_path / "my-crs"
+        crs_dir.mkdir()
+        (crs_dir / "1").mkdir()
+        (crs_dir / "temp").mkdir()
+        (crs_dir / "2").mkdir()
+        assert next_rebuild_id(tmp_path, "my-crs") == 3
 
 
 # ===========================================================================
@@ -159,32 +160,32 @@ class TestRunEphemeralBuild:
     def test_successful_build_returns_exit_code_0(self, tmp_path):
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            result = run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         assert result["exit_code"] == 0
-        assert result["build_id"] == "build123"
+        assert result["rebuild_id"] == 1
 
     def test_first_success_commits_snapshot(self, tmp_path):
         """First successful build with no existing snapshot: container.commit() called."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         container.commit.assert_called_once_with(
             repository="oss-crs-snapshot",
-            tag=f"build-{TEST_BUILDER_NAME}-build123",
+            tag=f"build-{TEST_BUILDER_NAME}-1",
         )
 
     def test_existing_snapshot_skips_commit(self, tmp_path):
         """Snapshot already exists: container.commit() must NOT be called."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=True)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         container.commit.assert_not_called()
 
     def test_failed_build_no_commit(self, tmp_path):
         """Non-zero exit code: snapshot must NOT be committed."""
         client, container = self._make_mock_client(exit_code=1, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            result = run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         assert result["exit_code"] == 1
         container.commit.assert_not_called()
 
@@ -192,14 +193,14 @@ class TestRunEphemeralBuild:
         """Container.remove(force=True) called after successful build."""
         client, container = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         container.remove.assert_called_once_with(force=True)
 
     def test_container_removed_on_failure(self, tmp_path):
         """Container.remove(force=True) called even when build fails."""
         client, container = self._make_mock_client(exit_code=1)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         container.remove.assert_called_once_with(force=True)
 
     def test_timeout_returns_error(self, tmp_path):
@@ -208,32 +209,22 @@ class TestRunEphemeralBuild:
         client, container = self._make_mock_client(exit_code=0)
         container.wait.side_effect = requests.exceptions.ReadTimeout()
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path, timeout=1)
+            result = run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path, timeout=1)
         assert result["exit_code"] == 1
         assert "timed out" in result["stderr"].lower() or "timeout" in result["stderr"].lower()
 
-    def test_version_override(self, tmp_path):
-        """When version_override provided, artifacts_version reflects the override string."""
+    def test_creates_output_directory(self, tmp_path):
+        """On success, output directory is created under rebuild_out_dir/{crs_name}/{rebuild_id}/."""
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build(
-                "base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path, version_override="final"
-            )
-        assert result["artifacts_version"] == "final"
-
-    def test_creates_version_directory(self, tmp_path):
-        """On success, a versioned directory is created under rebuild_out_dir."""
-        client, _ = self._make_mock_client(exit_code=0)
-        with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
-        version_str = result["artifacts_version"]
-        assert (tmp_path / version_str).exists()
+            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+        assert (tmp_path / "test-crs" / "1").exists()
 
     def test_failed_build_does_not_create_version_directory(self, tmp_path):
         """ART-02: Failed builds must not consume version slots."""
         client, _ = self._make_mock_client(exit_code=1)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", "build123", TEST_BUILDER_NAME, b"patch", tmp_path)
+            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         # No v{N} directories should exist in tmp_path
         version_re = __import__("re").compile(r"^v(\d+)$")
         versioned_dirs = [
@@ -268,7 +259,7 @@ class TestBuildEndpoint:
         """Return a (files, data) tuple suitable for TestClient multipart POST."""
         return (
             {"patch": ("patch.diff", content, "application/octet-stream")},
-            {"build_id": "testbuild", "builder_name": TEST_BUILDER_NAME, "version": "v1"},
+            {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME},
         )
 
     def test_submit_build_returns_queued(self):
@@ -286,7 +277,7 @@ class TestBuildEndpoint:
         patch_content = b"diff content here"
         client = _make_test_client()
         files1 = {"patch": ("p.diff", patch_content, "application/octet-stream")}
-        data = {"build_id": "testbuild", "builder_name": TEST_BUILDER_NAME}
+        data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
 
         resp1 = client.post("/build", files=files1, data=data)
         resp2 = client.post("/build", files={"patch": ("p.diff", patch_content, "application/octet-stream")}, data=data)
@@ -297,7 +288,7 @@ class TestBuildEndpoint:
         client = _make_test_client()
         patch_content = b"unique patch abc"
         files = {"patch": ("patch.diff", patch_content, "application/octet-stream")}
-        data = {"build_id": "myproj", "builder_name": TEST_BUILDER_NAME}
+        data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
 
         resp1 = client.post("/build", files=files, data=data)
         resp2 = client.post("/build", files={"patch": ("patch.diff", patch_content, "application/octet-stream")}, data=data)
@@ -320,7 +311,7 @@ class TestBuildEndpoint:
 
         client = _make_test_client()
         files = {"patch": ("patch.diff", patch_content, "application/octet-stream")}
-        data = {"build_id": "build1", "builder_name": TEST_BUILDER_NAME}
+        data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
         resp = client.post("/build", files=files, data=data)
         assert resp.json()["id"] == expected_id
 
@@ -328,7 +319,7 @@ class TestBuildEndpoint:
         """GET /builds returns a dict with a 'builds' key containing job id list."""
         client = _make_test_client()
         files = {"patch": ("patch.diff", b"some patch", "application/octet-stream")}
-        data = {"build_id": "proj1", "builder_name": TEST_BUILDER_NAME}
+        data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
         client.post("/build", files=files, data=data)
 
         resp = client.get("/builds")
@@ -370,8 +361,7 @@ class TestStatusEndpoint:
                 "exit_code": 0,
                 "stdout": "ok",
                 "stderr": "",
-                "build_id": "abc123",
-                "artifacts_version": "v1",
+                "rebuild_id": 1,
             },
         }
         server.job_results["abc123"] = fake_result
@@ -502,39 +492,32 @@ class TestRunEphemeralTest:
     def test_successful_test_returns_exit_code_0(self):
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            result = run_ephemeral_test("base:latest", 1, b"patch")
         assert result["exit_code"] == 0
-        assert result["build_id"] == "build123"
-
-    def test_artifacts_version_is_none(self):
-        """Test results always have artifacts_version=None (no versioned output)."""
-        client, _ = self._make_mock_client(exit_code=0)
-        with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
-        assert result["artifacts_version"] is None
+        assert result["rebuild_id"] == 1
 
     def test_first_success_commits_test_snapshot(self):
         """First successful test commits snapshot with test-{build_id} tag per D-05 (no builder_name)."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            run_ephemeral_test("base:latest", 1, b"patch")
         container.commit.assert_called_once_with(
             repository="oss-crs-snapshot",
-            tag="test-build123",
+            tag="test-1",
         )
 
     def test_existing_snapshot_skips_commit(self):
         """Test snapshot already exists: container.commit() must NOT be called."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=True)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            run_ephemeral_test("base:latest", 1, b"patch")
         container.commit.assert_not_called()
 
     def test_failed_test_no_commit(self):
         """Non-zero exit code: test snapshot must NOT be committed."""
         client, container = self._make_mock_client(exit_code=1, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            result = run_ephemeral_test("base:latest", 1, b"patch")
         assert result["exit_code"] == 1
         container.commit.assert_not_called()
 
@@ -542,14 +525,14 @@ class TestRunEphemeralTest:
         """container.remove(force=True) called after successful test."""
         client, container = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            run_ephemeral_test("base:latest", 1, b"patch")
         container.remove.assert_called_once_with(force=True)
 
     def test_container_removed_on_failure(self):
         """container.remove(force=True) called even when test fails."""
         client, container = self._make_mock_client(exit_code=1)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            run_ephemeral_test("base:latest", 1, b"patch")
         container.remove.assert_called_once_with(force=True)
 
     def test_timeout_returns_error(self):
@@ -558,16 +541,15 @@ class TestRunEphemeralTest:
         client, container = self._make_mock_client(exit_code=0)
         container.wait.side_effect = requests.exceptions.ReadTimeout()
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch", timeout=1)
+            result = run_ephemeral_test("base:latest", 1, b"patch", timeout=1)
         assert result["exit_code"] == 1
         assert "timed out" in result["stderr"].lower() or "timeout" in result["stderr"].lower()
-        assert result["artifacts_version"] is None
 
     def test_invokes_test_sh(self):
         """Container OSS_CRS_BUILD_CMD env var must reference test.sh."""
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
+            run_ephemeral_test("base:latest", 1, b"patch")
         call_kwargs = client.containers.create.call_args
         environment = call_kwargs[1].get("environment", {})
         assert "test.sh" in environment.get("OSS_CRS_BUILD_CMD", "")
@@ -603,7 +585,7 @@ class TestHandleTestProjectImage:
         mock_client = self._make_mock_client()
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(__import__("os").environ, {"PROJECT_BASE_IMAGE": "project:latest"}, clear=False):
-                server._handle_test("job1", b"patch", "bid1", "crs-libfuzzer")
+                server._handle_test("job1", b"patch", 1, "", "")
         mock_client.containers.create.assert_called_once()
         call_args = mock_client.containers.create.call_args
         image_arg = call_args[0][0] if call_args[0] else call_args[1].get("image")
@@ -618,7 +600,7 @@ class TestHandleTestProjectImage:
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(_os.environ, env_without_project_base, clear=True):
                 with pytest.raises(ValueError, match="PROJECT_BASE_IMAGE"):
-                    server._handle_test("job1", b"patch", "bid1", "crs-libfuzzer")
+                    server._handle_test("job1", b"patch", 1, "", "")
 
     def test_handle_test_ignores_builder_base_image(self):
         """_handle_test() does not read BASE_IMAGE_{builder_name} even when set."""
@@ -630,20 +612,18 @@ class TestHandleTestProjectImage:
         }
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(__import__("os").environ, env_vars, clear=False):
-                server._handle_test("job1", b"patch", "bid1", "crs-libfuzzer")
+                server._handle_test("job1", b"patch", 1, "", "")
         call_args = mock_client.containers.create.call_args
         image_arg = call_args[0][0] if call_args[0] else call_args[1].get("image")
         assert image_arg == "project:correct"
         assert image_arg != "wrong:image"
 
-    def test_test_response_schema_has_no_artifact_paths(self):
-        """Response dict keys are exactly {exit_code, stdout, stderr, build_id, artifacts_version}
-        and artifacts_version is None (TEST-02, D-04)."""
+    def test_test_response_schema(self):
+        """Response dict keys are exactly {exit_code, stdout, stderr, rebuild_id}."""
         client, _ = TestRunEphemeralTest()._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", "build123", TEST_BUILDER_NAME, b"patch")
-        assert set(result.keys()) == {"exit_code", "stdout", "stderr", "build_id", "artifacts_version"}
-        assert result["artifacts_version"] is None
+            result = run_ephemeral_test("base:latest", 1, b"patch")
+        assert set(result.keys()) == {"exit_code", "stdout", "stderr", "rebuild_id"}
 
 
 # ===========================================================================
@@ -657,7 +637,7 @@ class TestTestEndpoint:
         """Return (files, data) suitable for multipart POST to /test."""
         return (
             {"patch": ("patch.diff", content, "application/octet-stream")},
-            {"build_id": "testbuild", "builder_name": TEST_BUILDER_NAME},
+            {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME},
         )
 
     def test_submit_test_returns_queued(self):
@@ -685,12 +665,12 @@ class TestTestEndpoint:
         build_resp = client.post(
             "/build",
             files={"patch": ("p.diff", patch_content, "application/octet-stream")},
-            data={"build_id": "b1", "builder_name": TEST_BUILDER_NAME},
+            data={"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME},
         )
         test_resp = client.post(
             "/test",
             files={"patch": ("p.diff", patch_content, "application/octet-stream")},
-            data={"build_id": "b1", "builder_name": TEST_BUILDER_NAME},
+            data={"crs_name": "test-crs"},
         )
         assert build_resp.json()["id"] != test_resp.json()["id"]
 
@@ -706,7 +686,7 @@ class TestTestEndpoint:
         client = _make_test_client()
         patch_content = b"unique test patch xyz"
         files = {"patch": ("patch.diff", patch_content, "application/octet-stream")}
-        data = {"build_id": "myproj", "builder_name": TEST_BUILDER_NAME}
+        data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
 
         resp1 = client.post("/test", files=files, data=data)
         resp2 = client.post("/test", files={"patch": ("patch.diff", patch_content, "application/octet-stream")}, data=data)
