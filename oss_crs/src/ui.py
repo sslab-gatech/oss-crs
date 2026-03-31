@@ -1287,6 +1287,9 @@ class MultiTaskProgress:
                     "Warning: failed to list docker images for cleanup fallback."
                 )
 
+            # Don't remove preserved builder images — they're tagged copies of
+            # compose-built images kept for the sidecar and snapshot workflows.
+            image_refs = {r for r in image_refs if not r.startswith("oss-crs-builder:")}
             if image_refs:
                 rm_result = subprocess.run(
                     ["docker", "image", "rm", "-f", *sorted(image_refs)],

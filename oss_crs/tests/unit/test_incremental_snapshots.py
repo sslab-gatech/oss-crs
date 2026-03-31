@@ -43,10 +43,15 @@ def _make_mock_target():
     return target
 
 
-def _make_crs(builder_names: list[str]):
+def _make_crs(builder_names: list[str], crs_name: str = "test-crs"):
     """Return a minimal CRS-like object with target_build_phase.builds set."""
     crs = SimpleNamespace()
+    crs.name = crs_name
     crs.config = SimpleNamespace()
+    crs.crs_compose_env = SimpleNamespace()
+    crs.crs_compose_env.get_env = lambda: {"type": "local"}
+    crs.resource = SimpleNamespace()
+    crs.resource.additional_env = None
     if builder_names:
         crs.config.target_build_phase = SimpleNamespace()
         crs.config.target_build_phase.builds = [
@@ -75,6 +80,7 @@ def _make_crs_compose(crs_list):
     obj._create_incremental_snapshots = CRSCompose._create_incremental_snapshots.__get__(obj, type(obj))
     obj._snapshot_one = CRSCompose._snapshot_one.__get__(obj, type(obj))
     obj._check_snapshots_exist = CRSCompose._check_snapshots_exist.__get__(obj, type(obj))
+    obj._cleanup_preserved_builders = CRSCompose._cleanup_preserved_builders.__get__(obj, type(obj))
     return obj
 
 
@@ -117,8 +123,8 @@ class TestCreateIncrementalSnapshots:
         # Should have 3 commit calls: builderA, builderB, test (project image)
         assert container.commit.call_count == 3
         tags = [c.kwargs["tag"] for c in container.commit.call_args_list]
-        assert f"build-builderA-{build_id}" in tags
-        assert f"build-builderB-{build_id}" in tags
+        assert f"build__test-crs__builderA__{build_id}" in tags
+        assert f"build__test-crs__builderB__{build_id}" in tags
         assert f"test-{build_id}" in tags
 
     def test_no_snapshots_when_flag_false(self):
@@ -168,7 +174,7 @@ class TestCreateIncrementalSnapshots:
         # builderA snapshot was committed, so cleanup should remove it
         client.images.remove.assert_called()
         removed_tags = [c.args[0] for c in client.images.remove.call_args_list]
-        assert f"oss-crs-snapshot:build-builderA-{build_id}" in removed_tags
+        assert f"oss-crs-snapshot:build__test-crs__builderA__{build_id}" in removed_tags
 
     def test_test_failure_is_non_fatal(self):
         """All builders succeed, test.sh fails => builder snapshots kept, test snapshot skipped."""

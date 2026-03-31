@@ -16,6 +16,8 @@ from .utils import (
     TmpDockerCompose,
     normalize_run_id,
     generate_run_id,
+    build_snapshot_tag,
+    preserved_builder_image_name,
     rm_with_docker,
     log_success,
     log_warning,
@@ -228,17 +230,7 @@ class CRSCompose:
             exit_code = result["StatusCode"]
             if exit_code == 0:
                 full_tag = f"oss-crs-snapshot:{tag}"
-                # Bake env vars into snapshot so ephemeral rebuilds inherit them
-                changes = []
-                if extra_env:
-                    for k, v in extra_env.items():
-                        changes.append(f"ENV {k}={v}")
-                if command:
-                    changes.append(f"CMD {json.dumps(command)}")
-                container.commit(
-                    repository="oss-crs-snapshot", tag=tag,
-                    changes=changes or None,
-                )
+                container.commit(repository="oss-crs-snapshot", tag=tag)
                 committed_tags.append(full_tag)
                 return True
             return False
@@ -255,8 +247,11 @@ class CRSCompose:
         Implements D-03/D-04/D-05/D-06: Docker SDK snapshots with all-or-nothing cleanup.
         Called from build_target() when incremental_build=True.
 
+        Builder snapshots use preserved builder images (created by __build_target_one)
+        which carry the correct CMD and installed scripts from each builder Dockerfile.
+
         Args:
-            target_base_image: The target's base Docker image to run builders from.
+            target_base_image: The target's base Docker image (used for test snapshot).
             build_id: The build ID for snapshot tagging.
             target: Target object for env vars.
             sanitizer: Resolved sanitizer string.
@@ -264,7 +259,7 @@ class CRSCompose:
         Returns:
             True if all snapshots committed successfully, False otherwise (with cleanup).
         """
-        from .env_policy import OSS_FUZZ_TARGET_ENV
+        from .env_policy import OSS_FUZZ_TARGET_ENV, build_target_builder_env
 
         client = docker.from_env()
         committed_tags: list[str] = []
@@ -276,19 +271,28 @@ class CRSCompose:
         run_tests_script = str(renderer.OSS_CRS_ROOT_PATH / "oss-crs-infra" / "builder-sidecar" / "run_tests.sh")
 
         try:
-            # D-04: Snapshot each builder
+            # D-04: Snapshot each builder using its preserved builder image
             for crs in self.crs_list:
                 if not crs.config.target_build_phase or not crs.config.target_build_phase.builds:
                     continue
                 for build_config in crs.config.target_build_phase.builds:
-                    tag = f"build-{build_config.name}-{build_id}"
-                    # Merge builder-specific additional_env (e.g. SANITIZER=coverage)
-                    builder_env = dict(oss_fuzz_env)
-                    if build_config.additional_env:
-                        builder_env.update(build_config.additional_env)
+                    tag = f"build__{crs.name}__{build_config.name}__{build_id}"
+                    builder_image = preserved_builder_image_name(
+                        crs.name, build_config.name, build_id,
+                    )
+                    # Compute the full env the builder needs (same as compose run)
+                    env_plan = build_target_builder_env(
+                        target_env=target_env,
+                        run_env_type=crs.crs_compose_env.get_env()["type"] if crs.crs_compose_env else "local",
+                        build_id=build_id,
+                        crs_additional_env=crs.resource.additional_env if crs.resource else None,
+                        build_additional_env=build_config.additional_env,
+                        harness=target_env.get("harness"),
+                        scope=f"{crs.name}:snapshot:{build_config.name}",
+                    )
                     if not self._snapshot_one(
-                        client, target_base_image, tag, build_id, committed_tags,
-                        extra_env=builder_env,
+                        client, builder_image, tag, build_id, committed_tags,
+                        extra_env=env_plan.effective_env,
                     ):
                         raise RuntimeError(f"Builder snapshot failed: {build_config.name}")
 
@@ -316,6 +320,25 @@ class CRSCompose:
                     pass
             return False
 
+    def _cleanup_preserved_builders(self, build_id: str) -> None:
+        """Remove preserved builder images created for snapshot generation.
+
+        Called after _create_incremental_snapshots (success or failure) and on
+        build failure to clean up temporary builder image copies.
+        """
+        client = docker.from_env()
+        for crs in self.crs_list:
+            if not crs.config.target_build_phase or not crs.config.target_build_phase.builds:
+                continue
+            for build_config in crs.config.target_build_phase.builds:
+                image_name = preserved_builder_image_name(
+                    crs.name, build_config.name, build_id,
+                )
+                try:
+                    client.images.remove(image_name, force=True)
+                except docker.errors.ImageNotFound:
+                    pass
+
     def _check_snapshots_exist(self, build_id: str) -> "str | None":
         """Check that all required snapshot images exist for incremental run.
 
@@ -334,7 +357,7 @@ class CRSCompose:
             if not crs.config.target_build_phase or not crs.config.target_build_phase.builds:
                 continue
             for build_config in crs.config.target_build_phase.builds:
-                tag = f"oss-crs-snapshot:build-{build_config.name}-{build_id}"
+                tag = build_snapshot_tag(crs.name, build_config.name, build_id)
                 try:
                     client.images.get(tag)
                 except docker.errors.ImageNotFound:
@@ -584,8 +607,16 @@ class CRSCompose:
         ) as progress:
             ret = progress.run_added_tasks()
             if ret.success and incremental_build:
-                if not self._create_incremental_snapshots(target_base_image, build_id, target, sanitizer):
-                    return False
+                try:
+                    if not self._create_incremental_snapshots(target_base_image, build_id, target, sanitizer):
+                        return False
+                finally:
+                    # Incremental: sidecar uses snapshots, so preserved builders can go
+                    self._cleanup_preserved_builders(build_id)
+            elif not ret.success:
+                # Build failed: clean up any preserved builders from successful sub-builds
+                self._cleanup_preserved_builders(build_id)
+            # Non-incremental success: preserved builders persist for sidecar BASE_IMAGE_*
             if ret.success:
                 self._write_build_metadata(
                     target=target,

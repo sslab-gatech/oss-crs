@@ -47,14 +47,16 @@ def test_ephemeral_build_lifecycle(tmp_path):
     base_image = "ubuntu:22.04"
     build_id = "integration-test-001"
     builder_name = "integ-builder"
+    crs_name = "integ-crs"
     rebuild_out_dir = tmp_path / "rebuild_out"
     rebuild_out_dir.mkdir()
 
     # Create a minimal patch (empty is fine for lifecycle test)
     result = run_ephemeral_build(
         base_image=base_image,
-        build_id=build_id,
+        rebuild_id=build_id,
         builder_name=builder_name,
+        crs_name=crs_name,
         patch_bytes=b"",
         rebuild_out_dir=rebuild_out_dir,
         timeout=60,
@@ -64,12 +66,11 @@ def test_ephemeral_build_lifecycle(tmp_path):
     assert "exit_code" in result
     assert "stdout" in result
     assert "stderr" in result
-    assert "build_id" in result
-    assert result["build_id"] == build_id
+    assert "rebuild_id" in result
 
     # Verify container was cleaned up (OPS-03 behavior)
     # No containers with our build label should remain
-    snapshot_tag = f"oss-crs-snapshot:build-{builder_name}-{build_id}"
+    snapshot_tag = f"oss-crs-snapshot:build__{crs_name}__{builder_name}__{build_id}"
 
     # Cleanup: remove snapshot image if created
     try:
@@ -86,20 +87,22 @@ def test_snapshot_creation_and_reuse(tmp_path):
     base_image = "ubuntu:22.04"
     build_id = "integration-snapshot-001"
     builder_name = "integ-builder"
+    crs_name = "integ-crs"
     rebuild_out_dir = tmp_path / "rebuild_out"
     rebuild_out_dir.mkdir()
 
-    snapshot_tag = f"oss-crs-snapshot:build-{builder_name}-{build_id}"
+    snapshot_tag = f"oss-crs-snapshot:build__{crs_name}__{builder_name}__{build_id}"
 
     try:
         # First build: should use base image (no snapshot exists)
-        image_before = get_build_image(client, build_id, base_image, builder_name)
+        image_before = get_build_image(client, base_image, builder_name, crs_name)
         assert image_before == base_image, "First build should use base image"
 
         result1 = run_ephemeral_build(
             base_image=base_image,
-            build_id=build_id,
+            rebuild_id=build_id,
             builder_name=builder_name,
+            crs_name=crs_name,
             patch_bytes=b"",
             rebuild_out_dir=rebuild_out_dir,
             timeout=60,
@@ -107,14 +110,15 @@ def test_snapshot_creation_and_reuse(tmp_path):
 
         # If build succeeded, snapshot should exist
         if result1["exit_code"] == 0:
-            image_after = get_build_image(client, build_id, base_image, builder_name)
+            image_after = get_build_image(client, base_image, builder_name, crs_name)
             assert image_after == snapshot_tag, f"Second lookup should return snapshot, got {image_after}"
 
             # Second build should start from snapshot
             result2 = run_ephemeral_build(
                 base_image=image_after,
-                build_id=build_id,
+                rebuild_id=build_id,
                 builder_name=builder_name,
+                crs_name=crs_name,
                 patch_bytes=b"",
                 rebuild_out_dir=rebuild_out_dir,
                 timeout=60,
@@ -128,22 +132,23 @@ def test_snapshot_creation_and_reuse(tmp_path):
             pass
 
 
-def test_snapshot_tag_includes_builder_name(tmp_path):
-    """TST-03: Snapshot tag format includes builder_name segment."""
+def test_snapshot_tag_includes_crs_and_builder_name(tmp_path):
+    """TST-03: Snapshot tag format includes crs_name and builder_name segments."""
     from docker_ops import get_build_image
 
     client = docker_lib.from_env()
     builder_name = "my-custom-builder"
+    crs_name = "my-crs"
     build_id = "tag-format-test"
     base_image = "ubuntu:22.04"
 
     # Without a snapshot, get_build_image returns base
-    result = get_build_image(client, build_id, base_image, builder_name)
+    result = get_build_image(client, base_image, builder_name, crs_name)
     assert result == base_image
 
     # The expected tag format when a snapshot exists would be:
-    expected_tag = f"oss-crs-snapshot:build-{builder_name}-{build_id}"
-    assert expected_tag == "oss-crs-snapshot:build-my-custom-builder-tag-format-test"
+    expected_tag = f"oss-crs-snapshot:build__{crs_name}__{builder_name}__{build_id}"
+    assert expected_tag == "oss-crs-snapshot:build__my-crs__my-custom-builder__tag-format-test"
 
 
 def test_container_cleanup_on_failure(tmp_path):

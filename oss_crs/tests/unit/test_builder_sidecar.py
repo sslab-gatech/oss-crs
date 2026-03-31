@@ -44,6 +44,7 @@ from docker_ops import get_build_image, get_test_image, next_rebuild_id, rebuild
 # ---------------------------------------------------------------------------
 
 TEST_BUILDER_NAME = "test-builder"
+TEST_CRS_NAME = "test-crs"
 
 
 # ---------------------------------------------------------------------------
@@ -104,21 +105,21 @@ class TestGetBuildImage:
     def test_returns_snapshot_when_exists(self):
         client = MagicMock()
         client.images.get.return_value = MagicMock()
-        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME)
-        assert result == f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-bid123"
-        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-bid123")
+        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
+        assert result == f"oss-crs-snapshot:build__{TEST_CRS_NAME}__{TEST_BUILDER_NAME}__bid123"
+        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build__{TEST_CRS_NAME}__{TEST_BUILDER_NAME}__bid123")
 
     @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "bid123"})
     def test_returns_base_when_not_found(self):
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("not found")
-        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME)
+        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
         assert result == "base:latest"
 
     def test_returns_base_when_incremental_not_set(self):
         client = MagicMock()
         client.images.get.return_value = MagicMock()
-        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME)
+        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
         assert result == "base:latest"
         client.images.get.assert_not_called()
 
@@ -182,7 +183,7 @@ class TestRunEphemeralBuild:
             run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
         container.commit.assert_called_once_with(
             repository="oss-crs-snapshot",
-            tag=f"build-{TEST_BUILDER_NAME}-1",
+            tag=f"build__test-crs__{TEST_BUILDER_NAME}__1",
         )
 
     def test_existing_snapshot_skips_commit(self, tmp_path):
@@ -308,7 +309,7 @@ class TestBuildEndpoint:
         assert resp1.json()["id"] == resp2.json()["id"]
 
     def test_build_id_uses_sha256(self):
-        """Build ID is a 12-char hex prefix of SHA256(project:sanitizer:patch)."""
+        """Build ID is a 12-char hex prefix of SHA256(project:sanitizer:builder_name:patch)."""
         import os
         import server
 
@@ -316,7 +317,7 @@ class TestBuildEndpoint:
         project = os.environ.get("PROJECT_NAME", "unknown")
         sanitizer = os.environ.get("SANITIZER", "unknown")
         hasher = hashlib.sha256()
-        hasher.update(f"{project}:{sanitizer}:".encode())
+        hasher.update(f"{project}:{sanitizer}:{TEST_BUILDER_NAME}:".encode())
         hasher.update(patch_content)
         expected_id = hasher.hexdigest()[:12]
 
@@ -452,12 +453,12 @@ class TestSnapshotTagNaming:
     """Tests verifying build-tag and test-tag separation (TEST-04)."""
 
     @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "myid"})
-    def test_build_snapshot_uses_build_prefix(self):
-        """get_build_image looks up oss-crs-snapshot:build-{builder_name}-{build_id}."""
+    def test_build_snapshot_uses_crs_prefix(self):
+        """get_build_image looks up oss-crs-snapshot:{crs_name}-{builder_name}-{build_id}."""
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("nope")
-        get_build_image(client, "base:latest", TEST_BUILDER_NAME)
-        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-myid")
+        get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
+        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build__{TEST_CRS_NAME}__{TEST_BUILDER_NAME}__myid")
 
     @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "myid"})
     def test_test_snapshot_uses_test_prefix(self):
@@ -469,7 +470,7 @@ class TestSnapshotTagNaming:
 
     def test_build_and_test_tags_are_distinct(self):
         """Build and test snapshot tags for same build_id must differ."""
-        build_tag = f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-myid"
+        build_tag = f"oss-crs-snapshot:build__{TEST_CRS_NAME}__{TEST_BUILDER_NAME}__myid"
         test_tag = "oss-crs-snapshot:test-myid"
         assert build_tag != test_tag
 
