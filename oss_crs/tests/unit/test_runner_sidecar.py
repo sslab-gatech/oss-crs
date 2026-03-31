@@ -80,6 +80,7 @@ class TestRunPOVEndpoint:
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         assert response.status_code == 200
@@ -96,6 +97,7 @@ class TestRunPOVEndpoint:
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         body = response.json()
@@ -111,6 +113,7 @@ class TestRunPOVEndpoint:
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         body = response.json()
@@ -126,6 +129,7 @@ class TestRunPOVEndpoint:
         response = client.post("/run-pov", data={
             "harness_name": "nonexistent_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         assert response.status_code == 404
@@ -140,6 +144,7 @@ class TestRunPOVEndpoint:
         response = client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         assert response.status_code == 404
@@ -162,6 +167,7 @@ class TestRunPOV:
         client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         mock_run.assert_called_once()
@@ -179,10 +185,11 @@ class TestRunPOV:
             client.post("/run-pov", data={
                 "harness_name": "my_fuzzer",
                 "rebuild_id": "1",
+            "crs_name": "test-crs",
                 "pov_path": "/povs/crash.bin",
             })
         call_kwargs = mock_run.call_args[1]
-        assert call_kwargs["env"]["OUT"] == "/custom/out"
+        assert call_kwargs["env"]["OUT"] == "/custom/out/test-crs/1"
 
     @patch("runner_server.subprocess.run")
     @patch("runner_server.os.path.exists", return_value=True)
@@ -193,6 +200,7 @@ class TestRunPOV:
         client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         call_kwargs = mock_run.call_args[1]
@@ -207,6 +215,7 @@ class TestRunPOV:
         client.post("/run-pov", data={
             "harness_name": "my_fuzzer",
             "rebuild_id": "1",
+            "crs_name": "test-crs",
             "pov_path": "/povs/crash.bin",
         })
         call_kwargs = mock_run.call_args[1]

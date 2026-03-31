@@ -8,9 +8,11 @@ Provides public functions:
     run_ephemeral_test  - Test container lifecycle: create/start/wait/commit/remove (no artifacts)
 """
 
+import io
 import os
 import re
 import shutil
+import tarfile
 import tempfile
 from pathlib import Path
 
@@ -154,7 +156,7 @@ def run_ephemeral_build(
 
     build_cmd = get_image_cmd(client, base_image)
 
-    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as tmp_out_dir:
+    with tempfile.TemporaryDirectory() as tmpdir:
         patch_path = Path(tmpdir) / "patch.diff"
         patch_path.write_bytes(patch_bytes)
 
@@ -165,7 +167,6 @@ def run_ephemeral_build(
                 command=["bash", "/usr/local/bin/oss_crs_handler.sh", "/patch/patch.diff", "/out"],
                 volumes={
                     tmpdir: {"bind": "/patch", "mode": "ro"},
-                    tmp_out_dir: {"bind": "/out", "mode": "rw"},
                     handler_path: {"bind": "/usr/local/bin/oss_crs_handler.sh", "mode": "ro"},
                 },
                 environment={
@@ -203,7 +204,12 @@ def run_ephemeral_build(
                 if output_dir.exists():
                     shutil.rmtree(output_dir)
                 output_dir.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(tmp_out_dir, str(output_dir), dirs_exist_ok=True)
+                # Use docker cp to get /out from the container filesystem
+                # (not a bind mount — preserves snapshot state + new files)
+                bits, _ = container.get_archive("/out/.")
+                tar_buf = io.BytesIO(b"".join(bits))
+                with tarfile.open(fileobj=tar_buf) as tar:
+                    tar.extractall(path=str(output_dir))
 
             if exit_code == 0 and not snapshot_exists:
                 container.commit(repository="oss-crs-snapshot", tag=f"build-{builder_name}-{rebuild_id}")

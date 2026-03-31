@@ -488,10 +488,12 @@ class LocalCRSUtils(CRSUtils):
             (response_dir / "stderr.log").write_text("Runner unavailable")
             return 1
 
+        crs_name = os.environ.get("OSS_CRS_NAME", "unknown")
         runner_url = self._get_service_url(builder)
         data = {
             "harness_name": harness_name,
             "rebuild_id": str(rebuild_id),
+            "crs_name": crs_name,
             "pov_path": str(pov_path),
         }
         try:

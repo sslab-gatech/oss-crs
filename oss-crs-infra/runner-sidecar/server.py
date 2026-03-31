@@ -41,6 +41,7 @@ def health():
 def run_pov(
     harness_name: str = Form(...),
     rebuild_id: int = Form(...),
+    crs_name: str = Form(...),
     pov_path: str = Form(...),
 ):
     """Execute POV reproduction via OSS-Fuzz reproduce script.
@@ -56,8 +57,8 @@ def run_pov(
     out_dir = os.environ.get("OUT_DIR", "/out")
     pov_timeout = int(os.environ.get("POV_TIMEOUT", "30"))
 
-    # Validate harness binary exists
-    harness_path = os.path.join(out_dir, harness_name)
+    # Resolve harness path: /out/{crs_name}/{rebuild_id}/{harness_name}
+    harness_path = os.path.join(out_dir, crs_name, str(rebuild_id), harness_name)
     if not os.path.exists(harness_path):
         return JSONResponse(
             status_code=404,
@@ -71,8 +72,9 @@ def run_pov(
             content={"error": f"POV binary not found: {pov_path}"},
         )
 
+    rebuild_out = os.path.join(out_dir, crs_name, str(rebuild_id))
     env = os.environ.copy()
-    env["OUT"] = out_dir
+    env["OUT"] = rebuild_out
     env["TESTCASE"] = pov_path
     env.setdefault("FUZZER_ARGS", "-rss_limit_mb=2560 -timeout=25")
 
@@ -83,7 +85,7 @@ def run_pov(
             text=True,
             timeout=pov_timeout,
             env=env,
-            cwd=out_dir,
+            cwd=rebuild_out,
         )
         return POVResult(exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr)
     except subprocess.TimeoutExpired:
