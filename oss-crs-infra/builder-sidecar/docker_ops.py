@@ -36,6 +36,24 @@ def get_image_cmd(client: "docker.DockerClient", image: str) -> list[str]:
     return ["compile"]
 
 
+def get_image_env(client: "docker.DockerClient", image: str) -> dict[str, str]:
+    """Extract environment variables from a Docker image.
+
+    Returns dict of KEY=VALUE pairs from the image's Env config.
+    """
+    try:
+        img = client.images.get(image)
+        env_list = img.attrs.get("Config", {}).get("Env") or []
+        result = {}
+        for entry in env_list:
+            if "=" in entry:
+                k, v = entry.split("=", 1)
+                result[k] = v
+        return result
+    except docker.errors.ImageNotFound:
+        return {}
+
+
 def _resource_kwargs(cpuset: "str | None", mem_limit: "str | None") -> dict:
     """Build Docker SDK resource limit kwargs from CRS resource config."""
     kwargs = {}
@@ -170,6 +188,9 @@ def run_ephemeral_build(
         snapshot_exists = False
 
     build_cmd = get_image_cmd(client, base_image)
+    # Image env takes precedence over sidecar env (e.g. snapshot with SANITIZER=coverage)
+    image_env = get_image_env(client, base_image)
+    env_merged = {**_oss_fuzz_env(), **{k: image_env[k] for k in _OSS_FUZZ_ENV_KEYS if k in image_env}}
 
     with tempfile.TemporaryDirectory() as tmpdir:
         patch_path = Path(tmpdir) / "patch.diff"
@@ -189,7 +210,7 @@ def run_ephemeral_build(
                     "OSS_CRS_REBUILD_ID": str(rebuild_id),
                     "OSS_CRS_BUILD_CMD": " ".join(build_cmd),
                     "REPLAY_ENABLED": "",
-                    **_oss_fuzz_env(),
+                    **env_merged,
                 },
                 detach=True,
                 **_resource_kwargs(cpuset, mem_limit),

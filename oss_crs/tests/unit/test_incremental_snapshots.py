@@ -21,10 +21,11 @@ import docker.errors
 # Helpers: build minimal CRSCompose-like object for testing private methods
 # ---------------------------------------------------------------------------
 
-def _make_build_config(name: str):
+def _make_build_config(name: str, additional_env=None):
     """Return a minimal BuildConfig-like object."""
     cfg = SimpleNamespace()
     cfg.name = name
+    cfg.additional_env = additional_env
     return cfg
 
 

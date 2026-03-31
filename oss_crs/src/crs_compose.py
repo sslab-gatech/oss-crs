@@ -228,7 +228,17 @@ class CRSCompose:
             exit_code = result["StatusCode"]
             if exit_code == 0:
                 full_tag = f"oss-crs-snapshot:{tag}"
-                container.commit(repository="oss-crs-snapshot", tag=tag)
+                # Bake env vars into snapshot so ephemeral rebuilds inherit them
+                changes = []
+                if extra_env:
+                    for k, v in extra_env.items():
+                        changes.append(f"ENV {k}={v}")
+                if command:
+                    changes.append(f"CMD {json.dumps(command)}")
+                container.commit(
+                    repository="oss-crs-snapshot", tag=tag,
+                    changes=changes or None,
+                )
                 committed_tags.append(full_tag)
                 return True
             return False
@@ -272,9 +282,13 @@ class CRSCompose:
                     continue
                 for build_config in crs.config.target_build_phase.builds:
                     tag = f"build-{build_config.name}-{build_id}"
+                    # Merge builder-specific additional_env (e.g. SANITIZER=coverage)
+                    builder_env = dict(oss_fuzz_env)
+                    if build_config.additional_env:
+                        builder_env.update(build_config.additional_env)
                     if not self._snapshot_one(
                         client, target_base_image, tag, build_id, committed_tags,
-                        extra_env=oss_fuzz_env,
+                        extra_env=builder_env,
                     ):
                         raise RuntimeError(f"Builder snapshot failed: {build_config.name}")
 
