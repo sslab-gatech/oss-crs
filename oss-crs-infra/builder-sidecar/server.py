@@ -256,7 +256,7 @@ def _handle_build(_job_id: str, patch_content: bytes, crs_name: str, builder_nam
     rebuild_out_dir = Path(os.environ["REBUILD_OUT_DIR"])
     timeout = int(os.environ.get("BUILD_TIMEOUT", "1800"))
 
-    image = get_build_image(docker.from_env(), rebuild_id, base_image, builder_name)
+    image = get_build_image(docker.from_env(), base_image, builder_name)
     return run_ephemeral_build(
         base_image=image,
         rebuild_id=rebuild_id,
@@ -275,7 +275,7 @@ def _handle_test(_job_id: str, patch_content: bytes, rebuild_id: int, cpuset: st
     if not base_image:
         raise ValueError("PROJECT_BASE_IMAGE env var not set on sidecar service.")
     timeout = int(os.environ.get("BUILD_TIMEOUT", "1800"))
-    image = get_test_image(docker.from_env(), rebuild_id, base_image)
+    image = get_test_image(docker.from_env(), base_image)
     return run_ephemeral_test(
         base_image=image,
         rebuild_id=rebuild_id,

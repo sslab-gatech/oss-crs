@@ -74,11 +74,23 @@ def _stream_and_capture_logs(container, prefix: str) -> tuple[str, str]:
     return stdout, stderr
 
 
-def get_build_image(client: "docker.DockerClient", rebuild_id: int, base_image: str, builder_name: str) -> str:
-    """Return snapshot image if incremental build enabled and snapshot exists, otherwise base_image."""
+def _get_build_id() -> str:
+    """Get the CLI build_id from the sidecar's environment (set by compose template)."""
+    return os.environ.get("OSS_CRS_BUILD_ID", "")
+
+
+def get_build_image(client: "docker.DockerClient", base_image: str, builder_name: str) -> str:
+    """Return snapshot image if incremental build enabled and snapshot exists, otherwise base_image.
+
+    Snapshot tag uses the CLI build_id (from build-target --incremental-build),
+    not the rebuild_id (which versions rebuild artifacts).
+    """
     if not _incremental_build_enabled():
         return base_image
-    snapshot_tag = f"oss-crs-snapshot:build-{builder_name}-{rebuild_id}"
+    build_id = _get_build_id()
+    if not build_id:
+        return base_image
+    snapshot_tag = f"oss-crs-snapshot:build-{builder_name}-{build_id}"
     try:
         client.images.get(snapshot_tag)
         return snapshot_tag
@@ -86,11 +98,14 @@ def get_build_image(client: "docker.DockerClient", rebuild_id: int, base_image: 
         return base_image
 
 
-def get_test_image(client: "docker.DockerClient", rebuild_id: int, base_image: str) -> str:
+def get_test_image(client: "docker.DockerClient", base_image: str) -> str:
     """Return test snapshot if incremental build enabled and snapshot exists, otherwise base_image."""
     if not _incremental_build_enabled():
         return base_image
-    snapshot_tag = f"oss-crs-snapshot:test-{rebuild_id}"
+    build_id = _get_build_id()
+    if not build_id:
+        return base_image
+    snapshot_tag = f"oss-crs-snapshot:test-{build_id}"
     try:
         client.images.get(snapshot_tag)
         return snapshot_tag
