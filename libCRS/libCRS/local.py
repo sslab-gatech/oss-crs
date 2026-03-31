@@ -441,7 +441,7 @@ class LocalCRSUtils(CRSUtils):
             files = {"patch": patch_file}
             data = {
                 "crs_name": crs_name,
-                "builder_name": builder_name or builder,
+                "builder_name": builder_name or "",
                 "cpuset": cpuset,
                 "mem_limit": mem_limit,
             }
