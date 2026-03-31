@@ -207,6 +207,7 @@ services:
       - HANDLER_SCRIPT_PATH={{ oss_crs_infra_root_path }}/builder-sidecar/oss_crs_handler.sh
       - RUN_TESTS_SCRIPT_PATH={{ oss_crs_infra_root_path }}/builder-sidecar/run_tests.sh
       - INCREMENTAL_BUILD={{ "true" if incremental_build else "false" }}
+      - OSS_CRS_BUILD_ID={{ build_id }}
       - FUZZING_ENGINE={{ target_env.engine }}
       - SANITIZER={{ sanitizer }}
       - ARCHITECTURE={{ target_env.architecture }}

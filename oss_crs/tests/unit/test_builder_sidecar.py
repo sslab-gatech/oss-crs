@@ -100,26 +100,25 @@ class TestNextRebuildId:
 class TestGetBuildImage:
     """Tests for docker_ops.get_build_image() snapshot lookup."""
 
-    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true"})
+    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "bid123"})
     def test_returns_snapshot_when_exists(self):
         client = MagicMock()
-        # images.get returns successfully (no exception) => snapshot exists
         client.images.get.return_value = MagicMock()
-        result = get_build_image(client, "abc123", "base:latest", TEST_BUILDER_NAME)
-        assert result == f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-abc123"
-        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-abc123")
+        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME)
+        assert result == f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-bid123"
+        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-bid123")
 
-    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true"})
+    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "bid123"})
     def test_returns_base_when_not_found(self):
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("not found")
-        result = get_build_image(client, "abc123", "base:latest", TEST_BUILDER_NAME)
+        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME)
         assert result == "base:latest"
 
     def test_returns_base_when_incremental_not_set(self):
         client = MagicMock()
         client.images.get.return_value = MagicMock()
-        result = get_build_image(client, "abc123", "base:latest", TEST_BUILDER_NAME)
+        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME)
         assert result == "base:latest"
         client.images.get.assert_not_called()
 
@@ -422,24 +421,25 @@ class TestGetTestImage:
     """Tests for docker_ops.get_test_image() test snapshot lookup (TEST-03)."""
 
     @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true"})
+    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "bid123"})
     def test_returns_test_snapshot_when_exists(self):
         """get_test_image returns test-{build_id} snapshot (no builder_name, per D-05)."""
         client = MagicMock()
         client.images.get.return_value = MagicMock()
-        result = get_test_image(client, "abc123", "base:latest")
-        assert result == "oss-crs-snapshot:test-abc123"
-        client.images.get.assert_called_once_with("oss-crs-snapshot:test-abc123")
+        result = get_test_image(client, "base:latest")
+        assert result == "oss-crs-snapshot:test-bid123"
+        client.images.get.assert_called_once_with("oss-crs-snapshot:test-bid123")
 
-    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true"})
+    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "bid123"})
     def test_returns_base_when_not_found(self):
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("not found")
-        result = get_test_image(client, "abc123", "base:latest")
+        result = get_test_image(client, "base:latest")
         assert result == "base:latest"
 
     def test_returns_base_when_incremental_not_set(self):
         client = MagicMock()
-        result = get_test_image(client, "abc123", "base:latest")
+        result = get_test_image(client, "base:latest")
         assert result == "base:latest"
         client.images.get.assert_not_called()
 
@@ -451,20 +451,20 @@ class TestGetTestImage:
 class TestSnapshotTagNaming:
     """Tests verifying build-tag and test-tag separation (TEST-04)."""
 
-    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true"})
+    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "myid"})
     def test_build_snapshot_uses_build_prefix(self):
-        """get_build_image looks up oss-crs-snapshot:build-{builder_name}-{id}."""
+        """get_build_image looks up oss-crs-snapshot:build-{builder_name}-{build_id}."""
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("nope")
-        get_build_image(client, "myid", "base:latest", TEST_BUILDER_NAME)
+        get_build_image(client, "base:latest", TEST_BUILDER_NAME)
         client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_BUILDER_NAME}-myid")
 
-    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true"})
+    @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "myid"})
     def test_test_snapshot_uses_test_prefix(self):
         """get_test_image looks up oss-crs-snapshot:test-{build_id} (no builder_name, per D-05)."""
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("nope")
-        get_test_image(client, "myid", "base:latest")
+        get_test_image(client, "base:latest")
         client.images.get.assert_called_once_with("oss-crs-snapshot:test-myid")
 
     def test_build_and_test_tags_are_distinct(self):
