@@ -11,7 +11,6 @@ Provides public functions:
 import os
 import re
 import shutil
-import tempfile
 from pathlib import Path
 
 import docker
@@ -143,22 +142,29 @@ def next_rebuild_id(rebuild_out_dir: Path, crs_name: str) -> int:
     return max(existing, default=0) + 1
 
 
-def run_ephemeral_build(
+def _run_ephemeral(
     base_image: str,
     rebuild_id: int,
-    builder_name: str,
     crs_name: str,
     patch_bytes: bytes,
     rebuild_out_dir: Path,
+    build_cmd: str,
+    snapshot_tag: str,
+    log_prefix: str,
+    extra_volumes: dict[str, dict] | None = None,
+    clean_output: bool = False,
     timeout: int = 1800,
     cpuset: "str | None" = None,
     mem_limit: "str | None" = None,
 ) -> dict:
-    """Run a build inside an ephemeral Docker container.
+    """Run patch-apply + command inside an ephemeral Docker container.
 
-    Full lifecycle: create -> start -> wait -> (commit on success) -> remove.
-    Output dir: rebuild_out_dir/{crs_name}/{rebuild_id}/
-    Same rebuild_id overwrites previous artifacts.
+    Shared lifecycle for both build and test:
+      create -> start -> wait -> (commit on success) -> remove.
+
+    The patch file is written to the shared rebuild_out_dir volume
+    (host-visible) since the sidecar's tmpdir is not accessible to the
+    Docker daemon in Docker-in-Docker via socket mount.
 
     Returns:
         Dict with keys: exit_code, stdout, stderr, rebuild_id.
@@ -174,40 +180,37 @@ def run_ephemeral_build(
     host_rebuild_out_dir = Path(os.environ.get("HOST_REBUILD_OUT_DIR", str(rebuild_out_dir)))
     host_output_dir = host_rebuild_out_dir / crs_name / str(rebuild_id)
 
-    snapshot_tag = _build_snapshot_tag(crs_name, builder_name, str(rebuild_id))
     try:
         client.images.get(snapshot_tag)
         snapshot_exists = True
     except docker.errors.ImageNotFound:
         snapshot_exists = False
 
-    build_cmd = get_image_cmd(client, base_image)
-
-    # Prepare output dir — mounted into the container so
-    # submit-build-output writes directly (same mechanism as build-target).
-    if output_dir.exists():
+    # Prepare output dir on host.
+    if clean_output and output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write patch to the output dir (host-visible) so the ephemeral container
-    # can access it. tmpdir inside the sidecar container is not visible to the
-    # Docker daemon (Docker-in-Docker via socket mount).
-    patch_local_path = output_dir / "patch.diff"
-    patch_local_path.write_bytes(patch_bytes)
+    # Write patch to shared volume.
+    (output_dir / "patch.diff").write_bytes(patch_bytes)
 
     handler_path = os.environ.get("HANDLER_SCRIPT_PATH", "/oss_crs_handler.sh")
+    volumes = {
+        handler_path: {"bind": "/usr/local/bin/oss_crs_handler.sh", "mode": "ro"},
+        str(host_output_dir): {"bind": "/OSS_CRS_BUILD_OUT_DIR", "mode": "rw"},
+    }
+    if extra_volumes:
+        volumes.update(extra_volumes)
+
     try:
         container = client.containers.create(
             base_image,
             command=["bash", "/usr/local/bin/oss_crs_handler.sh", "/OSS_CRS_BUILD_OUT_DIR/patch.diff", "/out"],
-            volumes={
-                handler_path: {"bind": "/usr/local/bin/oss_crs_handler.sh", "mode": "ro"},
-                str(host_output_dir): {"bind": "/OSS_CRS_BUILD_OUT_DIR", "mode": "rw"},
-            },
+            volumes=volumes,
             environment={
                 "OSS_CRS_BUILD_ID": str(rebuild_id),
                 "OSS_CRS_REBUILD_ID": str(rebuild_id),
-                "OSS_CRS_BUILD_CMD": " ".join(build_cmd),
+                "OSS_CRS_BUILD_CMD": build_cmd,
                 "OSS_CRS_BUILD_OUT_DIR": "/OSS_CRS_BUILD_OUT_DIR",
                 "OSS_CRS_NAME": crs_name,
                 "OSS_CRS_RUN_ENV_TYPE": "local",
@@ -230,16 +233,16 @@ def run_ephemeral_build(
             return {
                 "exit_code": 1,
                 "stdout": "",
-                "stderr": f"Build timed out after {timeout} seconds",
+                "stderr": f"Timed out after {timeout} seconds",
                 "rebuild_id": rebuild_id,
             }
 
         exit_code = result["StatusCode"]
-
-        stdout, stderr = _stream_and_capture_logs(container, f"build:{builder_name}")
+        stdout, stderr = _stream_and_capture_logs(container, log_prefix)
 
         if exit_code == 0 and not snapshot_exists:
-            container.commit(repository="oss-crs-snapshot", tag=f"build-{crs_name}-{builder_name}-{rebuild_id}")
+            repo, tag = snapshot_tag.split(":", 1)
+            container.commit(repository=repo, tag=tag)
 
         return {
             "exit_code": exit_code,
@@ -256,94 +259,62 @@ def run_ephemeral_build(
                 pass
 
 
+def run_ephemeral_build(
+    base_image: str,
+    rebuild_id: int,
+    builder_name: str,
+    crs_name: str,
+    patch_bytes: bytes,
+    rebuild_out_dir: Path,
+    timeout: int = 1800,
+    cpuset: "str | None" = None,
+    mem_limit: "str | None" = None,
+) -> dict:
+    """Run a patch + build inside an ephemeral Docker container."""
+    client = docker.from_env()
+    build_cmd = " ".join(get_image_cmd(client, base_image))
+    snapshot_tag = _build_snapshot_tag(crs_name, builder_name, str(rebuild_id))
+
+    return _run_ephemeral(
+        base_image=base_image,
+        rebuild_id=rebuild_id,
+        crs_name=crs_name,
+        patch_bytes=patch_bytes,
+        rebuild_out_dir=rebuild_out_dir,
+        build_cmd=build_cmd,
+        snapshot_tag=snapshot_tag,
+        log_prefix=f"build:{builder_name}",
+        clean_output=True,
+        timeout=timeout,
+        cpuset=cpuset,
+        mem_limit=mem_limit,
+    )
+
+
 def run_ephemeral_test(
     base_image: str,
     rebuild_id: int,
     crs_name: str,
     patch_bytes: bytes,
+    rebuild_out_dir: Path,
     timeout: int = 1800,
     cpuset: "str | None" = None,
     mem_limit: "str | None" = None,
 ) -> dict:
-    """Run a test inside an ephemeral Docker container.
+    """Run a patch + test inside an ephemeral Docker container."""
+    run_tests_path = os.environ.get("RUN_TESTS_SCRIPT_PATH", "/run_tests.sh")
 
-    Full lifecycle: create -> start -> wait -> (commit on first success) -> remove.
-    No artifacts produced — only exit code and logs.
-
-    Returns:
-        Dict with keys: exit_code, stdout, stderr, rebuild_id.
-    """
-    client = docker.from_env()
-    container = None
-
-    snapshot_tag = f"oss-crs-snapshot:test-{rebuild_id}"
-    try:
-        client.images.get(snapshot_tag)
-        snapshot_exists = True
-    except docker.errors.ImageNotFound:
-        snapshot_exists = False
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        patch_path = Path(tmpdir) / "patch.diff"
-        patch_path.write_bytes(patch_bytes)
-
-        handler_path = os.environ.get("HANDLER_SCRIPT_PATH", "/oss_crs_handler.sh")
-        run_tests_path = os.environ.get("RUN_TESTS_SCRIPT_PATH", "/run_tests.sh")
-        try:
-            container = client.containers.create(
-                base_image,
-                command=["bash", "/usr/local/bin/oss_crs_handler.sh", "/patch/patch.diff", "/out"],
-                volumes={
-                    tmpdir: {"bind": "/patch", "mode": "ro"},
-                    handler_path: {"bind": "/usr/local/bin/oss_crs_handler.sh", "mode": "ro"},
-                    run_tests_path: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"},
-                },
-                environment={
-                    "OSS_CRS_BUILD_ID": str(rebuild_id),
-                    "OSS_CRS_REBUILD_ID": str(rebuild_id),
-                    "OSS_CRS_BUILD_CMD": "bash /usr/local/bin/run_tests.sh",
-                    "OSS_CRS_NAME": crs_name,
-                    "OSS_CRS_RUN_ENV_TYPE": "local",
-                    "REPLAY_ENABLED": "",
-                    **_oss_fuzz_env(),
-                },
-                detach=True,
-                **_resource_kwargs(cpuset, mem_limit),
-            )
-
-            container.start()
-
-            try:
-                result = container.wait(timeout=timeout)
-            except requests.exceptions.ReadTimeout:
-                try:
-                    container.kill()
-                except Exception:
-                    pass
-                return {
-                    "exit_code": 1,
-                    "stdout": "",
-                    "stderr": f"Test timed out after {timeout} seconds",
-                    "rebuild_id": rebuild_id,
-                }
-
-            exit_code = result["StatusCode"]
-
-            stdout, stderr = _stream_and_capture_logs(container, f"test:{rebuild_id}")
-
-            if exit_code == 0 and not snapshot_exists:
-                container.commit(repository="oss-crs-snapshot", tag=f"test-{rebuild_id}")
-
-            return {
-                "exit_code": exit_code,
-                "stdout": stdout,
-                "stderr": stderr,
-                "rebuild_id": rebuild_id,
-            }
-
-        finally:
-            if container is not None:
-                try:
-                    container.remove(force=True)
-                except docker.errors.NotFound:
-                    pass
+    return _run_ephemeral(
+        base_image=base_image,
+        rebuild_id=rebuild_id,
+        crs_name=crs_name,
+        patch_bytes=patch_bytes,
+        rebuild_out_dir=rebuild_out_dir,
+        build_cmd="bash /usr/local/bin/run_tests.sh",
+        snapshot_tag=f"oss-crs-snapshot:test-{rebuild_id}",
+        log_prefix=f"test:{rebuild_id}",
+        extra_volumes={run_tests_path: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"}},
+        timeout=timeout,
+        cpuset=cpuset,
+        mem_limit=mem_limit,
+    )
