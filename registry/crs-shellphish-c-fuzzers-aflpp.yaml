@@ -1,6 +1,6 @@
-name: crs-shellphish-c-fuzzers
+name: crs-shellphish-c-fuzzers-aflpp
 type:
   - bug-finding
 source:
   url: https://github.com/Team-Atlanta/shellphish-oss-crs.git
-  ref: crs-shellphish-c-fuzzers
+  ref: crs-shellphish-c-fuzzers-aflpp
