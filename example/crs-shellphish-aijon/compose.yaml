@@ -20,8 +20,8 @@ llm_config:
     mode: external
     model_check: false
     external:
-      url: "${AIXCC_LITELLM_HOSTNAME}"
-      key: "${LITELLM_KEY}"
+      url_env: AIXCC_LITELLM_HOSTNAME
+      key_env: LITELLM_KEY
 
 # --- CRS (Shellphish AIJON) ------------------------------------------------
 # Pipeline: AFL++ fuzzer + coverage tracer (→ AG) + AIJON instrumentation
