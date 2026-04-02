@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Patch verification test:
-  1. Download build-target artifacts + run POV directly → crash expected
-  2. Fetch diff and rebuild with patch → get rebuild_id
-  3. Run POV on patched build → no crash expected
+  1. Run all POVs on original build → all should crash
+  2. Fetch diff and rebuild with patch
+  3. Run all POVs on patched build → none should crash
   4. Run functionality tests → pass expected
 
+Timing logs are written to OSS_CRS_LOG_DIR/verify_patch_timing.json.
 The diff is provided via `oss-crs run --diff <patch>` and arrives in
 OSS_CRS_FETCH_DIR/diffs/ — no hardcoded COPY needed.
 """
 
 import hashlib
+import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from libCRS.base import DataType
@@ -31,18 +34,55 @@ def fail(msg: str):
     sys.exit(1)
 
 
+def timed(label: str):
+    """Context manager that records wall-clock seconds."""
+    class Timer:
+        def __init__(self):
+            self.elapsed = 0.0
+        def __enter__(self):
+            self._start = time.monotonic()
+            return self
+        def __exit__(self, *_):
+            self.elapsed = time.monotonic() - self._start
+            log(f"  [{label}] {self.elapsed:.1f}s")
+    return Timer()
+
+
+def run_pov_direct(harness_bin: Path, pov_file: Path, build_dir: Path) -> int:
+    """Run a POV directly against a harness binary. Returns exit code."""
+    result = subprocess.run(
+        [str(harness_bin), str(pov_file)],
+        capture_output=True,
+        timeout=30,
+        env={**os.environ, "OUT": str(build_dir)},
+        cwd=str(build_dir),
+    )
+    return result.returncode
+
+
 def main() -> int:
     crs = LocalCRSUtils()
+    timings = {}
 
     harness = os.environ.get("OSS_CRS_TARGET_HARNESS", "")
     fetch_dir = os.environ.get("OSS_CRS_FETCH_DIR", "")
+    log_dir = os.environ.get("OSS_CRS_LOG_DIR", "")
     if not harness:
         fail("OSS_CRS_TARGET_HARNESS not set")
     if not fetch_dir:
         fail("OSS_CRS_FETCH_DIR not set")
 
-    # --- Step 1: Download build-target artifacts + run POV (expect crash) ---
-    log("Step 1: Downloading build artifacts and running POV...")
+    # --- Discover all POVs ---
+    pov_dir = Path(fetch_dir) / "povs"
+    if not pov_dir.is_dir():
+        fail(f"POV directory {pov_dir} does not exist")
+    pov_files = sorted(f for f in pov_dir.iterdir() if f.is_file())
+    if not pov_files:
+        fail(f"No POV files in {pov_dir}")
+    log(f"Found {len(pov_files)} POV(s): {[f.name for f in pov_files]}")
+
+    # --- Step 1: Download build-target artifacts + run all POVs (expect crash) ---
+    log("Step 1: Downloading build artifacts and running POVs on original build...")
     build_dir = Path("/tmp/build-artifacts")
     crs.download_build_output("build", build_dir)
 
@@ -51,24 +91,12 @@ def main() -> int:
         fail(f"Harness {harness} not found in build artifacts")
     harness_bin.chmod(0o755)
 
-    pov_dir = Path(fetch_dir) / "povs"
-    if not pov_dir.is_dir():
-        fail(f"POV directory {pov_dir} does not exist")
-    pov_files = sorted(f for f in pov_dir.iterdir() if f.is_file())
-    if not pov_files:
-        fail(f"No POV files in {pov_dir}")
-    pov_file = pov_files[0]
-
-    result = subprocess.run(
-        [str(harness_bin), str(pov_file)],
-        capture_output=True,
-        timeout=30,
-        env={**os.environ, "OUT": str(build_dir)},
-        cwd=str(build_dir),
-    )
-    if result.returncode == 0:
-        fail("POV did NOT crash on original build — expected a crash")
-    log(f"PASS: POV crashes on original build (exit={result.returncode})")
+    for pov_file in pov_files:
+        rc = run_pov_direct(harness_bin, pov_file, build_dir)
+        if rc == 0:
+            fail(f"POV {pov_file.name} did NOT crash on original build — expected a crash")
+        log(f"  {pov_file.name}: crashes (exit={rc})")
+    log(f"PASS: All {len(pov_files)} POV(s) crash on original build")
 
     # --- Step 2: Fetch diff and rebuild ---
     log("Step 2: Fetching diff and rebuilding with patch...")
@@ -80,20 +108,16 @@ def main() -> int:
     if not diffs:
         fail("No diff files fetched from FETCH_DIR")
     patch = diffs[0]
-    log(f"Using patch: {patch.name}")
-
-    log(f"Patch contents ({patch.stat().st_size} bytes):")
-    log(patch.read_text()[:1000])
+    log(f"Using patch: {patch.name} ({patch.stat().st_size} bytes)")
 
     patched_resp = RESPONSE_DIR / "build-patched"
-    rc = crs.apply_patch_build(patch, patched_resp, builder_name="default-build")
-    build_stderr = patched_resp / "stderr.log"
-    build_stdout = patched_resp / "stdout.log"
-    if build_stderr.exists():
-        log(f"  build stderr (last 1000): {build_stderr.read_text().strip()[-1000:]}")
-    if build_stdout.exists():
-        log(f"  build stdout (last 1000): {build_stdout.read_text().strip()[-1000:]}")
+    with timed("rebuild") as t_rebuild:
+        rc = crs.apply_patch_build(patch, patched_resp, builder_name="default-build")
+    timings["rebuild"] = t_rebuild.elapsed
     if rc != 0:
+        build_stderr = patched_resp / "stderr.log"
+        if build_stderr.exists():
+            log(f"  build stderr (last 1000): {build_stderr.read_text().strip()[-1000:]}")
         fail(f"Patched build failed (exit={rc})")
     patched_rid = int((patched_resp / "rebuild_id").read_text().strip())
     log(f"Patched rebuild ID: {patched_rid}")
@@ -114,27 +138,40 @@ def main() -> int:
     if orig_hash == rebuilt_hash:
         log("WARNING: Rebuilt binary is identical to original — patch may not have affected compilation")
 
-    # --- Step 3: Run POV on patched build (expect NO crash) ---
-    log("Step 3: Running POV on patched build...")
-    pov_after = RESPONSE_DIR / "pov-after"
-    rc = crs.run_pov(pov_file, harness, patched_rid, pov_after)
-    stderr_log = pov_after / "stderr.log"
-    stdout_log = pov_after / "stdout.log"
-    if stderr_log.exists():
-        log(f"  stderr: {stderr_log.read_text().strip()[:2000]}")
-    if stdout_log.exists():
-        log(f"  stdout: {stdout_log.read_text().strip()[:2000]}")
-    if rc != 0:
-        fail(f"POV still crashes after patch (exit={rc})")
-    log("PASS: POV no longer crashes after patch")
+    # --- Step 3: Run all POVs on patched build (expect NO crash) ---
+    log("Step 3: Running POVs on patched build...")
+    any_crash = False
+    for pov_file in pov_files:
+        pov_resp = RESPONSE_DIR / f"pov-after-{pov_file.stem}"
+        rc = crs.run_pov(pov_file, harness, patched_rid, pov_resp)
+        if rc != 0:
+            stderr_log = pov_resp / "stderr.log"
+            if stderr_log.exists():
+                log(f"  {pov_file.name} stderr: {stderr_log.read_text().strip()[:500]}")
+            log(f"  {pov_file.name}: STILL CRASHES (exit={rc})")
+            any_crash = True
+        else:
+            log(f"  {pov_file.name}: fixed (no crash)")
+    if any_crash:
+        fail("Some POVs still crash after patch")
+    log(f"PASS: All {len(pov_files)} POV(s) no longer crash after patch")
 
     # --- Step 4: Run functionality tests ---
     log("Step 4: Running functionality tests...")
     test_resp = RESPONSE_DIR / "test"
-    rc = crs.apply_patch_test(patch, test_resp)
+    with timed("test") as t_test:
+        rc = crs.apply_patch_test(patch, test_resp)
+    timings["test"] = t_test.elapsed
     if rc != 0:
         fail(f"Tests failed (exit={rc})")
     log("PASS: Functionality tests pass")
+
+    # --- Write timing log ---
+    if log_dir:
+        timing_path = Path(log_dir) / "verify_patch_timing.json"
+        timing_path.parent.mkdir(parents=True, exist_ok=True)
+        timing_path.write_text(json.dumps(timings, indent=2) + "\n")
+        log(f"Timing log written to {timing_path}")
 
     log("SUCCESS: patch verified — crash fixed, tests pass")
     return 0
