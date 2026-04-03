@@ -1,13 +1,13 @@
 #!/bin/sh
-# Usage: verify-patch-inc.sh <fuzz-proj-path> <harness> <diff> <pov-dir>
+# Usage: verify-patch-inc.sh <fuzz-proj-path> <harness> <diff> <pov-dir> [compose-file]
 set -eu
 
-PROJ=${1:?Usage: $0 <fuzz-proj-path> <harness> <diff> <pov-dir>}
+PROJ=${1:?Usage: $0 <fuzz-proj-path> <harness> <diff> <pov-dir> [compose-file]}
 HARNESS=${2:?}
 DIFF=${3:?}
 POV_DIR=${4:?}
 
-COMPOSE=example/crs-verify-patch/compose.yaml
+COMPOSE=${5:-example/crs-verify-patch/compose.yaml}
 BUILD_ID="vp-$(basename "$PROJ")"
 
 uv run oss-crs prepare --compose-file "$COMPOSE"
