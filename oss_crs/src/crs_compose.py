@@ -170,15 +170,6 @@ class CRSCompose:
         }
         metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
 
-    @staticmethod
-    def _get_image_id(client: "docker.DockerClient", image: str) -> "str | None":
-        """Get the content hash (Docker image ID) of an image."""
-        try:
-            img = client.images.get(image)
-            return img.id
-        except docker.errors.ImageNotFound:
-            return None
-
     def _snapshot_one(
         self,
         client: "docker.DockerClient",
@@ -186,6 +177,7 @@ class CRSCompose:
         tag: str,
         build_id: str,
         committed_tags: "list[str]",
+        content_key: str,
         command: "list[str] | None" = None,
         timeout: int = 1800,
         extra_env: "dict[str, str] | None" = None,
@@ -193,10 +185,10 @@ class CRSCompose:
     ) -> bool:
         """Run a container from base_image and commit as snapshot on success.
 
-        Uses content-hash deduplication: the actual image is stored under a tag
-        derived from the base image's ID. The caller's tag is an alias pointing
-        to the same image. If the base image hasn't changed, the existing
-        snapshot is reused without recompiling.
+        Uses content-hash deduplication keyed on the target repo state (not
+        the Docker image ID, which changes on every rebuild). If a snapshot
+        for the same content_key already exists, it is reused without
+        recompiling.
 
         Args:
             client: Docker SDK client.
@@ -204,41 +196,30 @@ class CRSCompose:
             tag: Snapshot tag (without repository prefix).
             build_id: Build ID for container env.
             committed_tags: List to append full tag on success (for cleanup tracking).
-            command: Override command. If None, uses image CMD via get_image_cmd().
+            content_key: Deterministic hash for dedup (e.g. from target repo hash + sanitizer).
+            command: Override command. If None, uses image CMD.
             timeout: Max wait seconds.
 
         Returns:
             True if snapshot committed, False on failure.
         """
         full_tag = f"oss-crs-snapshot:{tag}"
-
-        # Compute content-hash key from the base image ID.
-        base_image_id = self._get_image_id(client, base_image)
-        if base_image_id:
-            content_key = hashlib.sha256(base_image_id.encode()).hexdigest()[:16]
-            content_tag = f"oss-crs-snapshot:content-{content_key}"
-        else:
-            content_key = hashlib.sha256(base_image.encode()).hexdigest()[:16]
-            content_tag = None
+        content_tag = f"oss-crs-snapshot:content-{content_key}"
 
         # File lock keyed on the content hash — serializes concurrent snapshot
-        # creation for the same builder image across processes.
+        # creation for the same content across processes.
         lock_dir = Path("/tmp/oss-crs-snapshot-locks")
         lock_path = lock_dir / f"snapshot-{content_key}.lock"
 
         with file_lock(lock_path):
             # Re-check after acquiring lock — another process may have built it.
-            if content_tag:
-                existing = self._get_image_id(client, content_tag)
-                if existing:
-                    try:
-                        img = client.images.get(content_tag)
-                        img.tag("oss-crs-snapshot", tag=tag)
-                        committed_tags.append(full_tag)
-                        return True
-                    except docker.errors.ImageNotFound:
-                        pass
-
+            try:
+                img = client.images.get(content_tag)
+                img.tag("oss-crs-snapshot", tag=tag)
+                committed_tags.append(full_tag)
+                return True
+            except docker.errors.ImageNotFound:
+                pass
 
             # Inline CMD extraction (same logic as docker_ops.get_image_cmd):
             if command is None:
@@ -277,12 +258,11 @@ class CRSCompose:
                     container.commit(repository="oss-crs-snapshot", tag=tag)
                     committed_tags.append(full_tag)
                     # Also tag with the content hash for future dedup
-                    if content_tag:
-                        try:
-                            img = client.images.get(full_tag)
-                            img.tag("oss-crs-snapshot", tag=content_tag.split(":", 1)[1])
-                        except docker.errors.ImageNotFound:
-                            pass
+                    try:
+                        img = client.images.get(full_tag)
+                        img.tag("oss-crs-snapshot", tag=f"content-{content_key}")
+                    except docker.errors.ImageNotFound:
+                        pass
                     return True
                 return False
             finally:
@@ -319,6 +299,11 @@ class CRSCompose:
         # Resolve run_tests.sh path from infra root
         run_tests_script = str(renderer.OSS_CRS_ROOT_PATH / "oss-crs-infra" / "builder-sidecar" / "run_tests.sh")
 
+        # Content key is derived from the target image name (includes repo hash),
+        # so it's deterministic across rebuilds of the same source state.
+        # target_base_image is "{name}:{repo_hash}" — stable across runs.
+        base_content_key = hashlib.sha256(target_base_image.encode()).hexdigest()[:16]
+
         try:
             # D-04: Snapshot each builder using its preserved builder image
             for crs in self.crs_list:
@@ -329,6 +314,10 @@ class CRSCompose:
                     builder_image = preserved_builder_image_name(
                         crs.name, build_config.name, build_id,
                     )
+                    # Per-builder content key includes builder name + sanitizer
+                    builder_content_key = hashlib.sha256(
+                        f"{base_content_key}:{crs.name}:{build_config.name}:{sanitizer}".encode()
+                    ).hexdigest()[:16]
                     # Compute the full env the builder needs (same as compose run)
                     env_plan = build_target_builder_env(
                         target_env=target_env,
@@ -341,14 +330,19 @@ class CRSCompose:
                     )
                     if not self._snapshot_one(
                         client, builder_image, tag, build_id, committed_tags,
+                        content_key=builder_content_key,
                         extra_env=env_plan.effective_env,
                     ):
                         raise RuntimeError(f"Builder snapshot failed: {build_config.name}")
 
             # D-05: Snapshot project image via run_tests.sh (optional)
             test_tag = f"test-{build_id}"
+            test_content_key = hashlib.sha256(
+                f"{base_content_key}:test:{sanitizer}".encode()
+            ).hexdigest()[:16]
             test_ok = self._snapshot_one(
                 client, target_base_image, test_tag, build_id, committed_tags,
+                content_key=test_content_key,
                 command=["bash", "/usr/local/bin/run_tests.sh"],
                 extra_env=oss_fuzz_env,
                 volumes={run_tests_script: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"}},
