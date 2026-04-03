@@ -55,6 +55,18 @@ def _make_test_client():
     return TestClient(runner_server.app)
 
 
+def _pov_upload(content: bytes = b"\x00deadbeef"):
+    """Return kwargs for a multipart POST with a POV file upload."""
+    return {
+        "files": {"pov": ("crash.bin", content, "application/octet-stream")},
+        "data": {
+            "harness_name": "my_fuzzer",
+            "rebuild_id": "1",
+            "crs_name": "test-crs",
+        },
+    }
+
+
 # ===========================================================================
 # TestHealthEndpoint
 # ===========================================================================
@@ -84,15 +96,7 @@ class TestRunPOVEndpoint:
         """Successful reproduce returns exit_code and stderr."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
-        response = client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
+        response = client.post("/run-pov", **_pov_upload())
         assert response.status_code == 200
         body = response.json()
         assert body["exit_code"] == 0
@@ -108,15 +112,7 @@ class TestRunPOVEndpoint:
             stderr="SUMMARY: AddressSanitizer: heap-buffer-overflow",
         )
         client = _make_test_client()
-        response = client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
+        response = client.post("/run-pov", **_pov_upload())
         body = response.json()
         assert body["exit_code"] == 1
         assert "AddressSanitizer" in body["stderr"]
@@ -127,15 +123,7 @@ class TestRunPOVEndpoint:
         """Timeout from subprocess returns exit_code=124."""
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="reproduce", timeout=30)
         client = _make_test_client()
-        response = client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
+        response = client.post("/run-pov", **_pov_upload())
         body = response.json()
         assert body["exit_code"] == 124
         assert (
@@ -145,35 +133,11 @@ class TestRunPOVEndpoint:
     @patch("runner_server.os.path.exists")
     def test_missing_harness_returns_404(self, mock_exists):
         """Harness binary not found returns 404."""
-        # First call (harness check) returns False, second call (pov check) irrelevant
         mock_exists.return_value = False
         client = _make_test_client()
         response = client.post(
             "/run-pov",
-            data={
-                "harness_name": "nonexistent_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
-        assert response.status_code == 404
-        assert "error" in response.json()
-
-    @patch("runner_server.os.path.exists")
-    def test_missing_pov_returns_404(self, mock_exists):
-        """POV binary not found returns 404."""
-        # harness exists, pov does not
-        mock_exists.side_effect = lambda p: p != "/povs/crash.bin"
-        client = _make_test_client()
-        response = client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
+            **_pov_upload(),
         )
         assert response.status_code == 404
         assert "error" in response.json()
@@ -193,15 +157,7 @@ class TestRunPOV:
         """reproduce is called with the harness_name as argument (POV-01)."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
-        client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
+        client.post("/run-pov", **_pov_upload())
         mock_run.assert_called_once()
         call_args = mock_run.call_args
         cmd = call_args[0][0] if call_args[0] else call_args[1].get("args")
@@ -214,35 +170,22 @@ class TestRunPOV:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
         with patch.dict("os.environ", {"OUT_DIR": "/custom/out"}):
-            client.post(
-                "/run-pov",
-                data={
-                    "harness_name": "my_fuzzer",
-                    "rebuild_id": "1",
-                    "crs_name": "test-crs",
-                    "pov_path": "/povs/crash.bin",
-                },
-            )
+            client.post("/run-pov", **_pov_upload())
         call_kwargs = mock_run.call_args[1]
-        assert call_kwargs["env"]["OUT"] == "/custom/out/test-crs/1"
+        assert call_kwargs["env"]["OUT"] == "/custom/out/test-crs/1/build"
 
     @patch("runner_server.subprocess.run")
     @patch("runner_server.os.path.exists", return_value=True)
     def test_sets_testcase_env(self, mock_exists, mock_run):
-        """TESTCASE env var is set to pov_path."""
+        """TESTCASE env var is set to the temp file path for the uploaded POV."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
-        client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
+        client.post("/run-pov", **_pov_upload())
         call_kwargs = mock_run.call_args[1]
-        assert call_kwargs["env"]["TESTCASE"] == "/povs/crash.bin"
+        # The server writes the uploaded POV to a temp file; just verify it is set
+        # and points to a .pov suffix file.
+        testcase = call_kwargs["env"]["TESTCASE"]
+        assert testcase.endswith(".pov")
 
     @patch("runner_server.subprocess.run")
     @patch("runner_server.os.path.exists", return_value=True)
@@ -250,15 +193,7 @@ class TestRunPOV:
         """FUZZER_ARGS defaults to OSS-Fuzz standard values."""
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         client = _make_test_client()
-        client.post(
-            "/run-pov",
-            data={
-                "harness_name": "my_fuzzer",
-                "rebuild_id": "1",
-                "crs_name": "test-crs",
-                "pov_path": "/povs/crash.bin",
-            },
-        )
+        client.post("/run-pov", **_pov_upload())
         call_kwargs = mock_run.call_args[1]
         assert "FUZZER_ARGS" in call_kwargs["env"]
         assert "-rss_limit_mb=2560" in call_kwargs["env"]["FUZZER_ARGS"]

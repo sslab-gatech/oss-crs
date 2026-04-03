@@ -189,17 +189,14 @@ class TestRunEphemeralBuild:
         assert result["exit_code"] == 0
         assert result["rebuild_id"] == 1
 
-    def test_first_success_commits_snapshot(self, tmp_path):
-        """First successful build with no existing snapshot: container.commit() called."""
+    def test_first_success_does_not_commit_snapshot(self, tmp_path):
+        """Ephemeral containers no longer commit snapshots."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
             run_ephemeral_build(
                 "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
             )
-        container.commit.assert_called_once_with(
-            repository="oss-crs-snapshot",
-            tag=f"build-test-crs-{TEST_BUILDER_NAME}-1",
-        )
+        container.commit.assert_not_called()
 
     def test_existing_snapshot_skips_commit(self, tmp_path):
         """Snapshot already exists: container.commit() must NOT be called."""
@@ -558,71 +555,74 @@ class TestRunEphemeralTest:
 
         return client, container
 
-    def test_successful_test_returns_exit_code_0(self):
+    def test_successful_test_returns_exit_code_0(self, tmp_path):
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", 1, b"patch")
+            result = run_ephemeral_test(
+                "base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path
+            )
         assert result["exit_code"] == 0
         assert result["rebuild_id"] == 1
 
-    def test_first_success_commits_test_snapshot(self):
-        """First successful test commits snapshot with test-{build_id} tag per D-05 (no builder_name)."""
+    def test_first_success_does_not_commit_test_snapshot(self, tmp_path):
+        """Ephemeral containers no longer commit snapshots."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", 1, b"patch")
-        container.commit.assert_called_once_with(
-            repository="oss-crs-snapshot",
-            tag="test-1",
-        )
+            run_ephemeral_test("base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path)
+        container.commit.assert_not_called()
 
-    def test_existing_snapshot_skips_commit(self):
+    def test_existing_snapshot_skips_commit(self, tmp_path):
         """Test snapshot already exists: container.commit() must NOT be called."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=True)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", 1, b"patch")
+            run_ephemeral_test("base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path)
         container.commit.assert_not_called()
 
-    def test_failed_test_no_commit(self):
+    def test_failed_test_no_commit(self, tmp_path):
         """Non-zero exit code: test snapshot must NOT be committed."""
         client, container = self._make_mock_client(exit_code=1, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", 1, b"patch")
+            result = run_ephemeral_test(
+                "base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path
+            )
         assert result["exit_code"] == 1
         container.commit.assert_not_called()
 
-    def test_container_removed_on_success(self):
+    def test_container_removed_on_success(self, tmp_path):
         """container.remove(force=True) called after successful test."""
         client, container = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", 1, b"patch")
+            run_ephemeral_test("base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path)
         container.remove.assert_called_once_with(force=True)
 
-    def test_container_removed_on_failure(self):
+    def test_container_removed_on_failure(self, tmp_path):
         """container.remove(force=True) called even when test fails."""
         client, container = self._make_mock_client(exit_code=1)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", 1, b"patch")
+            run_ephemeral_test("base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path)
         container.remove.assert_called_once_with(force=True)
 
-    def test_timeout_returns_error(self):
+    def test_timeout_returns_error(self, tmp_path):
         """ReadTimeout during container.wait results in exit_code=1 with timeout message."""
         import requests.exceptions
 
         client, container = self._make_mock_client(exit_code=0)
         container.wait.side_effect = requests.exceptions.ReadTimeout()
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", 1, b"patch", timeout=1)
+            result = run_ephemeral_test(
+                "base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path, timeout=1
+            )
         assert result["exit_code"] == 1
         assert (
             "timed out" in result["stderr"].lower()
             or "timeout" in result["stderr"].lower()
         )
 
-    def test_invokes_run_tests(self):
+    def test_invokes_run_tests(self, tmp_path):
         """Container OSS_CRS_BUILD_CMD env var must reference run_tests.sh."""
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_test("base:latest", 1, b"patch")
+            run_ephemeral_test("base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path)
         call_kwargs = client.containers.create.call_args
         environment = call_kwargs[1].get("environment", {})
         assert "run_tests.sh" in environment.get("OSS_CRS_BUILD_CMD", "")
@@ -656,7 +656,7 @@ class TestHandleTestProjectImage:
         mock_client.containers.create.return_value = mock_container
         return mock_client
 
-    def test_handle_test_uses_project_base_image(self):
+    def test_handle_test_uses_project_base_image(self, tmp_path):
         """_handle_test() uses PROJECT_BASE_IMAGE to create the container (D-02)."""
         import server
 
@@ -664,10 +664,13 @@ class TestHandleTestProjectImage:
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(
                 __import__("os").environ,
-                {"PROJECT_BASE_IMAGE": "project:latest"},
+                {
+                    "PROJECT_BASE_IMAGE": "project:latest",
+                    "REBUILD_OUT_DIR": str(tmp_path),
+                },
                 clear=False,
             ):
-                server._handle_test("job1", b"patch", 1, "", "")
+                server._handle_test("job1", b"patch", TEST_CRS_NAME, 1, "", "")
         mock_client.containers.create.assert_called_once()
         call_args = mock_client.containers.create.call_args
         image_arg = call_args[0][0] if call_args[0] else call_args[1].get("image")
@@ -682,12 +685,13 @@ class TestHandleTestProjectImage:
         env_without_project_base = {
             k: v for k, v in _os.environ.items() if k != "PROJECT_BASE_IMAGE"
         }
+        env_without_project_base["REBUILD_OUT_DIR"] = "/tmp/test"
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(_os.environ, env_without_project_base, clear=True):
                 with pytest.raises(ValueError, match="PROJECT_BASE_IMAGE"):
-                    server._handle_test("job1", b"patch", 1, "", "")
+                    server._handle_test("job1", b"patch", TEST_CRS_NAME, 1, "", "")
 
-    def test_handle_test_ignores_builder_base_image(self):
+    def test_handle_test_ignores_builder_base_image(self, tmp_path):
         """_handle_test() does not read BASE_IMAGE_{builder_name} even when set."""
         import server
 
@@ -695,20 +699,23 @@ class TestHandleTestProjectImage:
         env_vars = {
             "BASE_IMAGE_CRS_LIBFUZZER": "wrong:image",
             "PROJECT_BASE_IMAGE": "project:correct",
+            "REBUILD_OUT_DIR": str(tmp_path),
         }
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(__import__("os").environ, env_vars, clear=False):
-                server._handle_test("job1", b"patch", 1, "", "")
+                server._handle_test("job1", b"patch", TEST_CRS_NAME, 1, "", "")
         call_args = mock_client.containers.create.call_args
         image_arg = call_args[0][0] if call_args[0] else call_args[1].get("image")
         assert image_arg == "project:correct"
         assert image_arg != "wrong:image"
 
-    def test_test_response_schema(self):
+    def test_test_response_schema(self, tmp_path):
         """Response dict keys are exactly {exit_code, stdout, stderr, rebuild_id}."""
         client, _ = TestRunEphemeralTest()._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_test("base:latest", 1, b"patch")
+            result = run_ephemeral_test(
+                "base:latest", 1, TEST_CRS_NAME, b"patch", tmp_path
+            )
         assert set(result.keys()) == {"exit_code", "stdout", "stderr", "rebuild_id"}
 
 

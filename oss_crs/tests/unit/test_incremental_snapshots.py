@@ -7,6 +7,7 @@ Tests for:
 All Docker SDK calls are mocked — no real Docker daemon required.
 """
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -68,7 +69,6 @@ def _make_crs_compose(crs_list):
     lightweight SimpleNamespace so we can test them in isolation without
     constructing the full compose machinery.
     """
-    # Import the module under test (lazy to allow mocking at module level)
     from oss_crs.src.crs_compose import CRSCompose
 
     obj = SimpleNamespace()
@@ -79,7 +79,6 @@ def _make_crs_compose(crs_list):
         CRSCompose._create_incremental_snapshots.__get__(obj, type(obj))
     )
     obj._snapshot_one = CRSCompose._snapshot_one.__get__(obj, type(obj))
-    obj._get_image_id = CRSCompose._get_image_id
     obj._check_snapshots_exist = CRSCompose._check_snapshots_exist.__get__(
         obj, type(obj)
     )
@@ -107,6 +106,17 @@ def _make_mock_docker_client(exit_code: int = 0, snapshot_exists: bool = False):
     return client, container
 
 
+# Patches needed for _create_incremental_snapshots internals
+_PATCH_PREFIX = "oss_crs.src.crs_compose"
+
+# A no-op context manager to replace file_lock in tests
+
+
+@contextmanager
+def _noop_lock(path):
+    yield
+
+
 # ===========================================================================
 # Task 2: _create_incremental_snapshots()
 # ===========================================================================
@@ -122,7 +132,12 @@ class TestCreateIncrementalSnapshots:
         obj = _make_crs_compose([crs])
 
         client, container = _make_mock_docker_client(exit_code=0)
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with (
+            patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client),
+            patch(f"{_PATCH_PREFIX}.build_target_builder_env") as mock_env,
+            patch(f"{_PATCH_PREFIX}.file_lock", side_effect=_noop_lock),
+        ):
+            mock_env.return_value = SimpleNamespace(effective_env={"K": "V"})
             result = obj._create_incremental_snapshots(
                 "base:latest", build_id, _make_mock_target(), "address"
             )
@@ -140,12 +155,8 @@ class TestCreateIncrementalSnapshots:
         crs = _make_crs(["builderA"])
 
         # Mock enough of CRSCompose.build_target to check snapshot is not called
-        # We test this indirectly by ensuring no docker.from_env() call for snapshots
-        with patch("oss_crs.src.crs_compose.docker.from_env") as mock_from_env:
+        with patch(f"{_PATCH_PREFIX}.docker.from_env") as mock_from_env:
             _make_crs_compose([crs])
-            # Directly test: when we don't call _create_incremental_snapshots, no docker calls
-            # The actual build_target gate is tested at the wiring level
-            # Here we verify _create_incremental_snapshots can be called 0 times with no docker side effect
             mock_from_env.assert_not_called()
 
     def test_all_or_nothing_cleanup_on_builder_failure(self):
@@ -155,7 +166,7 @@ class TestCreateIncrementalSnapshots:
         obj = _make_crs_compose([crs])
 
         client = MagicMock()
-        # images.get always raises (no existing snapshots)
+        # images.get always raises (no existing snapshots / no content-hash hits)
         client.images.get.side_effect = docker.errors.ImageNotFound("nope")
 
         container_a = MagicMock()
@@ -164,15 +175,14 @@ class TestCreateIncrementalSnapshots:
         container_b = MagicMock()
         container_b.wait.return_value = {"StatusCode": 1}  # builderB fails
 
-        # images.get for CMD extraction: return something for the base image lookup
-        # but ImageNotFound for snapshot check
-        def images_get_side_effect(tag):
-            raise docker.errors.ImageNotFound("nope")
-
-        client.images.get.side_effect = images_get_side_effect
         client.containers.create.side_effect = [container_a, container_b]
 
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with (
+            patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client),
+            patch(f"{_PATCH_PREFIX}.build_target_builder_env") as mock_env,
+            patch(f"{_PATCH_PREFIX}.file_lock", side_effect=_noop_lock),
+        ):
+            mock_env.return_value = SimpleNamespace(effective_env={"K": "V"})
             result = obj._create_incremental_snapshots(
                 "base:latest", build_id, _make_mock_target(), "address"
             )
@@ -184,7 +194,7 @@ class TestCreateIncrementalSnapshots:
         assert f"oss-crs-snapshot:build-test-crs-builderA-{build_id}" in removed_tags
 
     def test_test_failure_is_non_fatal(self):
-        """All builders succeed, test.sh fails => builder snapshots kept, test snapshot skipped."""
+        """All builders succeed, test snapshot fails => builder snapshots kept, result still True."""
         build_id = "testfail"
         crs = _make_crs(["builderX"])
         obj = _make_crs_compose([crs])
@@ -196,13 +206,16 @@ class TestCreateIncrementalSnapshots:
         container_builder.wait.return_value = {"StatusCode": 0}  # builder succeeds
 
         container_test = MagicMock()
-        container_test.wait.return_value = {
-            "StatusCode": 0
-        }  # test.sh command succeeds (bash -c "test -f ... || true")
+        container_test.wait.return_value = {"StatusCode": 1}  # test fails
 
         client.containers.create.side_effect = [container_builder, container_test]
 
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with (
+            patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client),
+            patch(f"{_PATCH_PREFIX}.build_target_builder_env") as mock_env,
+            patch(f"{_PATCH_PREFIX}.file_lock", side_effect=_noop_lock),
+        ):
+            mock_env.return_value = SimpleNamespace(effective_env={"K": "V"})
             result = obj._create_incremental_snapshots(
                 "base:latest", build_id, _make_mock_target(), "address"
             )
@@ -211,14 +224,19 @@ class TestCreateIncrementalSnapshots:
         # Builder snapshot committed
         container_builder.commit.assert_called_once()
 
-    def test_project_image_uses_test_sh_command(self):
-        """The project image snapshot container runs test.sh if it exists."""
+    def test_project_image_uses_run_tests_command(self):
+        """The project image snapshot container runs run_tests.sh."""
         build_id = "cmdtest"
         crs = _make_crs(["builder1"])
         obj = _make_crs_compose([crs])
 
         client, _ = _make_mock_docker_client(exit_code=0)
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with (
+            patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client),
+            patch(f"{_PATCH_PREFIX}.build_target_builder_env") as mock_env,
+            patch(f"{_PATCH_PREFIX}.file_lock", side_effect=_noop_lock),
+        ):
+            mock_env.return_value = SimpleNamespace(effective_env={"K": "V"})
             result = obj._create_incremental_snapshots(
                 "base:latest", build_id, _make_mock_target(), "address"
             )
@@ -227,7 +245,7 @@ class TestCreateIncrementalSnapshots:
         # Second create call is for the test container (project image)
         assert client.containers.create.call_count == 2
         test_create_call = client.containers.create.call_args_list[1]
-        command = test_create_call.kwargs.get("command") or test_create_call.args[1]
+        command = test_create_call.kwargs.get("command") or test_create_call[1]
         assert "run_tests.sh" in " ".join(command)
 
 
@@ -248,7 +266,7 @@ class TestCheckSnapshotsExist:
         client = MagicMock()
         client.images.get.return_value = MagicMock()  # all images found
 
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client):
             result = obj._check_snapshots_exist(build_id)
 
         assert result is None
@@ -262,7 +280,7 @@ class TestCheckSnapshotsExist:
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("nope")
 
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client):
             result = obj._check_snapshots_exist(build_id)
 
         assert result is not None
@@ -285,7 +303,7 @@ class TestCheckSnapshotsExist:
 
         client.images.get.side_effect = images_get_side_effect
 
-        with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
+        with patch(f"{_PATCH_PREFIX}.docker.from_env", return_value=client):
             result = obj._check_snapshots_exist(build_id)
 
         assert result is None
@@ -302,7 +320,6 @@ class TestCheckSnapshotsExist:
         # Mock _check_snapshots_exist to return an error (simulates missing snapshot)
         error_msg = "Snapshot not found for build_id 'x'. Run `oss-crs build-target --incremental-build` first."
         with patch.object(obj, "_check_snapshots_exist", return_value=error_msg):
-            # Simulate the run() check inline (since we can't easily call run() without full setup)
             snapshot_error = obj._check_snapshots_exist("somebuild")
             if snapshot_error:
                 final_result = False

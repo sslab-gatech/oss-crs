@@ -307,7 +307,10 @@ def test_sidecar_emits_per_builder_base_image_env_vars(
     builder_sidecar = compose_data["services"]["oss-crs-builder-sidecar"]
     env_list = builder_sidecar["environment"]
 
-    assert "BASE_IMAGE_DEFAULT_BUILD=target:latest" in env_list
+    assert (
+        "BASE_IMAGE_DEFAULT_BUILD=oss-crs-builder:crs-incremental-default-build-build-1"
+        in env_list
+    )
     assert "BASE_IMAGE=target:latest" in env_list
 
 
@@ -346,8 +349,14 @@ def test_sidecar_emits_multiple_builder_env_vars(monkeypatch, tmp_path: Path) ->
     builder_sidecar = compose_data["services"]["oss-crs-builder-sidecar"]
     env_list = builder_sidecar["environment"]
 
-    assert "BASE_IMAGE_INC_BUILDER=target:latest" in env_list
-    assert "BASE_IMAGE_DEFAULT_BUILD=target:latest" in env_list
+    assert (
+        "BASE_IMAGE_INC_BUILDER=oss-crs-builder:crs-multi-inc-builder-build-1"
+        in env_list
+    )
+    assert (
+        "BASE_IMAGE_DEFAULT_BUILD=oss-crs-builder:crs-multi-default-build-build-1"
+        in env_list
+    )
     assert "BASE_IMAGE=target:latest" in env_list
 
 
