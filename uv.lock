@@ -514,22 +514,22 @@ dependencies = [
     { name = "gitpython" },
     { name = "jinja2" },
     { name = "pydantic" },
-    { name = "pyright" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "questionary" },
     { name = "requests" },
     { name = "rich" },
-    { name = "ruff" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-multipart" },
+    { name = "ruff" },
     { name = "ty" },
     { name = "uvicorn" },
     { name = "watchdog" },
@@ -541,22 +541,22 @@ requires-dist = [
     { name = "gitpython", specifier = ">=3.1.45" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pyright", specifier = ">=1.1.407" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "questionary", specifier = ">=2.1.1" },
     { name = "requests", specifier = ">=2.33.0" },
     { name = "rich", specifier = ">=13.7.0" },
-    { name = "ruff", specifier = ">=0.14.5" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "pyright", specifier = ">=1.1.407" },
     { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
     { name = "python-multipart", specifier = ">=0.0.18" },
+    { name = "ruff", specifier = ">=0.14.5" },
     { name = "ty", specifier = ">=0.0.4" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "watchdog", specifier = ">=4.0.0" },

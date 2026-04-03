@@ -17,8 +17,6 @@ dependencies = [
     "Jinja2>=3.1.6",
     "python-dotenv>=1.0.1",
     "docker>=7.1.0",
-    "ruff>=0.14.5",
-    "pyright>=1.1.407",
     "gitpython>=3.1.45",
     "pydantic>=2.12.5",
     "rich>=13.7.0",
@@ -27,15 +25,18 @@ dependencies = [
 
 [project.scripts]
 oss-crs = "oss_crs.src.cli.crs_compose:main"
+verify = "scripts.verify:main"
 
 [tool.setuptools.packages.find]
-include = ["oss_crs*"]
+include = ["oss_crs*", "scripts"]
 
 [tool.setuptools.package-data]
 "oss_crs.src.templates" = ["*.j2", "*.py"]
 
 [dependency-groups]
 dev = [
+    "ruff>=0.14.5",
+    "pyright>=1.1.407",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "watchdog>=4.0.0",
