@@ -153,7 +153,9 @@ def build_run_service_env(
     base_env = {
         "HELPER": "True",
         "RUN_FUZZER_MODE": "interactive",
-        **{k: target_env[v] for k, v in OSS_FUZZ_TARGET_ENV.items() if k != "SANITIZER"},
+        **{
+            k: target_env[v] for k, v in OSS_FUZZ_TARGET_ENV.items() if k != "SANITIZER"
+        },
         "SANITIZER": sanitizer,  # override: run phase uses resolved sanitizer
         "PROJECT_NAME": target_env["name"],
     }

@@ -1,7 +1,7 @@
 """Unit tests for --incremental-build CLI flag parsing on build-target and run subcommands."""
+
 import argparse
 
-import pytest
 
 from oss_crs.src.cli.crs_compose import add_build_target_command, add_run_command
 
@@ -17,16 +17,21 @@ def _make_parser():
 # Required args for build-target subcommand
 _BUILD_TARGET_REQUIRED = [
     "build-target",
-    "--compose-file", "c.yaml",
-    "--fuzz-proj-path", "/tmp/t",
+    "--compose-file",
+    "c.yaml",
+    "--fuzz-proj-path",
+    "/tmp/t",
 ]
 
 # Required args for run subcommand
 _RUN_REQUIRED = [
     "run",
-    "--compose-file", "c.yaml",
-    "--fuzz-proj-path", "/tmp/t",
-    "--target-harness", "h",
+    "--compose-file",
+    "c.yaml",
+    "--fuzz-proj-path",
+    "/tmp/t",
+    "--target-harness",
+    "h",
 ]
 
 

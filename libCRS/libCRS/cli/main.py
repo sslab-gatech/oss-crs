@@ -91,7 +91,9 @@ def main():
         help="Rebuild ID (required during run phase, forbidden during build-target phase)",
     )
     submit_build_parser.set_defaults(
-        func=lambda args: crs_utils.submit_build_output(args.src_path, Path(args.dst_path), rebuild_id=args.rebuild_id)
+        func=lambda args: crs_utils.submit_build_output(
+            args.src_path, Path(args.dst_path), rebuild_id=args.rebuild_id
+        )
     )
 
     # skip-build-output command
@@ -124,7 +126,9 @@ def main():
         help="Rebuild ID to fetch sidecar artifacts (omit for build-target artifacts)",
     )
     download_build_parser.set_defaults(
-        func=lambda args: crs_utils.download_build_output(args.src_path, Path(args.dst_path), rebuild_id=args.rebuild_id)
+        func=lambda args: crs_utils.download_build_output(
+            args.src_path, Path(args.dst_path), rebuild_id=args.rebuild_id
+        )
     )
 
     # download-source command

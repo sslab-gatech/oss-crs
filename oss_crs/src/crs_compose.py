@@ -272,7 +272,9 @@ class CRSCompose:
                     except docker.errors.NotFound:
                         pass
 
-    def _create_incremental_snapshots(self, target_base_image: str, build_id: str, target: "Target", sanitizer: str) -> bool:
+    def _create_incremental_snapshots(
+        self, target_base_image: str, build_id: str, target: "Target", sanitizer: str
+    ) -> bool:
         """Create snapshot images for all builders and the project image.
 
         Implements D-03/D-04/D-05/D-06: Docker SDK snapshots with all-or-nothing cleanup.
@@ -297,7 +299,12 @@ class CRSCompose:
         oss_fuzz_env["SANITIZER"] = sanitizer
 
         # Resolve run_tests.sh path from infra root
-        run_tests_script = str(renderer.OSS_CRS_ROOT_PATH / "oss-crs-infra" / "builder-sidecar" / "run_tests.sh")
+        run_tests_script = str(
+            renderer.OSS_CRS_ROOT_PATH
+            / "oss-crs-infra"
+            / "builder-sidecar"
+            / "run_tests.sh"
+        )
 
         # Content key is derived from the target image name (includes repo hash),
         # so it's deterministic across rebuilds of the same source state.
@@ -307,12 +314,17 @@ class CRSCompose:
         try:
             # D-04: Snapshot each builder using its preserved builder image
             for crs in self.crs_list:
-                if not crs.config.target_build_phase or not crs.config.target_build_phase.builds:
+                if (
+                    not crs.config.target_build_phase
+                    or not crs.config.target_build_phase.builds
+                ):
                     continue
                 for build_config in crs.config.target_build_phase.builds:
                     tag = f"build-{crs.name}-{build_config.name}-{build_id}"
                     builder_image = preserved_builder_image_name(
-                        crs.name, build_config.name, build_id,
+                        crs.name,
+                        build_config.name,
+                        build_id,
                     )
                     # Per-builder content key includes builder name + sanitizer
                     builder_content_key = hashlib.sha256(
@@ -321,19 +333,29 @@ class CRSCompose:
                     # Compute the full env the builder needs (same as compose run)
                     env_plan = build_target_builder_env(
                         target_env=target_env,
-                        run_env_type=crs.crs_compose_env.get_env()["type"] if crs.crs_compose_env else "local",
+                        run_env_type=crs.crs_compose_env.get_env()["type"]
+                        if crs.crs_compose_env
+                        else "local",
                         build_id=build_id,
-                        crs_additional_env=crs.resource.additional_env if crs.resource else None,
+                        crs_additional_env=crs.resource.additional_env
+                        if crs.resource
+                        else None,
                         build_additional_env=build_config.additional_env,
                         harness=target_env.get("harness"),
                         scope=f"{crs.name}:snapshot:{build_config.name}",
                     )
                     if not self._snapshot_one(
-                        client, builder_image, tag, build_id, committed_tags,
+                        client,
+                        builder_image,
+                        tag,
+                        build_id,
+                        committed_tags,
                         content_key=builder_content_key,
                         extra_env=env_plan.effective_env,
                     ):
-                        raise RuntimeError(f"Builder snapshot failed: {build_config.name}")
+                        raise RuntimeError(
+                            f"Builder snapshot failed: {build_config.name}"
+                        )
 
             # D-05: Snapshot project image via run_tests.sh (optional)
             test_tag = f"test-{build_id}"
@@ -341,11 +363,20 @@ class CRSCompose:
                 f"{base_content_key}:test:{sanitizer}".encode()
             ).hexdigest()[:16]
             test_ok = self._snapshot_one(
-                client, target_base_image, test_tag, build_id, committed_tags,
+                client,
+                target_base_image,
+                test_tag,
+                build_id,
+                committed_tags,
                 content_key=test_content_key,
                 command=["bash", "/usr/local/bin/run_tests.sh"],
                 extra_env=oss_fuzz_env,
-                volumes={run_tests_script: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"}},
+                volumes={
+                    run_tests_script: {
+                        "bind": "/usr/local/bin/run_tests.sh",
+                        "mode": "ro",
+                    }
+                },
             )
             if not test_ok:
                 print("Warning: test snapshot failed or not available, skipping")
@@ -371,11 +402,16 @@ class CRSCompose:
         """
         client = docker.from_env()
         for crs in self.crs_list:
-            if not crs.config.target_build_phase or not crs.config.target_build_phase.builds:
+            if (
+                not crs.config.target_build_phase
+                or not crs.config.target_build_phase.builds
+            ):
                 continue
             for build_config in crs.config.target_build_phase.builds:
                 image_name = preserved_builder_image_name(
-                    crs.name, build_config.name, build_id,
+                    crs.name,
+                    build_config.name,
+                    build_id,
                 )
                 try:
                     client.images.remove(image_name, force=True)
@@ -397,7 +433,10 @@ class CRSCompose:
 
         # Check builder snapshots
         for crs in self.crs_list:
-            if not crs.config.target_build_phase or not crs.config.target_build_phase.builds:
+            if (
+                not crs.config.target_build_phase
+                or not crs.config.target_build_phase.builds
+            ):
                 continue
             for build_config in crs.config.target_build_phase.builds:
                 tag = build_snapshot_tag(crs.name, build_config.name, build_id)
@@ -563,7 +602,6 @@ class CRSCompose:
         diff: Optional[Path] = None,
         incremental_build: bool = False,
     ) -> bool:
-        sanitizer_explicit = sanitizer is not None
         resolved_options = self._resolve_target_build_options(
             target,
             sanitizer=sanitizer,
@@ -651,7 +689,9 @@ class CRSCompose:
             ret = progress.run_added_tasks()
             if ret.success and incremental_build:
                 try:
-                    if not self._create_incremental_snapshots(target_base_image, build_id, target, sanitizer):
+                    if not self._create_incremental_snapshots(
+                        target_base_image, build_id, target, sanitizer
+                    ):
                         return False
                 finally:
                     # Incremental: sidecar uses snapshots, so preserved builders can go

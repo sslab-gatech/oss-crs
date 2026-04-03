@@ -57,7 +57,9 @@ def main() -> int:
     crs.download_build_output("coverage-build", coverage_dir / "build")
     if not (coverage_dir / "build").exists():
         fail("coverage-build download produced no directory")
-    log(f"Coverage build artifacts: {len(list((coverage_dir / 'build').iterdir()))} files")
+    log(
+        f"Coverage build artifacts: {len(list((coverage_dir / 'build').iterdir()))} files"
+    )
 
     crs.download_build_output("coverage-src", coverage_dir / "src")
     if not (coverage_dir / "src").exists():
@@ -70,13 +72,17 @@ def main() -> int:
         fail(f"Harness {harness_name} not found in coverage-build")
     log(f"Verifying coverage instrumentation on {harness_name}...")
     if b"__llvm_profile" not in harness_bin.read_bytes():
-        fail(f"{harness_name} missing __llvm_profile symbols — not coverage instrumented")
+        fail(
+            f"{harness_name} missing __llvm_profile symbols — not coverage instrumented"
+        )
     log(f"PASS: {harness_name} contains __llvm_profile symbols")
 
     # --- Apply patch + build (default builder) ---
     log("Applying patch and building via Python API...")
     build_response = RESPONSE_DIR / "build"
-    build_rc = crs.apply_patch_build(PATCH, build_response, builder_name="default-build")
+    build_rc = crs.apply_patch_build(
+        PATCH, build_response, builder_name="default-build"
+    )
     if build_rc != 0:
         fail(f"Build failed with exit code {build_rc}")
     log(f"Build exit code: {build_rc}")
@@ -90,7 +96,9 @@ def main() -> int:
     # --- Rebuild with coverage builder ---
     log("Rebuilding with coverage builder via Python API...")
     cov_rebuild_response = RESPONSE_DIR / "coverage-rebuild"
-    cov_rebuild_rc = crs.apply_patch_build(PATCH, cov_rebuild_response, builder_name="coverage-build")
+    cov_rebuild_rc = crs.apply_patch_build(
+        PATCH, cov_rebuild_response, builder_name="coverage-build"
+    )
     if cov_rebuild_rc != 0:
         fail(f"Coverage rebuild failed with exit code {cov_rebuild_rc}")
 
@@ -103,7 +111,9 @@ def main() -> int:
     # --- Download and verify coverage rebuild artifacts ---
     log(f"Downloading coverage rebuild artifacts (rebuild_id={cov_rebuild_id})...")
     cov_rebuild_dir = Path("/tmp/coverage-rebuild-artifacts-py")
-    crs.download_build_output("coverage-build", cov_rebuild_dir, rebuild_id=cov_rebuild_id)
+    crs.download_build_output(
+        "coverage-build", cov_rebuild_dir, rebuild_id=cov_rebuild_id
+    )
 
     rebuilt_harness = cov_rebuild_dir / harness_name
     if not rebuilt_harness.exists():
@@ -131,7 +141,9 @@ def main() -> int:
         fail(f"No POV files found in {pov_dir}")
 
     for pov_file in pov_files:
-        log(f"Running POV {pov_file.name} (harness={harness_name}, rebuild_id={rebuild_id})...")
+        log(
+            f"Running POV {pov_file.name} (harness={harness_name}, rebuild_id={rebuild_id})..."
+        )
         pov_response = RESPONSE_DIR / "pov"
         pov_rc = crs.run_pov(pov_file, harness_name, rebuild_id, pov_response)
 
@@ -143,7 +155,9 @@ def main() -> int:
         if pov_rc != 0:
             fail(f"POV {pov_file.name}: runner returned exit code {pov_rc}")
         else:
-            log(f"POV {pov_file.name}: no crash — ground-truth patch fixed the vulnerability")
+            log(
+                f"POV {pov_file.name}: no crash — ground-truth patch fixed the vulnerability"
+            )
 
     log("SUCCESS: all checks passed")
     return 0

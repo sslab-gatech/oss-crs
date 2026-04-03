@@ -3,6 +3,7 @@
 Tests all INT-* requirements with mocked HTTP requests and DNS resolution.
 No real Docker or sidecar services needed.
 """
+
 import io
 import zipfile
 from pathlib import Path
@@ -56,19 +57,23 @@ class TestApplyPatchBuild:
     """INT-01: apply_patch_build calls /build and parses nested response."""
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_successful_build_parses_nested_response(self, mock_requests, crs_utils, tmp_path):
+    def test_successful_build_parses_nested_response(
+        self, mock_requests, crs_utils, tmp_path
+    ):
         # Sidecar returns nested format
         submit_resp = _mock_response(json_data={"id": "job123", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "job123",
-            "status": "done",
-            "result": {
-                "exit_code": 0,
-                "stdout": "Build OK",
-                "stderr": "",
-                "rebuild_id": "build-abc",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "job123",
+                "status": "done",
+                "result": {
+                    "exit_code": 0,
+                    "stdout": "Build OK",
+                    "stderr": "",
+                    "rebuild_id": "build-abc",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
 
@@ -77,7 +82,9 @@ class TestApplyPatchBuild:
         response_dir = tmp_path / "response"
 
         with patch.dict("os.environ", {"OSS_CRS_BUILD_ID": "build-abc"}):
-            exit_code = crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
+            exit_code = crs_utils.apply_patch_build(
+                patch_file, response_dir, "test-builder"
+            )
 
         assert exit_code == 0
         assert (response_dir / "retcode").read_text() == "0"
@@ -87,16 +94,18 @@ class TestApplyPatchBuild:
     @patch("libCRS.libCRS.local.http_requests")
     def test_failed_build(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "job123", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "job123",
-            "status": "done",
-            "result": {
-                "exit_code": 1,
-                "stdout": "",
-                "stderr": "compile error",
-                "rebuild_id": "b1",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "job123",
+                "status": "done",
+                "result": {
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": "compile error",
+                    "rebuild_id": "b1",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
 
@@ -105,7 +114,9 @@ class TestApplyPatchBuild:
         response_dir = tmp_path / "response"
 
         with patch.dict("os.environ", {"OSS_CRS_BUILD_ID": "b1"}):
-            exit_code = crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
+            exit_code = crs_utils.apply_patch_build(
+                patch_file, response_dir, "test-builder"
+            )
 
         assert exit_code == 1
         assert (response_dir / "retcode").read_text() == "1"
@@ -114,16 +125,18 @@ class TestApplyPatchBuild:
     @patch("libCRS.libCRS.local.http_requests")
     def test_sends_builder_name_in_form_data(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "j1", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "j1",
-            "status": "done",
-            "result": {
-                "exit_code": 0,
-                "stdout": "",
-                "stderr": "",
-                "rebuild_id": "b1",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "j1",
+                "status": "done",
+                "result": {
+                    "exit_code": 0,
+                    "stdout": "",
+                    "stderr": "",
+                    "rebuild_id": "b1",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
 
@@ -136,7 +149,9 @@ class TestApplyPatchBuild:
 
         # Verify builder_name was sent in the POST data
         call_args = mock_requests.post.call_args
-        data = call_args.kwargs.get("data") or (call_args[1].get("data", {}) if len(call_args) > 1 else {})
+        data = call_args.kwargs.get("data") or (
+            call_args[1].get("data", {}) if len(call_args) > 1 else {}
+        )
         assert "builder_name" in data
 
     def test_unavailable_builder_writes_exit_code_1(self, crs_utils, tmp_path):
@@ -147,24 +162,30 @@ class TestApplyPatchBuild:
         patch_file.write_text("diff")
         response_dir = tmp_path / "response"
 
-        exit_code = crs_utils.apply_patch_build(patch_file, response_dir, "test-builder")
+        exit_code = crs_utils.apply_patch_build(
+            patch_file, response_dir, "test-builder"
+        )
 
         assert exit_code == 1
         assert (response_dir / "retcode").read_text() == "1"
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_stores_last_builder_and_build_id_on_success(self, mock_requests, crs_utils, tmp_path):
+    def test_stores_last_builder_and_build_id_on_success(
+        self, mock_requests, crs_utils, tmp_path
+    ):
         submit_resp = _mock_response(json_data={"id": "j1", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "j1",
-            "status": "done",
-            "result": {
-                "exit_code": 0,
-                "stdout": "",
-                "stderr": "",
-                "rebuild_id": "stored-build-id",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "j1",
+                "status": "done",
+                "result": {
+                    "exit_code": 0,
+                    "stdout": "",
+                    "stderr": "",
+                    "rebuild_id": "stored-build-id",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
 
@@ -200,14 +221,19 @@ class TestDownloadBuildOutputWithRebuildId:
     """download_build_output with rebuild_id fetches from sidecar via HTTP."""
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_fetches_from_sidecar_with_rebuild_id(self, mock_requests, crs_utils, tmp_path):
+    def test_fetches_from_sidecar_with_rebuild_id(
+        self, mock_requests, crs_utils, tmp_path
+    ):
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w") as zf:
             zf.writestr("fuzzer_binary", b"ELF binary content")
         mock_requests.get.return_value = _mock_response(content=zip_buf.getvalue())
 
         dst = tmp_path / "artifacts"
-        with patch.dict("os.environ", {"OSS_CRS_NAME": "test-crs", "BUILDER_MODULE": "builder-sidecar"}):
+        with patch.dict(
+            "os.environ",
+            {"OSS_CRS_NAME": "test-crs", "BUILDER_MODULE": "builder-sidecar"},
+        ):
             crs_utils.download_build_output("", dst, rebuild_id=1)
 
         assert (dst / "fuzzer_binary").exists()
@@ -215,7 +241,9 @@ class TestDownloadBuildOutputWithRebuildId:
         assert "download-build-output" in call_url
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_ephemeral_container_tries_sidecar_first(self, mock_requests, crs_utils, tmp_path):
+    def test_ephemeral_container_tries_sidecar_first(
+        self, mock_requests, crs_utils, tmp_path
+    ):
         """When OSS_CRS_REBUILD_ID is set, tries sidecar before local filesystem."""
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, "w") as zf:
@@ -223,11 +251,14 @@ class TestDownloadBuildOutputWithRebuildId:
         mock_requests.get.return_value = _mock_response(content=zip_buf.getvalue())
 
         dst = tmp_path / "artifacts"
-        with patch.dict("os.environ", {
-            "OSS_CRS_REBUILD_ID": "2",
-            "OSS_CRS_NAME": "test-crs",
-            "BUILDER_MODULE": "builder-sidecar",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "OSS_CRS_REBUILD_ID": "2",
+                "OSS_CRS_NAME": "test-crs",
+                "BUILDER_MODULE": "builder-sidecar",
+            },
+        ):
             crs_utils.download_build_output("", dst)
 
         mock_requests.get.assert_called_once()
@@ -245,7 +276,9 @@ class TestRunPov:
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_routes_to_runner_sidecar(self, mock_requests, crs_utils, tmp_path):
-        mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 0, "stderr": ""}
+        )
         response_dir = tmp_path / "response"
 
         crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
@@ -256,29 +289,41 @@ class TestRunPov:
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_sends_form_data_not_file(self, mock_requests, crs_utils, tmp_path):
-        mock_requests.post.return_value = _mock_response(json_data={"exit_code": 1, "stderr": "CRASH"})
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 1, "stderr": "CRASH"}
+        )
         response_dir = tmp_path / "response"
 
         crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
 
         call_kwargs = mock_requests.post.call_args
-        data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
+        data = call_kwargs.kwargs.get("data") or (
+            call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {}
+        )
         assert "pov_path" in data
         assert "harness_name" in data
         # Confirm no "files" argument was used (no file upload)
-        files = call_kwargs.kwargs.get("files") or (call_kwargs[1].get("files") if len(call_kwargs) > 1 else None)
+        files = call_kwargs.kwargs.get("files") or (
+            call_kwargs[1].get("files") if len(call_kwargs) > 1 else None
+        )
         assert files is None
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_pov_path_sent_as_string_not_upload(self, mock_requests, crs_utils, tmp_path):
-        mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
+    def test_pov_path_sent_as_string_not_upload(
+        self, mock_requests, crs_utils, tmp_path
+    ):
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 0, "stderr": ""}
+        )
         response_dir = tmp_path / "response"
         pov_path = Path("/container/pov/testcase")
 
         crs_utils.run_pov(pov_path, "fuzzer", 1, response_dir, "test-runner")
 
         call_kwargs = mock_requests.post.call_args
-        data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
+        data = call_kwargs.kwargs.get("data") or (
+            call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {}
+        )
         assert data["pov_path"] == str(pov_path)
 
     @patch("libCRS.libCRS.local.http_requests")
@@ -288,7 +333,9 @@ class TestRunPov:
         )
         response_dir = tmp_path / "response"
 
-        exit_code = crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
+        exit_code = crs_utils.run_pov(
+            Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner"
+        )
 
         assert exit_code == 1
         assert (response_dir / "retcode").read_text() == "1"
@@ -296,10 +343,14 @@ class TestRunPov:
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_pov_success_writes_exit_code_0(self, mock_requests, crs_utils, tmp_path):
-        mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 0, "stderr": ""}
+        )
         response_dir = tmp_path / "response"
 
-        exit_code = crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
+        exit_code = crs_utils.run_pov(
+            Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner"
+        )
 
         assert exit_code == 0
         assert (response_dir / "retcode").read_text() == "0"
@@ -307,7 +358,9 @@ class TestRunPov:
     @patch("libCRS.libCRS.local.http_requests")
     def test_does_not_use_submit_and_poll(self, mock_requests, crs_utils, tmp_path):
         """run_pov is synchronous: no job ID polling should occur."""
-        mock_requests.post.return_value = _mock_response(json_data={"exit_code": 0, "stderr": ""})
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 0, "stderr": ""}
+        )
         response_dir = tmp_path / "response"
 
         crs_utils.run_pov(Path("/pov/crash"), "fuzzer", 1, response_dir, "test-runner")
@@ -329,16 +382,18 @@ class TestApplyPatchTest:
     @patch("libCRS.libCRS.local.http_requests")
     def test_parses_nested_test_response(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "t1", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "t1",
-            "status": "done",
-            "result": {
-                "exit_code": 0,
-                "stdout": "tests passed",
-                "stderr": "",
-                "rebuild_id": "b1",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "t1",
+                "status": "done",
+                "result": {
+                    "exit_code": 0,
+                    "stdout": "tests passed",
+                    "stderr": "",
+                    "rebuild_id": "b1",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
         response_dir = tmp_path / "response"
@@ -354,16 +409,18 @@ class TestApplyPatchTest:
     @patch("libCRS.libCRS.local.http_requests")
     def test_failed_test_writes_exit_code_1(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "t2", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "t2",
-            "status": "done",
-            "result": {
-                "exit_code": 1,
-                "stdout": "",
-                "stderr": "test failure",
-                "rebuild_id": "b2",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "t2",
+                "status": "done",
+                "result": {
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": "test failure",
+                    "rebuild_id": "b2",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
         response_dir = tmp_path / "response"
@@ -379,10 +436,12 @@ class TestApplyPatchTest:
     @patch("libCRS.libCRS.local.http_requests")
     def test_sends_builder_name_and_build_id(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "t3", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "t3",
-            "status": "done",
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "t3",
+                "status": "done",
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
         response_dir = tmp_path / "response"
@@ -392,18 +451,24 @@ class TestApplyPatchTest:
         crs_utils.apply_patch_test(patch_file, response_dir, "test-builder")
 
         call_kwargs = mock_requests.post.call_args
-        data = call_kwargs.kwargs.get("data") or (call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {})
+        data = call_kwargs.kwargs.get("data") or (
+            call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {}
+        )
         assert "crs_name" in data
         assert "builder_name" not in data  # test endpoint no longer needs builder_name
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_sends_patch_file_to_test_endpoint(self, mock_requests, crs_utils, tmp_path):
+    def test_sends_patch_file_to_test_endpoint(
+        self, mock_requests, crs_utils, tmp_path
+    ):
         """apply_patch_test sends the patch file to the /test endpoint."""
         submit_resp = _mock_response(json_data={"id": "t4", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "t4",
-            "status": "done",
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "t4",
+                "status": "done",
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
         response_dir = tmp_path / "response"
@@ -414,7 +479,9 @@ class TestApplyPatchTest:
 
         # Verify files dict was passed with a "patch" key
         call_kwargs = mock_requests.post.call_args
-        files = call_kwargs.kwargs.get("files") or (call_kwargs[1].get("files") if len(call_kwargs) > 1 else None)
+        files = call_kwargs.kwargs.get("files") or (
+            call_kwargs[1].get("files") if len(call_kwargs) > 1 else None
+        )
         assert files is not None
         assert "patch" in files
 
@@ -430,16 +497,18 @@ class TestResponseDirCompat:
     @patch("libCRS.libCRS.local.http_requests")
     def test_build_response_files(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "j1", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "j1",
-            "status": "done",
-            "result": {
-                "exit_code": 0,
-                "stdout": "ok",
-                "stderr": "warn",
-                "rebuild_id": "bid",
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "j1",
+                "status": "done",
+                "result": {
+                    "exit_code": 0,
+                    "stdout": "ok",
+                    "stderr": "warn",
+                    "rebuild_id": "bid",
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
 
@@ -471,16 +540,18 @@ class TestResponseDirCompat:
     @patch("libCRS.libCRS.local.http_requests")
     def test_test_response_files(self, mock_requests, crs_utils, tmp_path):
         submit_resp = _mock_response(json_data={"id": "j2", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "j2",
-            "status": "done",
-            "result": {
-                "exit_code": 0,
-                "stdout": "pass",
-                "stderr": "",
-                "rebuild_id": None,
-            },
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "j2",
+                "status": "done",
+                "result": {
+                    "exit_code": 0,
+                    "stdout": "pass",
+                    "stderr": "",
+                    "rebuild_id": None,
+                },
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
         response_dir = tmp_path / "resp"
@@ -493,14 +564,18 @@ class TestResponseDirCompat:
         assert (response_dir / "stdout.log").exists()
 
     @patch("libCRS.libCRS.local.http_requests")
-    def test_build_exit_code_is_string_integer(self, mock_requests, crs_utils, tmp_path):
+    def test_build_exit_code_is_string_integer(
+        self, mock_requests, crs_utils, tmp_path
+    ):
         """build_exit_code file contains a plain integer string, not JSON."""
         submit_resp = _mock_response(json_data={"id": "j3", "status": "queued"})
-        poll_resp = _mock_response(json_data={
-            "id": "j3",
-            "status": "done",
-            "result": {"exit_code": 0, "stdout": "", "stderr": "", "rebuild_id": 1},
-        })
+        poll_resp = _mock_response(
+            json_data={
+                "id": "j3",
+                "status": "done",
+                "result": {"exit_code": 0, "stdout": "", "stderr": "", "rebuild_id": 1},
+            }
+        )
         mock_requests.post.return_value = submit_resp
         mock_requests.get.return_value = poll_resp
 
@@ -517,7 +592,9 @@ class TestResponseDirCompat:
 
     @patch("libCRS.libCRS.local.http_requests")
     def test_pov_exit_code_is_string_integer(self, mock_requests, crs_utils, tmp_path):
-        mock_requests.post.return_value = _mock_response(json_data={"exit_code": 77, "stderr": ""})
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 77, "stderr": ""}
+        )
         response_dir = tmp_path / "resp"
 
         crs_utils.run_pov(Path("/pov"), "fuzz", 1, response_dir, "test-runner")

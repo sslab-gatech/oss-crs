@@ -11,7 +11,7 @@ from contextlib import contextmanager
 
 from .config.target import FuzzingEngine, TargetConfig, TargetSanitizer
 from .ui import MultiTaskProgress, TaskResult
-from .utils import generate_random_name, rm_with_docker, log_warning
+from .utils import log_warning
 from . import ui
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
@@ -573,4 +573,3 @@ class Target:
         tmp_path = path.with_name(f"{path.name}.tmp-{uuid.uuid4().hex}")
         tmp_path.write_text(content)
         tmp_path.replace(path)
-

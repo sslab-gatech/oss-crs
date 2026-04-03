@@ -5,17 +5,23 @@ They validate the full build container lifecycle (TST-02) and snapshot creation/
 
 Run with: uv run pytest oss_crs/tests/integration/test_sidecar_lifecycle.py -x -m integration
 """
+
 import sys
 from pathlib import Path
 
 import pytest
 
 # Sidecar code is outside oss_crs package tree
-_SIDECAR_DIR = Path(__file__).resolve().parent.parent.parent.parent / "oss-crs-infra" / "builder-sidecar"
+_SIDECAR_DIR = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "oss-crs-infra"
+    / "builder-sidecar"
+)
 sys.path.insert(0, str(_SIDECAR_DIR))
 
 try:
     import docker as docker_lib
+
     _DOCKER_AVAILABLE = True
 except ImportError:
     _DOCKER_AVAILABLE = False
@@ -41,7 +47,7 @@ pytestmark = [
 
 def test_ephemeral_build_lifecycle(tmp_path):
     """TST-02: Full build container lifecycle — start, build, snapshot, cleanup."""
-    from docker_ops import run_ephemeral_build, get_build_image
+    from docker_ops import run_ephemeral_build
 
     client = docker_lib.from_env()
     base_image = "ubuntu:22.04"
@@ -111,7 +117,9 @@ def test_snapshot_creation_and_reuse(tmp_path):
         # If build succeeded, snapshot should exist
         if result1["exit_code"] == 0:
             image_after = get_build_image(client, base_image, builder_name, crs_name)
-            assert image_after == snapshot_tag, f"Second lookup should return snapshot, got {image_after}"
+            assert image_after == snapshot_tag, (
+                f"Second lookup should return snapshot, got {image_after}"
+            )
 
             # Second build should start from snapshot
             result2 = run_ephemeral_build(
@@ -148,14 +156,16 @@ def test_snapshot_tag_includes_crs_and_builder_name(tmp_path):
 
     # The expected tag format when a snapshot exists would be:
     expected_tag = f"oss-crs-snapshot:build-{crs_name}-{builder_name}-{build_id}"
-    assert expected_tag == "oss-crs-snapshot:build-my-crs-my-custom-builder-tag-format-test"
+    assert (
+        expected_tag
+        == "oss-crs-snapshot:build-my-crs-my-custom-builder-tag-format-test"
+    )
 
 
 def test_container_cleanup_on_failure(tmp_path):
     """TST-02: Container is removed even when build fails."""
     from docker_ops import run_ephemeral_build
 
-    client = docker_lib.from_env()
     # Use ubuntu:22.04 to force failure at command execution (no oss_crs_handler.sh)
     result = run_ephemeral_build(
         base_image="ubuntu:22.04",

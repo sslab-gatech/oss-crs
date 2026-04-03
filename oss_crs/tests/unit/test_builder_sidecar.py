@@ -5,39 +5,33 @@ Sidecar code lives outside the oss_crs package tree; sys.path insertion
 is required before any imports from the sidecar.
 """
 
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# sys.path setup: must precede any sidecar imports
-# ---------------------------------------------------------------------------
-
-_SIDECAR_DIR = Path(__file__).resolve().parent.parent.parent.parent / "oss-crs-infra" / "builder-sidecar"
+_SIDECAR_DIR = (
+    Path(__file__).resolve().parent.parent.parent.parent
+    / "oss-crs-infra"
+    / "builder-sidecar"
+)
 sys.path.insert(0, str(_SIDECAR_DIR))
-
-# ---------------------------------------------------------------------------
-# Standard library / test framework imports
-# ---------------------------------------------------------------------------
 
 import hashlib
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-# ---------------------------------------------------------------------------
-# docker.errors must be importable for side-effect setup before importing
-# the sidecar modules (which also import docker at module level)
-# ---------------------------------------------------------------------------
-
 import docker
 import docker.errors
+import pytest
 
-# ---------------------------------------------------------------------------
-# Sidecar module imports
-# ---------------------------------------------------------------------------
-
-from docker_ops import get_build_image, get_test_image, next_rebuild_id, rebuild_output_dir, run_ephemeral_build, run_ephemeral_test
+from docker_ops import (
+    get_build_image,
+    get_test_image,
+    next_rebuild_id,
+    run_ephemeral_build,
+    run_ephemeral_test,
+)
 
 # ---------------------------------------------------------------------------
 # Test-wide builder name constant
@@ -50,6 +44,7 @@ TEST_CRS_NAME = "test-crs"
 # ---------------------------------------------------------------------------
 # Helper: create a patched server app for endpoint testing
 # ---------------------------------------------------------------------------
+
 
 def _make_test_client():
     """Return a TestClient for the server app with a clean job_results dict."""
@@ -65,6 +60,7 @@ def _make_test_client():
 # ===========================================================================
 # TestNextVersion
 # ===========================================================================
+
 
 class TestNextRebuildId:
     """Tests for docker_ops.next_rebuild_id() filesystem counter."""
@@ -98,6 +94,7 @@ class TestNextRebuildId:
 # TestGetBuildImage
 # ===========================================================================
 
+
 class TestGetBuildImage:
     """Tests for docker_ops.get_build_image() snapshot lookup."""
 
@@ -105,21 +102,32 @@ class TestGetBuildImage:
     def test_returns_snapshot_when_exists(self):
         client = MagicMock()
         client.images.get.return_value = MagicMock()
-        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
-        assert result == f"oss-crs-snapshot:build-{TEST_CRS_NAME}-{TEST_BUILDER_NAME}-bid123"
-        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_CRS_NAME}-{TEST_BUILDER_NAME}-bid123")
+        result = get_build_image(
+            client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME
+        )
+        assert (
+            result
+            == f"oss-crs-snapshot:build-{TEST_CRS_NAME}-{TEST_BUILDER_NAME}-bid123"
+        )
+        client.images.get.assert_called_once_with(
+            f"oss-crs-snapshot:build-{TEST_CRS_NAME}-{TEST_BUILDER_NAME}-bid123"
+        )
 
     @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "bid123"})
     def test_returns_base_when_not_found(self):
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("not found")
-        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
+        result = get_build_image(
+            client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME
+        )
         assert result == "base:latest"
 
     def test_returns_base_when_incremental_not_set(self):
         client = MagicMock()
         client.images.get.return_value = MagicMock()
-        result = get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
+        result = get_build_image(
+            client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME
+        )
         assert result == "base:latest"
         client.images.get.assert_not_called()
 
@@ -127,6 +135,7 @@ class TestGetBuildImage:
 # ===========================================================================
 # TestRunEphemeralBuild
 # ===========================================================================
+
 
 class TestRunEphemeralBuild:
     """Tests for docker_ops.run_ephemeral_build() container lifecycle.
@@ -144,10 +153,12 @@ class TestRunEphemeralBuild:
         container = MagicMock()
 
         container.wait.return_value = {"StatusCode": exit_code}
+
         def _mock_logs(**kwargs):
             if kwargs.get("stream"):
                 return iter([b"build output\n"])
             return b"build output"
+
         container.logs.side_effect = _mock_logs
 
         # Mock get_archive to return a valid tar stream
@@ -172,7 +183,9 @@ class TestRunEphemeralBuild:
     def test_successful_build_returns_exit_code_0(self, tmp_path):
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            result = run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         assert result["exit_code"] == 0
         assert result["rebuild_id"] == 1
 
@@ -180,7 +193,9 @@ class TestRunEphemeralBuild:
         """First successful build with no existing snapshot: container.commit() called."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         container.commit.assert_called_once_with(
             repository="oss-crs-snapshot",
             tag=f"build-test-crs-{TEST_BUILDER_NAME}-1",
@@ -190,14 +205,18 @@ class TestRunEphemeralBuild:
         """Snapshot already exists: container.commit() must NOT be called."""
         client, container = self._make_mock_client(exit_code=0, snapshot_exists=True)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         container.commit.assert_not_called()
 
     def test_failed_build_no_commit(self, tmp_path):
         """Non-zero exit code: snapshot must NOT be committed."""
         client, container = self._make_mock_client(exit_code=1, snapshot_exists=False)
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            result = run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         assert result["exit_code"] == 1
         container.commit.assert_not_called()
 
@@ -205,43 +224,62 @@ class TestRunEphemeralBuild:
         """Container.remove(force=True) called after successful build."""
         client, container = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         container.remove.assert_called_once_with(force=True)
 
     def test_container_removed_on_failure(self, tmp_path):
         """Container.remove(force=True) called even when build fails."""
         client, container = self._make_mock_client(exit_code=1)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         container.remove.assert_called_once_with(force=True)
 
     def test_timeout_returns_error(self, tmp_path):
         """ReadTimeout during container.wait results in exit_code=1 with timeout message."""
         import requests.exceptions
+
         client, container = self._make_mock_client(exit_code=0)
         container.wait.side_effect = requests.exceptions.ReadTimeout()
         with patch("docker_ops.docker.from_env", return_value=client):
-            result = run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path, timeout=1)
+            result = run_ephemeral_build(
+                "base:latest",
+                1,
+                TEST_BUILDER_NAME,
+                "test-crs",
+                b"patch",
+                tmp_path,
+                timeout=1,
+            )
         assert result["exit_code"] == 1
-        assert "timed out" in result["stderr"].lower() or "timeout" in result["stderr"].lower()
+        assert (
+            "timed out" in result["stderr"].lower()
+            or "timeout" in result["stderr"].lower()
+        )
 
     def test_creates_output_directory(self, tmp_path):
         """On success, output directory is created under rebuild_out_dir/{crs_name}/{rebuild_id}/."""
         client, _ = self._make_mock_client(exit_code=0)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         assert (tmp_path / "test-crs" / "1").exists()
 
     def test_failed_build_does_not_create_version_directory(self, tmp_path):
         """ART-02: Failed builds must not consume version slots."""
         client, _ = self._make_mock_client(exit_code=1)
         with patch("docker_ops.docker.from_env", return_value=client):
-            run_ephemeral_build("base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path)
+            run_ephemeral_build(
+                "base:latest", 1, TEST_BUILDER_NAME, "test-crs", b"patch", tmp_path
+            )
         # No v{N} directories should exist in tmp_path
         version_re = __import__("re").compile(r"^v(\d+)$")
         versioned_dirs = [
-            d for d in tmp_path.iterdir()
-            if d.is_dir() and version_re.match(d.name)
+            d for d in tmp_path.iterdir() if d.is_dir() and version_re.match(d.name)
         ]
         assert versioned_dirs == []
 
@@ -249,6 +287,7 @@ class TestRunEphemeralBuild:
 # ===========================================================================
 # TestHealthEndpoint
 # ===========================================================================
+
 
 class TestHealthEndpoint:
     """Tests for GET /health."""
@@ -263,6 +302,7 @@ class TestHealthEndpoint:
 # ===========================================================================
 # TestBuildEndpoint
 # ===========================================================================
+
 
 class TestBuildEndpoint:
     """Tests for POST /build endpoint."""
@@ -292,7 +332,11 @@ class TestBuildEndpoint:
         data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
 
         resp1 = client.post("/build", files=files1, data=data)
-        resp2 = client.post("/build", files={"patch": ("p.diff", patch_content, "application/octet-stream")}, data=data)
+        resp2 = client.post(
+            "/build",
+            files={"patch": ("p.diff", patch_content, "application/octet-stream")},
+            data=data,
+        )
         assert resp1.json()["id"] == resp2.json()["id"]
 
     def test_dedup_returns_existing_status(self):
@@ -303,7 +347,11 @@ class TestBuildEndpoint:
         data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
 
         resp1 = client.post("/build", files=files, data=data)
-        resp2 = client.post("/build", files={"patch": ("patch.diff", patch_content, "application/octet-stream")}, data=data)
+        resp2 = client.post(
+            "/build",
+            files={"patch": ("patch.diff", patch_content, "application/octet-stream")},
+            data=data,
+        )
 
         # Both calls return the same job id
         assert resp1.json()["id"] == resp2.json()["id"]
@@ -311,7 +359,6 @@ class TestBuildEndpoint:
     def test_build_id_uses_sha256(self):
         """Build ID is a 12-char hex prefix of SHA256(project:sanitizer:builder_name:patch)."""
         import os
-        import server
 
         patch_content = b"my patch bytes"
         project = os.environ.get("PROJECT_NAME", "unknown")
@@ -345,6 +392,7 @@ class TestBuildEndpoint:
 # ===========================================================================
 # TestStatusEndpoint
 # ===========================================================================
+
 
 class TestStatusEndpoint:
     """Tests for GET /status/{id}."""
@@ -400,6 +448,7 @@ class TestStatusEndpoint:
 # TestStubEndpoints
 # ===========================================================================
 
+
 class TestStubEndpoints:
     """Tests for stub endpoints (run-pov remains stub; /test is now implemented)."""
 
@@ -417,6 +466,7 @@ class TestStubEndpoints:
 # ===========================================================================
 # TestGetTestImage
 # ===========================================================================
+
 
 class TestGetTestImage:
     """Tests for docker_ops.get_test_image() test snapshot lookup (TEST-03)."""
@@ -449,6 +499,7 @@ class TestGetTestImage:
 # TestSnapshotTagNaming
 # ===========================================================================
 
+
 class TestSnapshotTagNaming:
     """Tests verifying build-tag and test-tag separation (TEST-04)."""
 
@@ -458,7 +509,9 @@ class TestSnapshotTagNaming:
         client = MagicMock()
         client.images.get.side_effect = docker.errors.ImageNotFound("nope")
         get_build_image(client, "base:latest", TEST_BUILDER_NAME, TEST_CRS_NAME)
-        client.images.get.assert_called_once_with(f"oss-crs-snapshot:build-{TEST_CRS_NAME}-{TEST_BUILDER_NAME}-myid")
+        client.images.get.assert_called_once_with(
+            f"oss-crs-snapshot:build-{TEST_CRS_NAME}-{TEST_BUILDER_NAME}-myid"
+        )
 
     @patch.dict(os.environ, {"INCREMENTAL_BUILD": "true", "OSS_CRS_BUILD_ID": "myid"})
     def test_test_snapshot_uses_test_prefix(self):
@@ -479,6 +532,7 @@ class TestSnapshotTagNaming:
 # TestRunEphemeralTest
 # ===========================================================================
 
+
 class TestRunEphemeralTest:
     """Tests for docker_ops.run_ephemeral_test() container lifecycle (TEST-01, TEST-02)."""
 
@@ -488,10 +542,12 @@ class TestRunEphemeralTest:
         container = MagicMock()
 
         container.wait.return_value = {"StatusCode": exit_code}
+
         def _mock_logs(**kwargs):
             if kwargs.get("stream"):
                 return iter([b"test output\n"])
             return b"test output"
+
         container.logs.side_effect = _mock_logs
         client.containers.create.return_value = container
 
@@ -551,12 +607,16 @@ class TestRunEphemeralTest:
     def test_timeout_returns_error(self):
         """ReadTimeout during container.wait results in exit_code=1 with timeout message."""
         import requests.exceptions
+
         client, container = self._make_mock_client(exit_code=0)
         container.wait.side_effect = requests.exceptions.ReadTimeout()
         with patch("docker_ops.docker.from_env", return_value=client):
             result = run_ephemeral_test("base:latest", 1, b"patch", timeout=1)
         assert result["exit_code"] == 1
-        assert "timed out" in result["stderr"].lower() or "timeout" in result["stderr"].lower()
+        assert (
+            "timed out" in result["stderr"].lower()
+            or "timeout" in result["stderr"].lower()
+        )
 
     def test_invokes_run_tests(self):
         """Container OSS_CRS_BUILD_CMD env var must reference run_tests.sh."""
@@ -572,6 +632,7 @@ class TestRunEphemeralTest:
 # TestHandleTestProjectImage
 # ===========================================================================
 
+
 class TestHandleTestProjectImage:
     """Tests for _handle_test() PROJECT_BASE_IMAGE behavior (D-02, D-06, D-07)."""
 
@@ -580,14 +641,17 @@ class TestHandleTestProjectImage:
     def _make_mock_client(self):
         """Return a mock Docker client that simulates no existing test snapshot."""
         import docker as _docker
+
         mock_client = MagicMock()
         mock_client.images.get.side_effect = _docker.errors.ImageNotFound("nope")
         mock_container = MagicMock()
         mock_container.wait.return_value = {"StatusCode": 0}
+
         def _mock_logs(**kwargs):
             if kwargs.get("stream"):
                 return iter([b"test output\n"])
             return b"test output"
+
         mock_container.logs.side_effect = _mock_logs
         mock_client.containers.create.return_value = mock_container
         return mock_client
@@ -595,9 +659,14 @@ class TestHandleTestProjectImage:
     def test_handle_test_uses_project_base_image(self):
         """_handle_test() uses PROJECT_BASE_IMAGE to create the container (D-02)."""
         import server
+
         mock_client = self._make_mock_client()
         with patch("docker_ops.docker.from_env", return_value=mock_client):
-            with patch.dict(__import__("os").environ, {"PROJECT_BASE_IMAGE": "project:latest"}, clear=False):
+            with patch.dict(
+                __import__("os").environ,
+                {"PROJECT_BASE_IMAGE": "project:latest"},
+                clear=False,
+            ):
                 server._handle_test("job1", b"patch", 1, "", "")
         mock_client.containers.create.assert_called_once()
         call_args = mock_client.containers.create.call_args
@@ -608,8 +677,11 @@ class TestHandleTestProjectImage:
         """_handle_test() raises ValueError when PROJECT_BASE_IMAGE is not in os.environ."""
         import server
         import os as _os
+
         mock_client = self._make_mock_client()
-        env_without_project_base = {k: v for k, v in _os.environ.items() if k != "PROJECT_BASE_IMAGE"}
+        env_without_project_base = {
+            k: v for k, v in _os.environ.items() if k != "PROJECT_BASE_IMAGE"
+        }
         with patch("docker_ops.docker.from_env", return_value=mock_client):
             with patch.dict(_os.environ, env_without_project_base, clear=True):
                 with pytest.raises(ValueError, match="PROJECT_BASE_IMAGE"):
@@ -618,6 +690,7 @@ class TestHandleTestProjectImage:
     def test_handle_test_ignores_builder_base_image(self):
         """_handle_test() does not read BASE_IMAGE_{builder_name} even when set."""
         import server
+
         mock_client = self._make_mock_client()
         env_vars = {
             "BASE_IMAGE_CRS_LIBFUZZER": "wrong:image",
@@ -642,6 +715,7 @@ class TestHandleTestProjectImage:
 # ===========================================================================
 # TestTestEndpoint
 # ===========================================================================
+
 
 class TestTestEndpoint:
     """Tests for POST /test endpoint (API-03, TEST-01)."""
@@ -702,13 +776,18 @@ class TestTestEndpoint:
         data = {"crs_name": "test-crs", "builder_name": TEST_BUILDER_NAME}
 
         resp1 = client.post("/test", files=files, data=data)
-        resp2 = client.post("/test", files={"patch": ("patch.diff", patch_content, "application/octet-stream")}, data=data)
+        resp2 = client.post(
+            "/test",
+            files={"patch": ("patch.diff", patch_content, "application/octet-stream")},
+            data=data,
+        )
         assert resp1.json()["id"] == resp2.json()["id"]
 
 
 # ===========================================================================
 # TestErrorFormat
 # ===========================================================================
+
 
 class TestErrorFormat:
     """Tests for consistent error response format (API-06)."""

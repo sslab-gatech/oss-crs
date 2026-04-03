@@ -30,13 +30,19 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from docker_ops import (
-    get_build_image, get_test_image,
-    next_rebuild_id, run_ephemeral_build, run_ephemeral_test,
+    get_build_image,
+    get_test_image,
+    next_rebuild_id,
+    run_ephemeral_build,
+    run_ephemeral_test,
 )
 import docker
 
 
-app = FastAPI(title="Builder Sidecar", description="Host-side ephemeral container build orchestrator")
+app = FastAPI(
+    title="Builder Sidecar",
+    description="Host-side ephemeral container build orchestrator",
+)
 
 
 class BuildResult(BaseModel):
@@ -53,7 +59,9 @@ class JobResponse(BaseModel):
 
 
 job_results: dict[str, dict] = {}
-_executor = ThreadPoolExecutor(max_workers=int(os.environ.get("MAX_PARALLEL_JOBS", "4")))
+_executor = ThreadPoolExecutor(
+    max_workers=int(os.environ.get("MAX_PARALLEL_JOBS", "4"))
+)
 
 
 def _make_job_id(patch_content: bytes, builder_name: str = "") -> str:
@@ -69,6 +77,7 @@ def _make_job_id(patch_content: bytes, builder_name: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 def health():
@@ -103,21 +112,35 @@ async def submit_build(
         rebuild_id = next_rebuild_id(rebuild_out_dir, crs_name)
 
     job_results[job_id] = {"id": job_id, "status": "queued"}
-    _executor.submit(_run_job, "build", job_id, patch_content, crs_name, builder_name, rebuild_id, cpuset, mem_limit)
+    _executor.submit(
+        _run_job,
+        "build",
+        job_id,
+        patch_content,
+        crs_name,
+        builder_name,
+        rebuild_id,
+        cpuset,
+        mem_limit,
+    )
     return JobResponse(id=job_id, status="queued")
 
 
 @app.post("/run-pov")
 async def run_pov():
     """Stub — POV handled by runner-sidecar service."""
-    return JSONResponse(status_code=501, content={"error": "Not implemented. Use runner-sidecar."})
+    return JSONResponse(
+        status_code=501, content={"error": "Not implemented. Use runner-sidecar."}
+    )
 
 
 @app.get("/status/{job_id}")
 def get_job_status(job_id: str):
     result = job_results.get(job_id)
     if result is None:
-        return JSONResponse(status_code=404, content={"error": "Job not found", "id": job_id})
+        return JSONResponse(
+            status_code=404, content={"error": "Job not found", "id": job_id}
+        )
     return result
 
 
@@ -152,14 +175,16 @@ async def run_test(
         rebuild_id = next_rebuild_id(rebuild_out_dir, crs_name)
 
     job_results[job_id] = {"id": job_id, "status": "queued"}
-    _executor.submit(_run_job, "test", job_id, patch_content, crs_name, rebuild_id, cpuset, mem_limit)
+    _executor.submit(
+        _run_job, "test", job_id, patch_content, crs_name, rebuild_id, cpuset, mem_limit
+    )
     return JobResponse(id=job_id, status="queued")
-
 
 
 # ---------------------------------------------------------------------------
 # Job handlers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_builder_name(builder_name: str) -> tuple[str, str]:
     """Resolve builder_name to (builder_name, base_image).
@@ -176,7 +201,7 @@ def _resolve_builder_name(builder_name: str) -> tuple[str, str]:
 
     # Auto-detect: find all BASE_IMAGE_* env vars
     candidates = {
-        k[len("BASE_IMAGE_"):].lower().replace("_", "-"): v
+        k[len("BASE_IMAGE_") :].lower().replace("_", "-"): v
         for k, v in os.environ.items()
         if k.startswith("BASE_IMAGE_") and k != "BASE_IMAGE"
     }
@@ -197,7 +222,15 @@ def _resolve_builder_name(builder_name: str) -> tuple[str, str]:
     )
 
 
-def _handle_build(_job_id: str, patch_content: bytes, crs_name: str, builder_name: str, rebuild_id: int, cpuset: str, mem_limit: str) -> dict:
+def _handle_build(
+    _job_id: str,
+    patch_content: bytes,
+    crs_name: str,
+    builder_name: str,
+    rebuild_id: int,
+    cpuset: str,
+    mem_limit: str,
+) -> dict:
     builder_name, base_image = _resolve_builder_name(builder_name)
     rebuild_out_dir = Path(os.environ["REBUILD_OUT_DIR"])
     timeout = int(os.environ.get("BUILD_TIMEOUT", "1800"))
@@ -216,7 +249,14 @@ def _handle_build(_job_id: str, patch_content: bytes, crs_name: str, builder_nam
     )
 
 
-def _handle_test(_job_id: str, patch_content: bytes, crs_name: str, rebuild_id: int, cpuset: str, mem_limit: str) -> dict:
+def _handle_test(
+    _job_id: str,
+    patch_content: bytes,
+    crs_name: str,
+    rebuild_id: int,
+    cpuset: str,
+    mem_limit: str,
+) -> dict:
     base_image = os.environ.get("PROJECT_BASE_IMAGE")
     if not base_image:
         raise ValueError("PROJECT_BASE_IMAGE env var not set on sidecar service.")
@@ -244,13 +284,23 @@ def _run_job(action: str, job_id: str, *args):
         elif action == "test":
             result = _handle_test(job_id, *args)
         else:
-            job_results[job_id] = {"id": job_id, "status": "done", "error": f"Unknown action: {action}"}
+            job_results[job_id] = {
+                "id": job_id,
+                "status": "done",
+                "error": f"Unknown action: {action}",
+            }
             return
         job_results[job_id] = {"id": job_id, "status": "done", "result": result}
     except Exception as e:
-        job_results[job_id] = {"id": job_id, "status": "done", "result": None, "error": str(e)}
+        job_results[job_id] = {
+            "id": job_id,
+            "status": "done",
+            "result": None,
+            "error": str(e),
+        }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8080)

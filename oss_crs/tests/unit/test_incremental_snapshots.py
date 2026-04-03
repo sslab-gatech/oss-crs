@@ -7,12 +7,9 @@ Tests for:
 All Docker SDK calls are mocked — no real Docker daemon required.
 """
 
-import sys
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-import pytest
 import docker
 import docker.errors
 
@@ -20,6 +17,7 @@ import docker.errors
 # ---------------------------------------------------------------------------
 # Helpers: build minimal CRSCompose-like object for testing private methods
 # ---------------------------------------------------------------------------
+
 
 def _make_build_config(name: str, additional_env=None):
     """Return a minimal BuildConfig-like object."""
@@ -77,11 +75,17 @@ def _make_crs_compose(crs_list):
     obj.crs_list = crs_list
 
     # Bind the real private methods to our namespace object
-    obj._create_incremental_snapshots = CRSCompose._create_incremental_snapshots.__get__(obj, type(obj))
+    obj._create_incremental_snapshots = (
+        CRSCompose._create_incremental_snapshots.__get__(obj, type(obj))
+    )
     obj._snapshot_one = CRSCompose._snapshot_one.__get__(obj, type(obj))
     obj._get_image_id = CRSCompose._get_image_id
-    obj._check_snapshots_exist = CRSCompose._check_snapshots_exist.__get__(obj, type(obj))
-    obj._cleanup_preserved_builders = CRSCompose._cleanup_preserved_builders.__get__(obj, type(obj))
+    obj._check_snapshots_exist = CRSCompose._check_snapshots_exist.__get__(
+        obj, type(obj)
+    )
+    obj._cleanup_preserved_builders = CRSCompose._cleanup_preserved_builders.__get__(
+        obj, type(obj)
+    )
     return obj
 
 
@@ -107,6 +111,7 @@ def _make_mock_docker_client(exit_code: int = 0, snapshot_exists: bool = False):
 # Task 2: _create_incremental_snapshots()
 # ===========================================================================
 
+
 class TestCreateIncrementalSnapshots:
     """Tests for CRSCompose._create_incremental_snapshots()."""
 
@@ -118,7 +123,9 @@ class TestCreateIncrementalSnapshots:
 
         client, container = _make_mock_docker_client(exit_code=0)
         with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
-            result = obj._create_incremental_snapshots("base:latest", build_id, _make_mock_target(), "address")
+            result = obj._create_incremental_snapshots(
+                "base:latest", build_id, _make_mock_target(), "address"
+            )
 
         assert result is True
         # Should have 3 commit calls: builderA, builderB, test (project image)
@@ -130,15 +137,12 @@ class TestCreateIncrementalSnapshots:
 
     def test_no_snapshots_when_flag_false(self):
         """When incremental_build=False, _create_incremental_snapshots is never called."""
-        build_id = "abc123"
         crs = _make_crs(["builderA"])
-
-        from oss_crs.src.crs_compose import CRSCompose
 
         # Mock enough of CRSCompose.build_target to check snapshot is not called
         # We test this indirectly by ensuring no docker.from_env() call for snapshots
         with patch("oss_crs.src.crs_compose.docker.from_env") as mock_from_env:
-            obj = _make_crs_compose([crs])
+            _make_crs_compose([crs])
             # Directly test: when we don't call _create_incremental_snapshots, no docker calls
             # The actual build_target gate is tested at the wiring level
             # Here we verify _create_incremental_snapshots can be called 0 times with no docker side effect
@@ -169,7 +173,9 @@ class TestCreateIncrementalSnapshots:
         client.containers.create.side_effect = [container_a, container_b]
 
         with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
-            result = obj._create_incremental_snapshots("base:latest", build_id, _make_mock_target(), "address")
+            result = obj._create_incremental_snapshots(
+                "base:latest", build_id, _make_mock_target(), "address"
+            )
 
         assert result is False
         # builderA snapshot was committed, so cleanup should remove it
@@ -190,12 +196,16 @@ class TestCreateIncrementalSnapshots:
         container_builder.wait.return_value = {"StatusCode": 0}  # builder succeeds
 
         container_test = MagicMock()
-        container_test.wait.return_value = {"StatusCode": 0}  # test.sh command succeeds (bash -c "test -f ... || true")
+        container_test.wait.return_value = {
+            "StatusCode": 0
+        }  # test.sh command succeeds (bash -c "test -f ... || true")
 
         client.containers.create.side_effect = [container_builder, container_test]
 
         with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
-            result = obj._create_incremental_snapshots("base:latest", build_id, _make_mock_target(), "address")
+            result = obj._create_incremental_snapshots(
+                "base:latest", build_id, _make_mock_target(), "address"
+            )
 
         assert result is True
         # Builder snapshot committed
@@ -209,7 +219,9 @@ class TestCreateIncrementalSnapshots:
 
         client, _ = _make_mock_docker_client(exit_code=0)
         with patch("oss_crs.src.crs_compose.docker.from_env", return_value=client):
-            result = obj._create_incremental_snapshots("base:latest", build_id, _make_mock_target(), "address")
+            result = obj._create_incremental_snapshots(
+                "base:latest", build_id, _make_mock_target(), "address"
+            )
 
         assert result is True
         # Second create call is for the test container (project image)
@@ -222,6 +234,7 @@ class TestCreateIncrementalSnapshots:
 # ===========================================================================
 # Task 3: _check_snapshots_exist()
 # ===========================================================================
+
 
 class TestCheckSnapshotsExist:
     """Tests for CRSCompose._check_snapshots_exist()."""
@@ -264,6 +277,7 @@ class TestCheckSnapshotsExist:
         obj = _make_crs_compose([crs])
 
         client = MagicMock()
+
         def images_get_side_effect(tag):
             if f"test-{build_id}" in tag:
                 raise docker.errors.ImageNotFound("no test snapshot")
@@ -278,7 +292,6 @@ class TestCheckSnapshotsExist:
 
     def test_run_returns_false_when_snapshots_missing(self):
         """run() with incremental_build=True returns False when snapshots are missing."""
-        from oss_crs.src.crs_compose import CRSCompose
 
         crs = _make_crs(["builder1"])
         obj = _make_crs_compose([crs])
@@ -290,7 +303,6 @@ class TestCheckSnapshotsExist:
         error_msg = "Snapshot not found for build_id 'x'. Run `oss-crs build-target --incremental-build` first."
         with patch.object(obj, "_check_snapshots_exist", return_value=error_msg):
             # Simulate the run() check inline (since we can't easily call run() without full setup)
-            incremental_build = True
             snapshot_error = obj._check_snapshots_exist("somebuild")
             if snapshot_error:
                 final_result = False

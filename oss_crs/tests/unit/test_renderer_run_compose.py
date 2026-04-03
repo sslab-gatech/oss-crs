@@ -144,9 +144,7 @@ def _make_crs(tmp_path: Path, name: str) -> SimpleNamespace:
     )
 
 
-def test_sidecar_always_injected_without_snapshot(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_sidecar_always_injected_without_snapshot(monkeypatch, tmp_path: Path) -> None:
     """Sidecars appear in compose output for a CRS with no snapshot-related config."""
     monkeypatch.setattr(
         "oss_crs.src.templates.renderer.build_run_service_env",
@@ -193,9 +191,7 @@ def test_sidecar_always_injected_without_snapshot(
     assert f"runner-sidecar.{crs_name}" in runner_aliases
 
 
-def test_runner_sidecar_aliases_per_crs(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_runner_sidecar_aliases_per_crs(monkeypatch, tmp_path: Path) -> None:
     """Each CRS in crs_list gets its own DNS alias on both sidecar services."""
     monkeypatch.setattr(
         "oss_crs.src.templates.renderer.build_run_service_env",
@@ -238,7 +234,9 @@ def test_runner_sidecar_aliases_per_crs(
     assert "builder-sidecar.crs-beta" in builder_aliases
 
 
-def _make_crs_with_builders(tmp_path: Path, name: str, builder_names: list) -> SimpleNamespace:
+def _make_crs_with_builders(
+    tmp_path: Path, name: str, builder_names: list
+) -> SimpleNamespace:
     """Helper to build a CRS SimpleNamespace with target_build_phase builds."""
     module_config = SimpleNamespace(
         dockerfile="patcher.Dockerfile",
@@ -313,9 +311,7 @@ def test_sidecar_emits_per_builder_base_image_env_vars(
     assert "BASE_IMAGE=target:latest" in env_list
 
 
-def test_sidecar_emits_multiple_builder_env_vars(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_sidecar_emits_multiple_builder_env_vars(monkeypatch, tmp_path: Path) -> None:
     """Builder sidecar emits BASE_IMAGE_{NAME} env vars for each builder in a multi-builder CRS."""
     monkeypatch.setattr(
         "oss_crs.src.templates.renderer.build_run_service_env",
@@ -326,7 +322,9 @@ def test_sidecar_emits_multiple_builder_env_vars(
         lambda *_args, **_kwargs: None,
     )
 
-    crs = _make_crs_with_builders(tmp_path, "crs-multi", ["inc-builder", "default-build"])
+    crs = _make_crs_with_builders(
+        tmp_path, "crs-multi", ["inc-builder", "default-build"]
+    )
     crs_compose = _make_crs_compose(tmp_path, [crs])
     target = SimpleNamespace(
         get_target_env=lambda: {"harness": "fuzz_target"},
@@ -353,9 +351,7 @@ def test_sidecar_emits_multiple_builder_env_vars(
     assert "BASE_IMAGE=target:latest" in env_list
 
 
-def test_sidecar_emits_project_base_image_env_var(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_sidecar_emits_project_base_image_env_var(monkeypatch, tmp_path: Path) -> None:
     """Builder-sidecar always emits PROJECT_BASE_IMAGE env var (D-01, TEST-01)."""
     monkeypatch.setattr(
         "oss_crs.src.templates.renderer.build_run_service_env",

@@ -183,7 +183,7 @@ def prepare_llm_context(
         keys = {}
         key_info = {}
         for crs in crs_compose.crs_list:
-            if crs.resource is None: # for type check
+            if crs.resource is None:  # for type check
                 raise RuntimeError(
                     f"CRS '{crs.name}' is missing resource configuration for LiteLLM"
                 )
@@ -231,9 +231,7 @@ def render_run_crs_compose_docker_compose(
 
     # Deployment conditions for infra sidecars
     bug_finding_crs_count = sum(
-        1
-        for crs in crs_compose.crs_list
-        if CRSType.BUG_FINDING in crs.config.type
+        1 for crs in crs_compose.crs_list if CRSType.BUG_FINDING in crs.config.type
     )
     bug_finding_ensemble = bug_finding_crs_count > 1
     bug_fix_ensemble = any(
@@ -243,9 +241,11 @@ def render_run_crs_compose_docker_compose(
     exchange_dir = fetch_dir
 
     # Sidecar services are always injected as infrastructure (per D-04: single parent mount)
-    rebuild_out_dir = str(crs_compose.work_dir.get_rebuild_out_dir(
-        crs_compose.crs_list[0].name, target, run_id, sanitizer, create=True
-    ))
+    rebuild_out_dir = str(
+        crs_compose.work_dir.get_rebuild_out_dir(
+            crs_compose.crs_list[0].name, target, run_id, sanitizer, create=True
+        )
+    )
 
     target_env = target.get_target_env()
     context = {

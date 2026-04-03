@@ -523,7 +523,9 @@ class CRS:
                     cwd=None,
                 )
                 if not ret.success:
-                    return TaskResult(success=False, error=f"Failed to tag builder image: {ret.error}")
+                    return TaskResult(
+                        success=False, error=f"Failed to tag builder image: {ret.error}"
+                    )
                 return TaskResult(success=True)
 
             progress.add_task(

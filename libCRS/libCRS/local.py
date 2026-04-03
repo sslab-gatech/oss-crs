@@ -201,7 +201,9 @@ class LocalCRSUtils(CRSUtils):
                 return hinted_src.relative_to(source_root)
         return None
 
-    def submit_build_output(self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None) -> None:
+    def submit_build_output(
+        self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None
+    ) -> None:
         """Write build output to the build output directory.
 
         Both build-target and run phases use the same mechanism: rsync to the
@@ -334,7 +336,9 @@ class LocalCRSUtils(CRSUtils):
             time.sleep(interval)
             interval = min(interval * 2, 10.0)
 
-        logger.error("Service sidecar '%s' not healthy after %ds", service_name, max_wait)
+        logger.error(
+            "Service sidecar '%s' not healthy after %ds", service_name, max_wait
+        )
         return False
 
     def _wait_for_builder_health(
@@ -478,7 +482,13 @@ class LocalCRSUtils(CRSUtils):
         }
         try:
             with open(pov_path, "rb") as f:
-                files = {"pov": (pov_path.name if hasattr(pov_path, "name") else str(pov_path), f, "application/octet-stream")}
+                files = {
+                    "pov": (
+                        pov_path.name if hasattr(pov_path, "name") else str(pov_path),
+                        f,
+                        "application/octet-stream",
+                    )
+                }
                 resp = http_requests.post(
                     f"{runner_url}/run-pov",
                     data=data,
@@ -487,7 +497,11 @@ class LocalCRSUtils(CRSUtils):
                 )
             resp.raise_for_status()
             result = resp.json()
-        except (http_requests.ConnectionError, http_requests.Timeout, http_requests.HTTPError) as e:
+        except (
+            http_requests.ConnectionError,
+            http_requests.Timeout,
+            http_requests.HTTPError,
+        ) as e:
             logger.error("Failed to run POV: %s", e)
             response_dir.mkdir(parents=True, exist_ok=True)
             (response_dir / "retcode").write_text("1")
@@ -544,7 +558,9 @@ class LocalCRSUtils(CRSUtils):
 
         return exit_code
 
-    def download_build_output(self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None) -> None:
+    def download_build_output(
+        self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None
+    ) -> None:
         """Download build artifacts.
 
         Args:

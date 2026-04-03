@@ -84,7 +84,9 @@ def _build_snapshot_tag(crs_name: str, builder_name: str, build_id: str) -> str:
     return f"oss-crs-snapshot:build-{crs_name}-{builder_name}-{build_id}"
 
 
-def get_build_image(client: "docker.DockerClient", base_image: str, builder_name: str, crs_name: str) -> str:
+def get_build_image(
+    client: "docker.DockerClient", base_image: str, builder_name: str, crs_name: str
+) -> str:
     """Return snapshot image if incremental build enabled and snapshot exists, otherwise base_image.
 
     Snapshot tag uses the CLI build_id (from build-target --incremental-build),
@@ -176,7 +178,9 @@ def _run_ephemeral(
     # Resolve the host path for bind-mounting into ephemeral containers.
     # The sidecar sees rebuild_out_dir as /rebuild_out (container path),
     # but Docker volume mounts need the actual host path.
-    host_rebuild_out_dir = Path(os.environ.get("HOST_REBUILD_OUT_DIR", str(rebuild_out_dir)))
+    host_rebuild_out_dir = Path(
+        os.environ.get("HOST_REBUILD_OUT_DIR", str(rebuild_out_dir))
+    )
     host_output_dir = host_rebuild_out_dir / crs_name / str(rebuild_id)
 
     # Prepare output dir on host.
@@ -198,7 +202,12 @@ def _run_ephemeral(
     try:
         container = client.containers.create(
             base_image,
-            command=["bash", "/usr/local/bin/oss_crs_handler.sh", "/OSS_CRS_BUILD_OUT_DIR/patch.diff", "/out"],
+            command=[
+                "bash",
+                "/usr/local/bin/oss_crs_handler.sh",
+                "/OSS_CRS_BUILD_OUT_DIR/patch.diff",
+                "/out",
+            ],
             volumes=volumes,
             environment={
                 "OSS_CRS_BUILD_ID": str(rebuild_id),
@@ -300,7 +309,9 @@ def run_ephemeral_test(
         rebuild_out_dir=rebuild_out_dir,
         build_cmd="bash /usr/local/bin/run_tests.sh",
         log_prefix=f"test:{rebuild_id}",
-        extra_volumes={run_tests_path: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"}},
+        extra_volumes={
+            run_tests_path: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"}
+        },
         timeout=timeout,
         cpuset=cpuset,
         mem_limit=mem_limit,

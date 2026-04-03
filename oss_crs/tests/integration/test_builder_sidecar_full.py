@@ -56,33 +56,46 @@ def test_builder_sidecar_full(cli_runner, sidecar_full_compose, mock_repo):
 
     result = cli_runner(
         "prepare",
-        "--compose-file", compose,
+        "--compose-file",
+        compose,
         timeout=120,
     )
     assert result.returncode == 0, f"prepare failed:\n{result.stderr[-2000:]}"
 
     result = cli_runner(
         "build-target",
-        "--compose-file", compose,
-        "--fuzz-proj-path", proj,
-        "--target-source-path", repo,
+        "--compose-file",
+        compose,
+        "--fuzz-proj-path",
+        proj,
+        "--target-source-path",
+        repo,
         "--incremental-build",
-        "--build-id", "sidecar-full-e2e",
+        "--build-id",
+        "sidecar-full-e2e",
         timeout=600,
     )
     assert result.returncode == 0, f"build-target failed:\n{result.stderr[-2000:]}"
 
     result = cli_runner(
         "run",
-        "--compose-file", compose,
-        "--fuzz-proj-path", proj,
-        "--target-source-path", repo,
-        "--target-harness", "fuzz_parse_buffer",
-        "--diff", patch,
+        "--compose-file",
+        compose,
+        "--fuzz-proj-path",
+        proj,
+        "--target-source-path",
+        repo,
+        "--target-harness",
+        "fuzz_parse_buffer",
+        "--diff",
+        patch,
         "--incremental-build",
-        "--build-id", "sidecar-full-e2e",
-        "--run-id", "sidecar-full-e2e",
-        "--pov-dir", pov_dir,
+        "--build-id",
+        "sidecar-full-e2e",
+        "--run-id",
+        "sidecar-full-e2e",
+        "--pov-dir",
+        pov_dir,
         timeout=600,
     )
     assert result.returncode == 0, (

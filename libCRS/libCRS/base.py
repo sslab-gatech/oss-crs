@@ -42,7 +42,9 @@ class CRSUtils(ABC):
         self.infra_client = InfraClient()
 
     @abstractmethod
-    def download_build_output(self, src_path: str, dst_path: Path) -> None:
+    def download_build_output(
+        self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None
+    ) -> None:
         """Download build output from src_path (in infra) to dst_path (in local)."""
         pass
 
@@ -61,7 +63,9 @@ class CRSUtils(ABC):
         pass
 
     @abstractmethod
-    def submit_build_output(self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None) -> None:
+    def submit_build_output(
+        self, src_path: str, dst_path: Path, rebuild_id: "int | None" = None
+    ) -> None:
         """Submit build output.
 
         Args:

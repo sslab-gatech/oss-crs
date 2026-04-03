@@ -23,7 +23,10 @@ from pydantic import BaseModel
 import uvicorn
 
 
-app = FastAPI(title="Runner Sidecar", description="POV reproduction service using OSS-Fuzz reproduce")
+app = FastAPI(
+    title="Runner Sidecar",
+    description="POV reproduction service using OSS-Fuzz reproduce",
+)
 
 
 class POVResult(BaseModel):
@@ -93,7 +96,9 @@ async def run_pov(
                 env=env,
                 cwd=rebuild_out,
             )
-            return POVResult(exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr)
+            return POVResult(
+                exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr
+            )
         except subprocess.TimeoutExpired:
             return POVResult(exit_code=124, stderr="POV execution timed out")
     finally:
