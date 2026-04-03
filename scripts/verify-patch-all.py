@@ -6,17 +6,40 @@ then invokes verify-patch-inc.sh.
 """
 
 import argparse
+import atexit
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import yaml
 
 BENCHMARKS_DIR = Path.home() / "post" / "CRSBench" / "benchmarks"
+PROJECT_ROOT = Path(__file__).parent.parent
 SCRIPT = Path(__file__).parent / "verify-patch-inc.sh"
 # SCRIPT = Path(__file__).parent / "verify-patch-no-inc.sh"
-COMPOSE = Path(__file__).parent / "example" / "crs-verify-patch" / "compose.yaml"
+
+COMPOSE_CONTENT = """\
+run_env: local
+docker_registry: local
+
+oss_crs_infra:
+  cpuset: "0-3"
+  memory: "8G"
+
+builder-sidecar-lite:
+  source:
+    local_path: oss_crs/tests/integration/fixtures/builder-sidecar-lite
+  cpuset: "0-15"
+  memory: "32G"
+"""
+
+# Written once at startup, cleaned up on exit.
+_compose_tmpdir = tempfile.mkdtemp(prefix="verify-patch-")
+COMPOSE = Path(_compose_tmpdir) / "compose.yaml"
+COMPOSE.write_text(COMPOSE_CONTENT)
+atexit.register(lambda: __import__("shutil").rmtree(_compose_tmpdir, ignore_errors=True))
 
 # Set to None to run all, or list specific benchmark names to filter.
 # SELECTED_BENCHMARKS = None
@@ -68,7 +91,7 @@ def get_artifacts(proj: Path, harness: str, build_id: str) -> dict | None:
              "--build-id", build_id,
              "--run-id", build_id],
             capture_output=True, text=True, timeout=30,
-            cwd=str(SCRIPT.parent),
+            cwd=str(PROJECT_ROOT),
         )
         if result.returncode != 0:
             return None
@@ -117,8 +140,8 @@ def main():
         print(f"{'='*60}")
 
         rc = subprocess.run(
-            [str(SCRIPT), str(proj), harness, str(diff), str(pov_dir)],
-            cwd=str(SCRIPT.parent),
+            [str(SCRIPT), str(proj), harness, str(diff), str(pov_dir), str(COMPOSE)],
+            cwd=str(PROJECT_ROOT),
         ).returncode
 
         status = "PASS" if rc == 0 else "FAIL"

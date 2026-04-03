@@ -149,7 +149,6 @@ def _run_ephemeral(
     patch_bytes: bytes,
     rebuild_out_dir: Path,
     build_cmd: str,
-    snapshot_tag: str,
     log_prefix: str,
     extra_volumes: dict[str, dict] | None = None,
     clean_output: bool = False,
@@ -160,7 +159,7 @@ def _run_ephemeral(
     """Run patch-apply + command inside an ephemeral Docker container.
 
     Shared lifecycle for both build and test:
-      create -> start -> wait -> (commit on success) -> remove.
+      create -> start -> wait -> remove.
 
     The patch file is written to the shared rebuild_out_dir volume
     (host-visible) since the sidecar's tmpdir is not accessible to the
@@ -179,12 +178,6 @@ def _run_ephemeral(
     # but Docker volume mounts need the actual host path.
     host_rebuild_out_dir = Path(os.environ.get("HOST_REBUILD_OUT_DIR", str(rebuild_out_dir)))
     host_output_dir = host_rebuild_out_dir / crs_name / str(rebuild_id)
-
-    try:
-        client.images.get(snapshot_tag)
-        snapshot_exists = True
-    except docker.errors.ImageNotFound:
-        snapshot_exists = False
 
     # Prepare output dir on host.
     if clean_output and output_dir.exists():
@@ -241,10 +234,6 @@ def _run_ephemeral(
         exit_code = result["StatusCode"]
         stdout, stderr = _stream_and_capture_logs(container, log_prefix)
 
-        if exit_code == 0 and not snapshot_exists:
-            repo, tag = snapshot_tag.split(":", 1)
-            container.commit(repository=repo, tag=tag)
-
         return {
             "exit_code": exit_code,
             "stdout": stdout,
@@ -274,7 +263,6 @@ def run_ephemeral_build(
     """Run a patch + build inside an ephemeral Docker container."""
     client = docker.from_env()
     build_cmd = " ".join(get_image_cmd(client, base_image))
-    snapshot_tag = _build_snapshot_tag(crs_name, builder_name, str(rebuild_id))
 
     return _run_ephemeral(
         base_image=base_image,
@@ -283,7 +271,6 @@ def run_ephemeral_build(
         patch_bytes=patch_bytes,
         rebuild_out_dir=rebuild_out_dir,
         build_cmd=build_cmd,
-        snapshot_tag=snapshot_tag,
         log_prefix=f"build:{builder_name}",
         clean_output=True,
         timeout=timeout,
@@ -312,7 +299,6 @@ def run_ephemeral_test(
         patch_bytes=patch_bytes,
         rebuild_out_dir=rebuild_out_dir,
         build_cmd="bash /usr/local/bin/run_tests.sh",
-        snapshot_tag=f"oss-crs-snapshot:test-{rebuild_id}",
         log_prefix=f"test:{rebuild_id}",
         extra_volumes={run_tests_path: {"bind": "/usr/local/bin/run_tests.sh", "mode": "ro"}},
         timeout=timeout,
