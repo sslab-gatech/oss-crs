@@ -11,7 +11,7 @@ from .env_policy import build_prepare_env
 from .ui import MultiTaskProgress, TaskResult
 from .target import Target, file_lock
 from .templates import renderer
-from .utils import TmpDockerCompose, log_dim
+from .utils import TmpDockerCompose, log_dim, preserved_builder_image_name
 from .workdir import WorkDir
 
 CRS_YAML_PATH = "oss-crs/crs.yaml"
@@ -304,17 +304,13 @@ class CRS:
                 success=True,
                 output=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
-        # Filter out snapshot builds — they are handled by target.create_snapshot()
-        # at the CRSCompose level, not by the docker-compose build pipeline
-        non_snapshot_builds = [
-            b for b in self.config.target_build_phase.builds if not b.snapshot
-        ]
-        if not non_snapshot_builds:
+        builds = self.config.target_build_phase.builds
+        if not builds:
             return TaskResult(success=True)
         build_work_dir = self.work_dir.get_crs_build_dir(
             self.name, target, build_id, sanitizer
         )
-        for build_config in non_snapshot_builds:
+        for build_config in builds:
             build_name = build_config.name
             progress.add_task(
                 build_name,
@@ -355,17 +351,13 @@ class CRS:
                 success=True,
                 output=f"Skipping target {target.name} for CRS {self.name} as it is not supported.",
             )
-        # Filter out snapshot builds — snapshots produce Docker images, not files in
-        # the build-out directory, so they have no outputs to check here
-        non_snapshot_builds = [
-            b for b in self.config.target_build_phase.builds if not b.snapshot
-        ]
-        if not non_snapshot_builds:
+        builds = self.config.target_build_phase.builds
+        if not builds:
             return TaskResult(success=True)
         build_out_dir = self.work_dir.get_build_output_dir(
             self.name, target, build_id, sanitizer
         )
-        for build_config in non_snapshot_builds:
+        for build_config in builds:
             build_name = build_config.name
             progress.add_task(
                 f"Check build outputs for {build_name}",
@@ -516,6 +508,29 @@ class CRS:
             progress.add_task(
                 "Check outputs",
                 lambda p: self.__check_outputs(build_config, build_out_dir, p),
+            )
+
+            def tag_builder_image(p) -> TaskResult:
+                """Tag the builder image with a deterministic name before cleanup.
+
+                docker_compose_down excludes oss-crs-builder:* from removal,
+                so this tag survives while the compose-named reference is cleaned up.
+                """
+                src = f"{project_name}-target_builder"
+                dest = preserved_builder_image_name(self.name, build_name, build_id)
+                ret = p.run_command_with_streaming_output(
+                    cmd=["docker", "tag", src, dest],
+                    cwd=None,
+                )
+                if not ret.success:
+                    return TaskResult(
+                        success=False, error=f"Failed to tag builder image: {ret.error}"
+                    )
+                return TaskResult(success=True)
+
+            progress.add_task(
+                "Tag builder image",
+                tag_builder_image,
             )
 
             result = progress.run_added_tasks()

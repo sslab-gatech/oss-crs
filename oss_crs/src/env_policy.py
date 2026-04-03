@@ -7,6 +7,15 @@ from .env_schema import (
     is_reserved_system_key,
 )
 
+# OSS-Fuzz env vars that must be set in every build/test container.
+# Mapping: env var name -> target_env dict key.
+OSS_FUZZ_TARGET_ENV = {
+    "FUZZING_ENGINE": "engine",
+    "SANITIZER": "sanitizer",
+    "ARCHITECTURE": "architecture",
+    "FUZZING_LANGUAGE": "language",
+}
+
 
 @dataclass
 class EnvPlan:
@@ -95,14 +104,12 @@ def build_target_builder_env(
     base_env = {
         "HELPER": "True",
         "RUN_FUZZER_MODE": "interactive",
-        "FUZZING_ENGINE": target_env["engine"],
-        "SANITIZER": target_env["sanitizer"],
-        "ARCHITECTURE": target_env["architecture"],
+        **{k: target_env[v] for k, v in OSS_FUZZ_TARGET_ENV.items()},
         "PROJECT_NAME": target_env["name"],
-        "FUZZING_LANGUAGE": target_env["language"],
     }
     system_env = {
         "OSS_CRS_RUN_ENV_TYPE": run_env_type,
+        "OSS_CRS_CURRENT_PHASE": "build-target",
         "OSS_CRS_BUILD_ID": build_id,
         "OSS_CRS_BUILD_OUT_DIR": "/OSS_CRS_BUILD_OUT_DIR",
         "OSS_CRS_TARGET": target_env["name"],
@@ -140,22 +147,22 @@ def build_run_service_env(
     scope: str,
     harness: str | None = None,
     include_fetch_dir: bool = False,
-    include_snapshot_image: str | None = None,
     llm_api_url: str | None = None,
     llm_api_key: str | None = None,
 ) -> EnvPlan:
     base_env = {
         "HELPER": "True",
         "RUN_FUZZER_MODE": "interactive",
-        "FUZZING_ENGINE": target_env["engine"],
-        "SANITIZER": sanitizer,
-        "ARCHITECTURE": target_env["architecture"],
+        **{
+            k: target_env[v] for k, v in OSS_FUZZ_TARGET_ENV.items() if k != "SANITIZER"
+        },
+        "SANITIZER": sanitizer,  # override: run phase uses resolved sanitizer
         "PROJECT_NAME": target_env["name"],
-        "FUZZING_LANGUAGE": target_env["language"],
     }
     # Preserve existing behavior: module env first, CRS env last.
     system_env = {
         "OSS_CRS_RUN_ENV_TYPE": run_env_type,
+        "OSS_CRS_CURRENT_PHASE": "run",
         "OSS_CRS_NAME": crs_name,
         "OSS_CRS_SERVICE_NAME": f"{crs_name}_{module_name}",
         "OSS_CRS_TARGET": target_env["name"],
@@ -165,6 +172,7 @@ def build_run_service_env(
         "OSS_CRS_PROJ_PATH": "/OSS_CRS_PROJ_PATH",
         "OSS_CRS_REPO_PATH": target_env["repo_path"],
         "OSS_CRS_BUILD_OUT_DIR": "/OSS_CRS_BUILD_OUT_DIR",
+        "OSS_CRS_REBUILD_OUT_DIR": "/OSS_CRS_REBUILD_OUT_DIR",
         "OSS_CRS_SUBMIT_DIR": "/OSS_CRS_SUBMIT_DIR",
         "OSS_CRS_SHARED_DIR": "/OSS_CRS_SHARED_DIR",
         "OSS_CRS_LOG_DIR": "/OSS_CRS_LOG_DIR",
@@ -173,8 +181,6 @@ def build_run_service_env(
         system_env["OSS_CRS_TARGET_HARNESS"] = harness
     if include_fetch_dir:
         system_env["OSS_CRS_FETCH_DIR"] = "/OSS_CRS_FETCH_DIR"
-    if include_snapshot_image:
-        system_env["OSS_CRS_SNAPSHOT_IMAGE"] = include_snapshot_image
     if llm_api_url:
         system_env["OSS_CRS_LLM_API_URL"] = llm_api_url
     if llm_api_key:

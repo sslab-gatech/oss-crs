@@ -17,6 +17,7 @@ from ..constants import (
 )
 from ..env_policy import build_run_service_env, build_target_builder_env
 from ..llm import DEFAULT_LITELLM_CONFIG_PATH
+from ..utils import preserved_builder_image_name
 
 RAND_CHARS = string.ascii_lowercase + string.digits
 
@@ -158,8 +159,6 @@ def prepare_llm_context(
             raise RuntimeError("External LiteLLM API key is required.")
         keys = {}
         for crs in crs_compose.crs_list:
-            if crs.config.is_builder:
-                continue
             keys[crs.name] = key
         return {
             "mode": "external",
@@ -184,9 +183,7 @@ def prepare_llm_context(
         keys = {}
         key_info = {}
         for crs in crs_compose.crs_list:
-            if crs.config.is_builder:
-                continue
-            if crs.resource is None:
+            if crs.resource is None:  # for type check
                 raise RuntimeError(
                     f"CRS '{crs.name}' is missing resource configuration for LiteLLM"
                 )
@@ -227,15 +224,14 @@ def render_run_crs_compose_docker_compose(
     build_id: str,
     sanitizer: str,
     cgroup_parents: Optional[dict[str, str]] = None,
+    incremental_build: bool = False,
 ) -> tuple[str, list[str]]:
     template_path = CUR_DIR / "run-crs-compose.docker-compose.yaml.j2"
     compose_env = crs_compose.crs_compose_env
 
     # Deployment conditions for infra sidecars
     bug_finding_crs_count = sum(
-        1
-        for crs in crs_compose.crs_list
-        if CRSType.BUG_FINDING in crs.config.type and not crs.config.is_builder
+        1 for crs in crs_compose.crs_list if CRSType.BUG_FINDING in crs.config.type
     )
     bug_finding_ensemble = bug_finding_crs_count > 1
     bug_fix_ensemble = any(
@@ -243,6 +239,13 @@ def render_run_crs_compose_docker_compose(
     )
     fetch_dir = str(crs_compose.work_dir.get_exchange_dir(target, run_id, sanitizer))
     exchange_dir = fetch_dir
+
+    # Sidecar services are always injected as infrastructure (per D-04: single parent mount)
+    rebuild_out_dir = str(
+        crs_compose.work_dir.get_rebuild_out_dir(
+            crs_compose.crs_list[0].name, target, run_id, sanitizer, create=True
+        )
+    )
 
     target_env = target.get_target_env()
     context = {
@@ -257,7 +260,6 @@ def render_run_crs_compose_docker_compose(
         "build_id": build_id,
         "sanitizer": sanitizer,
         "oss_crs_infra_root_path": str(OSS_CRS_ROOT_PATH / "oss-crs-infra"),
-        "snapshot_image_tag": target.snapshot_image_tag or "",
         "resolve_dockerfile": _resolve_module_dockerfile,
         "fetch_dir": fetch_dir,
         "exchange_dir": exchange_dir,
@@ -270,6 +272,9 @@ def render_run_crs_compose_docker_compose(
         "postgres_user": POSTGRES_USER,
         "postgres_port": POSTGRES_PORT,
         "postgres_host": POSTGRES_HOST,
+        "rebuild_out_dir": rebuild_out_dir,
+        "incremental_build": incremental_build,
+        "preserved_builder_image_name": preserved_builder_image_name,
     }
 
     llm_context = prepare_llm_context(tmp_docker_compose, crs_compose)
@@ -288,18 +293,9 @@ def render_run_crs_compose_docker_compose(
                 )
             resource = crs.resource
             service_name = f"{crs.name}_{module_name}"
-            include_snapshot = (
-                target.snapshot_image_tag
-                if (
-                    target.snapshot_image_tag
-                    and not module_config.run_snapshot
-                    and not crs.config.is_builder
-                )
-                else None
-            )
             llm_url = None
             llm_key = None
-            if llm_context is not None and not crs.config.is_builder:
+            if llm_context is not None:
                 llm_url = llm_context.get("llm_api_url")
                 llm_key = llm_context.get("api_keys", {}).get(crs.name)
             env_plan = build_run_service_env(
@@ -315,7 +311,6 @@ def render_run_crs_compose_docker_compose(
                 crs_additional_env=resource.additional_env,
                 harness=target_env.get("harness"),
                 include_fetch_dir=bool(fetch_dir),
-                include_snapshot_image=include_snapshot,
                 llm_api_url=llm_url,
                 llm_api_key=llm_key,
                 scope=f"{crs.name}:run:{module_name}",
