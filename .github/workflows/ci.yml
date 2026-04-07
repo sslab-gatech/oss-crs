@@ -245,7 +245,8 @@ jobs:
             echo "Found patches:"
             ls -la "$patch_dir"
           else
-            echo "WARNING: No patches found (may be expected if LLM could not fix)"
+            echo "ERROR: No patches found"
+            exit 1
           fi
 
       - name: Create smoke-c-patch workdir tarball

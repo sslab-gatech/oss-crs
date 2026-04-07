@@ -215,7 +215,7 @@ services:
       - ARCHITECTURE={{ target_env.architecture }}
       - FUZZING_LANGUAGE={{ target_env.language }}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -237,7 +237,7 @@ services:
     volumes:
       - {{ rebuild_out_dir }}:/out:rw
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
       interval: 5s
       timeout: 3s
       retries: 5
