@@ -36,8 +36,8 @@ def sidecar_full_compose(tmp_dir):
         "oss_crs_infra": {"cpuset": "0-3", "memory": "8G"},
         "builder-sidecar-full": {
             "source": {"local_path": str(CRS_FIXTURE)},
-            "cpuset": "0-15",
-            "memory": "32G",
+            "cpuset": "0-3",
+            "memory": "8G",
         },
     }
     path = tmp_dir / "compose.yaml"
