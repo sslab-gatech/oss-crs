@@ -200,7 +200,7 @@ class LocalCRSUtils(CRSUtils):
         builder: str,
         files: dict | None = None,
         data: dict | None = None,
-        timeout: int = 600,
+        timeout: int = 1200,
         poll_interval: int = 5,
     ) -> dict | None:
         """Submit a job to the builder sidecar and poll until done.
