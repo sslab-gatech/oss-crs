@@ -25,6 +25,15 @@ from libCRS.local import LocalCRSUtils
 
 RESPONSE_DIR = Path("/tmp/response")
 
+# Max bytes of stderr/stdout kept inline in verify_patch_timing.json. The full
+# content is always persisted to OSS_CRS_LOG_DIR on failure so truncation here
+# only affects the inline summary, not diagnosability. 8 KiB is large enough to
+# capture typical ASan/jazzer reports while keeping the JSON manageable.
+_DEFAULT_INLINE_TAIL_BYTES = 8192
+INLINE_TAIL_BYTES = int(
+    os.environ.get("OSS_CRS_VERIFY_INLINE_TAIL_BYTES", _DEFAULT_INLINE_TAIL_BYTES)
+)
+
 
 # --- Result accumulator -------------------------------------------------
 # Initialized with "error" so that an unexpected crash (unhandled exception,
@@ -66,6 +75,36 @@ def _mark_step(name: str, status: str, **extra) -> None:
     entry = {"status": status}
     entry.update(extra)
     _result["steps"][name] = entry
+
+
+def _archive_full_log(src: Path, dest_name: str) -> "str | None":
+    """Copy a response-dir log file into OSS_CRS_LOG_DIR for post-mortem.
+
+    Returns the archived path (string) on success, or None if the log is
+    missing or OSS_CRS_LOG_DIR is unavailable. Called from failure paths so
+    the full (untruncated) stderr/stdout survives alongside the structured
+    verify_patch_timing.json.
+    """
+    log_dir = os.environ.get("OSS_CRS_LOG_DIR", "")
+    if not log_dir or not src.exists():
+        return None
+    try:
+        dest = Path(log_dir) / dest_name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(src.read_bytes())
+        return str(dest)
+    except Exception as exc:
+        log(f"Failed to archive {src} -> {dest_name}: {exc}")
+        return None
+
+
+def _tail_text(path: Path, nbytes: int) -> str:
+    if not path.exists():
+        return ""
+    try:
+        return path.read_text(errors="replace").strip()[-nbytes:]
+    except Exception as exc:
+        return f"<failed to read {path}: {exc}>"
 
 
 def fail(step: str, reason: str) -> None:
@@ -157,16 +196,22 @@ def main() -> int:
     _result["rebuild"] = t_rebuild.elapsed
     if rc != 0:
         build_stderr = patched_resp / "stderr.log"
-        stderr_tail = ""
-        if build_stderr.exists():
-            stderr_tail = build_stderr.read_text().strip()[-1000:]
-            log(f"  build stderr (last 1000): {stderr_tail}")
+        build_stdout = patched_resp / "stdout.log"
+        stderr_tail = _tail_text(build_stderr, INLINE_TAIL_BYTES)
+        if stderr_tail:
+            log(f"  build stderr (last {INLINE_TAIL_BYTES}): {stderr_tail}")
+        archived_stderr = _archive_full_log(build_stderr, "apply_patch_build.stderr.log")
+        archived_stdout = _archive_full_log(build_stdout, "apply_patch_build.stdout.log")
+        if archived_stderr:
+            log(f"  full build stderr archived to {archived_stderr}")
         _mark_step(
             "apply_patch_build",
             "fail",
             duration=t_rebuild.elapsed,
             exit_code=rc,
             stderr_tail=stderr_tail,
+            stderr_full_path=archived_stderr,
+            stdout_full_path=archived_stdout,
         )
         fail("apply_patch_build", f"Patched build failed (exit={rc})")
     patched_rid = int((patched_resp / "rebuild_id").read_text().strip())
@@ -211,12 +256,28 @@ def main() -> int:
         rc = crs.run_pov(pov_file, harness, pov_resp, patched_rid)
         if rc != 0:
             stderr_log = pov_resp / "stderr.log"
-            stderr_tail = ""
-            if stderr_log.exists():
-                stderr_tail = stderr_log.read_text().strip()[:500]
-                log(f"  {pov_file.name} stderr: {stderr_tail}")
+            stdout_log = pov_resp / "stdout.log"
+            stderr_tail = _tail_text(stderr_log, INLINE_TAIL_BYTES)
+            if stderr_tail:
+                log(f"  {pov_file.name} stderr (last {INLINE_TAIL_BYTES}): {stderr_tail}")
+            archived_stderr = _archive_full_log(
+                stderr_log, f"run_povs_patched.{pov_file.stem}.stderr.log"
+            )
+            archived_stdout = _archive_full_log(
+                stdout_log, f"run_povs_patched.{pov_file.stem}.stdout.log"
+            )
+            if archived_stderr:
+                log(f"  {pov_file.name} full stderr archived to {archived_stderr}")
             log(f"  {pov_file.name}: STILL CRASHES (exit={rc})")
-            still_crash.append({"pov": pov_file.name, "exit": rc, "stderr_tail": stderr_tail})
+            still_crash.append(
+                {
+                    "pov": pov_file.name,
+                    "exit": rc,
+                    "stderr_tail": stderr_tail,
+                    "stderr_full_path": archived_stderr,
+                    "stdout_full_path": archived_stdout,
+                }
+            )
         else:
             log(f"  {pov_file.name}: fixed (no crash)")
     if still_crash:
@@ -235,11 +296,23 @@ def main() -> int:
         rc = crs.apply_patch_test(patch, test_resp)
     _result["test"] = t_test.elapsed
     if rc != 0:
+        test_stderr = test_resp / "stderr.log"
+        test_stdout = test_resp / "stdout.log"
+        stderr_tail = _tail_text(test_stderr, INLINE_TAIL_BYTES)
+        if stderr_tail:
+            log(f"  test stderr (last {INLINE_TAIL_BYTES}): {stderr_tail}")
+        archived_stderr = _archive_full_log(test_stderr, "apply_patch_test.stderr.log")
+        archived_stdout = _archive_full_log(test_stdout, "apply_patch_test.stdout.log")
+        if archived_stderr:
+            log(f"  full test stderr archived to {archived_stderr}")
         _mark_step(
             "apply_patch_test",
             "fail",
             duration=t_test.elapsed,
             exit_code=rc,
+            stderr_tail=stderr_tail,
+            stderr_full_path=archived_stderr,
+            stdout_full_path=archived_stdout,
         )
         fail("apply_patch_test", f"Tests failed (exit={rc})")
     _mark_step("apply_patch_test", "pass", duration=t_test.elapsed)
