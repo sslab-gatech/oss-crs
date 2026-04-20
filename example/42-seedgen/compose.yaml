@@ -1,0 +1,29 @@
+##############################################################################
+#                        CRS Compose Configuration                           #
+#              Example for 42-seed-gen (bug-finding)                         #
+##############################################################################
+
+# --- General Settings -------------------------------------------------------
+run_env: local
+docker_registry: local
+
+# --- Infrastructure ---------------------------------------------------------
+oss_crs_infra:
+  cpuset: "0-1"
+  memory: "8G"
+
+# --- CRS (42-seed-gen) -----------------------------------------------------
+# Generates seeds using LLM-based agents and registers them in shared directory.
+42-seedgen:
+  cpuset: "2-7"
+  memory: "16G"
+  llm_budget: 10
+  additional_env:
+    SEEDGEN_GENERATIVE_MODEL: claude-sonnet-4-5-20250929
+    SEEDGEN_INFER_MODEL: o3-mini
+    SEEDGEN_KNOWLEDGEABLE_MODEL: gpt-4o
+    NUM_SEEDS: "100"
+
+# --- LLM Configuration -----------------------------------------------------
+llm_config:
+  litellm_config: ./example/42-seedgen/litellm-config.yaml
