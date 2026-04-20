@@ -1,0 +1,19 @@
+##############################################################################
+#                        CRS Compose Configuration                           #
+#              Example for 42-directed (bug-finding)                         #
+##############################################################################
+
+# --- General Settings -------------------------------------------------------
+run_env: local
+docker_registry: local
+
+# --- Infrastructure ---------------------------------------------------------
+oss_crs_infra:
+  cpuset: "0-1"
+  memory: "8G"
+
+# --- CRS (42-directed) -----------------------------------------------------
+# Generates seeds using LLM-based agents and registers them in shared directory.
+42-directed:
+  cpuset: "8-16"
+  memory: "32G"

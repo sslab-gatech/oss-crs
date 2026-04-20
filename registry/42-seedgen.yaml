@@ -1,0 +1,6 @@
+name: 42-seedgen
+type:
+  - bug-finding
+source:
+  url: https://github.com/Team-Atlanta/42-seedgen.git
+  ref: main
