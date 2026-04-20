@@ -142,6 +142,9 @@ jobs:
 
   smoke-c-patch:
     name: Smoke test (C patching)
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     needs: [verify]
     timeout-minutes: 40
@@ -273,9 +276,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [verify]
     timeout-minutes: 30
-    env:
-      EXTERNAL_LITELLM_API_BASE: ${{ secrets.EXTERNAL_LITELLM_API_BASE }}
-      EXTERNAL_LITELLM_API_KEY: ${{ secrets.EXTERNAL_LITELLM_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v7
