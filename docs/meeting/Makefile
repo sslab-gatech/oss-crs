@@ -15,10 +15,10 @@ $(DATES:%=%/main.md): %/main.md: %/template.md
 	mmdc -i $< -o $@
 
 $(PDFS): $$(dir $$@)main.md
-	marp --allow-local-files $< --pdf -o $@
+	marp --html --allow-local-files $< --pdf -o $@
 
 $(PPTXS): $$(dir $$@)main.md
-	marp --allow-local-files $< --pptx -o $@
+	marp --html --allow-local-files $< --pptx -o $@
 
 clean:
 	rm -f $(TODAY)/main.md $(TODAY)/$(TODAY).pdf $(TODAY)/$(TODAY).pptx
