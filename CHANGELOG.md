@@ -17,6 +17,7 @@ stricter subset of Keep a Changelog).
 - roboduck to registry/ and example/
 - fuzzing-brain to registry/ and example/ (bug-finding, C/C++, multi-provider LLM)
 - buttercup-seed-gen to registry/ and example/
+- 42-directed and 42-seedgen to registry/ and example/
 - `libCRS download-source fuzz-proj <dest>`: copies clean fuzz project
 - `libCRS download-source target-source <dest>`: copies clean target source
 
