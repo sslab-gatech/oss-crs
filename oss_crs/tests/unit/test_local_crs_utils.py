@@ -409,6 +409,33 @@ class TestRunPov:
         # No GET calls were made (no job polling)
         assert mock_requests.get.call_count == 0
 
+    @patch("libCRS.libCRS.local.http_requests")
+    def test_omits_rebuild_id_when_none(self, mock_requests, crs_utils, tmp_path):
+        """When rebuild_id is None (base build), the client must not send a
+        rebuild_id field at all.  The server uses Form(None) default to detect
+        this.  Sending a sentinel string instead of omitting the field caused
+        a writable-overlay bug on the server side.
+        """
+        mock_requests.post.return_value = _mock_response(
+            json_data={"exit_code": 0, "stderr": ""}
+        )
+        response_dir = tmp_path / "response"
+        pov_file = tmp_path / "crash"
+        pov_file.write_bytes(b"crashdata")
+
+        crs_utils.run_pov(
+            pov_file, "fuzzer", response_dir, rebuild_id=None, builder="test-runner"
+        )
+
+        call_kwargs = mock_requests.post.call_args
+        data = call_kwargs.kwargs.get("data") or (
+            call_kwargs[1].get("data", {}) if len(call_kwargs) > 1 else {}
+        )
+        assert "rebuild_id" not in data, (
+            f"Client must not send rebuild_id when it is None, "
+            f"but sent: {data.get('rebuild_id')!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # INT-04: apply_patch_test

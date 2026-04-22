@@ -65,7 +65,7 @@ async def run_pov(
     """
     pov_timeout = int(os.environ.get("POV_TIMEOUT", "30"))
 
-    if rebuild_id is not None and rebuild_id != "OSS_CRS_BASE":
+    if rebuild_id is not None:
         # Rebuild artifacts: /out/{crs_name}/{rebuild_id}/build/{harness_name}
         out_dir = os.environ.get("OUT_DIR", "/out")
         harness_dir = os.path.join(out_dir, crs_name, str(rebuild_id), "build")
@@ -92,7 +92,7 @@ async def run_pov(
     # the harness binary (and any sibling files the fuzzer may need) into a
     # temp dir and point OUT there.
     writable_out = None
-    if rebuild_id is None or rebuild_id == "OSS_CRS_BASE":
+    if rebuild_id is None:
         writable_out = tempfile.mkdtemp(prefix="run-pov-out-")
         # Symlink every file from the read-only harness dir so the runner
         # can find harness binary + seed corpus etc. without a full copy.

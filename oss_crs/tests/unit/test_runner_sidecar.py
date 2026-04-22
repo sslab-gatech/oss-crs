@@ -197,3 +197,81 @@ class TestRunPOV:
         call_kwargs = mock_run.call_args[1]
         assert "FUZZER_ARGS" in call_kwargs["env"]
         assert "-rss_limit_mb=2560" in call_kwargs["env"]["FUZZER_ARGS"]
+
+
+# ===========================================================================
+# TestRunPOVDefaultRebuildId — writable overlay for base build
+# ===========================================================================
+
+
+class TestRunPOVDefaultRebuildId:
+    """When rebuild_id is not provided (base build), the server must create a
+    writable temp overlay for OUT, since the base build directory is read-only.
+
+    This test exercises the client-to-server contract: the client omits
+    rebuild_id when it is None, and the server correctly detects this and
+    creates the writable overlay.  The test is intentionally independent of
+    any sentinel value — it only checks observable behavior (the OUT env var
+    used by subprocess).
+    """
+
+    @patch("runner_server.subprocess.run")
+    @patch("runner_server.os.listdir", return_value=["my_fuzzer"])
+    @patch("runner_server.os.symlink")
+    @patch("runner_server.os.path.exists", return_value=True)
+    def test_default_rebuild_id_uses_writable_out(
+        self, mock_exists, mock_symlink, mock_listdir, mock_run
+    ):
+        """No rebuild_id ⇒ OUT is a writable temp dir, not the read-only base path."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        client = _make_test_client()
+
+        # Client sends NO rebuild_id field — simulates what libCRS does for
+        # the default (base build) case.
+        upload = {
+            "files": {
+                "pov": ("crash.bin", b"\x00deadbeef", "application/octet-stream")
+            },
+            "data": {
+                "harness_name": "my_fuzzer",
+                "crs_name": "test-crs",
+                # rebuild_id intentionally absent
+            },
+        }
+        with patch.dict("os.environ", {"BUILD_OUT_DIR": "/build_out"}):
+            response = client.post("/run-pov", **upload)
+
+        assert response.status_code == 200
+        call_kwargs = mock_run.call_args[1]
+        out_env = call_kwargs["env"]["OUT"]
+        # OUT must NOT be the read-only base build path
+        assert not out_env.startswith("/build_out"), (
+            f"OUT should be a writable temp dir, not the read-only base path: {out_env}"
+        )
+        # OUT should be a temp directory (created by tempfile.mkdtemp)
+        assert "run-pov-out-" in out_env
+
+    @patch("runner_server.subprocess.run")
+    @patch("runner_server.os.path.exists", return_value=True)
+    def test_explicit_rebuild_id_uses_rebuild_path(self, mock_exists, mock_run):
+        """Explicit rebuild_id ⇒ OUT points to the rebuild artifacts dir."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        client = _make_test_client()
+
+        upload = {
+            "files": {
+                "pov": ("crash.bin", b"\x00deadbeef", "application/octet-stream")
+            },
+            "data": {
+                "harness_name": "my_fuzzer",
+                "crs_name": "test-crs",
+                "rebuild_id": "42",
+            },
+        }
+        with patch.dict("os.environ", {"OUT_DIR": "/out"}):
+            response = client.post("/run-pov", **upload)
+
+        assert response.status_code == 200
+        call_kwargs = mock_run.call_args[1]
+        out_env = call_kwargs["env"]["OUT"]
+        assert out_env == "/out/test-crs/42/build"
