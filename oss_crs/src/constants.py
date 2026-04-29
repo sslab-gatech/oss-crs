@@ -1,5 +1,5 @@
 # Container images used by the infrastructure sidecar stack.
-LITELLM_IMAGE = "ghcr.io/berriai/litellm-database@sha256:7c51011535fc9347fc306c8ed7d2e4cdda2336ffd91d930a35fdccd034f2ec17"  # main-stable
+LITELLM_IMAGE = "ghcr.io/berriai/litellm-database@sha256:2dec2d0228b7ad35126e3be5eb8969d8151563dfe5c79a3f25e6ebbd28bf607b"  # main-v1.83.10-stable
 POSTGRES_IMAGE = "postgres@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416"  # 16-alpine
 
 # Internal LiteLLM proxy URL exposed inside the Docker network.
