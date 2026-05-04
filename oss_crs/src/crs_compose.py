@@ -1061,6 +1061,7 @@ class CRSCompose:
                     crs.name, target, run_id, sanitizer, create=False
                 )
                 for crs in self.crs_list
+                if not crs.config.is_triage and not crs.config.is_seed_filter  # post-processors run until timeout
             ]
             # Also watch exchange dir when multiple CRSs (shared artifact location)
             if len(self.crs_list) > 1:

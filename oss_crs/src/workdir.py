@@ -269,6 +269,32 @@ class WorkDir:
             path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def get_processed_exchange_dir(
+        self,
+        target: Target,
+        run_id: str,
+        sanitizer: str,
+        create: bool = True,
+    ) -> Path:
+        """Get the PROCESSED_EXCHANGE_DIR (post-processor outputs for non-processor CRSs).
+
+        Collects outputs from triage and seed-filter CRSs into a single dir
+        that non-processor CRSs mount as their FETCH_DIR.
+
+        Structure: <sanitizer>/runs/<run_id>/PROCESSED_EXCHANGE_DIR/<target_key>/<harness>/
+        """
+        assert target.target_harness, "target_harness must be set for processed exchange dir"
+        target_key = self._get_target_key(target)
+        path = (
+            self.get_run_dir(run_id, sanitizer)
+            / "PROCESSED_EXCHANGE_DIR"
+            / target_key
+            / target.target_harness
+        )
+        if create:
+            path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def get_snapshot_dir(
         self,
         target: Target,

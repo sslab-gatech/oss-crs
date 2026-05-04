@@ -250,6 +250,22 @@ def render_run_crs_compose_docker_compose(
     fetch_dir = str(crs_compose.work_dir.get_exchange_dir(target, run_id, sanitizer))
     exchange_dir = fetch_dir
 
+    # When triage CRS(s) are present, non-triage CRS should fetch from the
+    # triage exchange dir (triaged POVs) instead of the main exchange dir
+    # (raw POVs). A second exchange sidecar collects triage outputs there.
+    # Post-processor CRS (triage, seed-filter) read from exchange_dir and write
+    # processed results to their submit dirs.  A dedicated sidecar collects those
+    # into processed_exchange_dir, which non-processor CRS mount as FETCH_DIR.
+    has_post_processor = any(
+        crs.config.is_triage or crs.config.is_seed_filter
+        for crs in crs_compose.crs_list
+    )
+    processed_exchange_dir = (
+        str(crs_compose.work_dir.get_processed_exchange_dir(target, run_id, sanitizer))
+        if has_post_processor
+        else None
+    )
+
     # Sidecar services are always injected as infrastructure (per D-04: single parent mount)
     rebuild_out_dir = str(
         crs_compose.work_dir.get_rebuild_out_dir(
@@ -273,6 +289,7 @@ def render_run_crs_compose_docker_compose(
         "resolve_dockerfile": _resolve_module_dockerfile,
         "fetch_dir": fetch_dir,
         "exchange_dir": exchange_dir,
+        "processed_exchange_dir": processed_exchange_dir,
         "bug_finding_ensemble": bug_finding_ensemble,
         "bug_fix_ensemble": bug_fix_ensemble,
         "cgroup_parents": cgroup_parents,  # Dict mapping CRS name to cgroup_parent path

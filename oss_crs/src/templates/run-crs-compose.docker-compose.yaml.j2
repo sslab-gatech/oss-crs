@@ -53,7 +53,9 @@ services:
       - {{ work_dir.get_submit_dir(crs.name, target, run_id, sanitizer) }}:/OSS_CRS_SUBMIT_DIR:rw
       - {{ work_dir.get_shared_dir(crs.name, target, run_id, sanitizer) }}:/OSS_CRS_SHARED_DIR:rw
       - {{ work_dir.get_log_dir(crs.name, target, run_id, sanitizer) }}:/OSS_CRS_LOG_DIR:rw
-{%- if fetch_dir %}
+{%- if processed_exchange_dir and not crs.config.is_triage and not crs.config.is_seed_filter %}
+      - {{ processed_exchange_dir }}:/OSS_CRS_FETCH_DIR:ro
+{%- elif fetch_dir %}
       - {{ fetch_dir }}:/OSS_CRS_FETCH_DIR:ro
 {%- endif %}
       - {{ fuzz_proj_path }}:/OSS_CRS_FUZZ_PROJ:ro
@@ -150,7 +152,26 @@ services:
     volumes:
       - {{ exchange_dir }}:/OSS_CRS_EXCHANGE_DIR:rw
 {%- for crs in crs_list %}
-{%- if not crs.config.is_bug_fixing_ensemble %}
+{%- if not crs.config.is_bug_fixing_ensemble and not crs.config.is_triage and not crs.config.is_seed_filter %}
+      - {{ work_dir.get_submit_dir(crs.name, target, run_id, sanitizer) }}:/submit/{{ crs.name }}:ro
+{%- endif %}
+{%- endfor %}
+    networks:
+      {{ crs_compose_name }}-infra-only-network:
+{%- endif %}
+  ###########################################
+  # OSS-CRS-PROCESSED-EXCHANGE SIDECAR
+  ###########################################
+{%- if processed_exchange_dir %}
+  oss-crs-processed-exchange:
+    build:
+      context: {{ oss_crs_infra_root_path }}/exchange
+    attach: false
+    restart: on-failure:3
+    volumes:
+      - {{ processed_exchange_dir }}:/OSS_CRS_EXCHANGE_DIR:rw
+{%- for crs in crs_list %}
+{%- if crs.config.is_triage or crs.config.is_seed_filter %}
       - {{ work_dir.get_submit_dir(crs.name, target, run_id, sanitizer) }}:/submit/{{ crs.name }}:ro
 {%- endif %}
 {%- endfor %}

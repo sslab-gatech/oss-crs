@@ -160,6 +160,7 @@ class CRSType(Enum):
     BUG_FIXING = "bug-fixing"
     BUG_FIXING_ENSEMBLE = "bug-fixing-ensemble"
     BUG_FINDING_TRIAGE = "bug-finding-triage"
+    SEED_FILTER = "seed-filter"
 
 
 VALID_REQUIRED_INPUT_NAMES: set[str] = {"diff", "pov", "seed", "bug-candidate"}
@@ -194,6 +195,10 @@ class CRSConfig(BaseModel):
     @property
     def is_triage(self) -> bool:
         return CRSType.BUG_FINDING_TRIAGE in self.type
+
+    @property
+    def is_seed_filter(self) -> bool:
+        return CRSType.SEED_FILTER in self.type
 
     @field_validator("version")
     @classmethod

@@ -169,6 +169,18 @@ class TestCRSTypeProperties:
         config = CRSConfig.from_dict(_minimal_crs_config(type=["bug-finding-triage"]))
         assert config.is_bug_fixing_ensemble is False
 
+    def test_seed_filter_is_seed_filter(self):
+        config = CRSConfig.from_dict(_minimal_crs_config(type=["seed-filter"]))
+        assert config.is_seed_filter is True
+
+    def test_seed_filter_is_not_bug_fixing(self):
+        config = CRSConfig.from_dict(_minimal_crs_config(type=["seed-filter"]))
+        assert config.is_bug_fixing is False
+
+    def test_seed_filter_is_not_triage(self):
+        config = CRSConfig.from_dict(_minimal_crs_config(type=["seed-filter"]))
+        assert config.is_triage is False
+
 
 class TestSidecarDeploymentConditions:
     """Tests for exchange/lifecycle sidecar deployment logic.
@@ -193,33 +205,29 @@ class TestSidecarDeploymentConditions:
         )
         bug_finding_ensemble = bug_finding_count > 1
         bug_fix_ensemble = any(c.is_bug_fixing_ensemble for c in configs)
-        needs_exchange = bug_finding_ensemble or bug_fix_ensemble
-        return bug_finding_ensemble, bug_fix_ensemble, needs_exchange
+        return bug_finding_ensemble, bug_fix_ensemble
 
-    def test_single_bug_fixing_no_sidecars(self):
-        """Single bug-fixing CRS needs no exchange or lifecycle."""
+    def test_single_bug_fixing_no_ensemble(self):
+        """Single bug-fixing CRS is not an ensemble."""
         configs = self._configs(["bug-fixing"])
-        bf_ens, bfix_ens, exchange = self._compute_conditions(configs)
+        bf_ens, bfix_ens = self._compute_conditions(configs)
         assert bf_ens is False
         assert bfix_ens is False
-        assert exchange is False
 
-    def test_multiple_bug_finding_gets_exchange_only(self):
-        """Multiple bug-finding CRSes need exchange but not lifecycle."""
+    def test_multiple_bug_finding_is_ensemble(self):
+        """Multiple bug-finding CRSes form an ensemble."""
         configs = self._configs(["bug-finding"], ["bug-finding"])
-        bf_ens, bfix_ens, exchange = self._compute_conditions(configs)
+        bf_ens, bfix_ens = self._compute_conditions(configs)
         assert bf_ens is True
         assert bfix_ens is False
-        assert exchange is True
 
-    def test_bug_fix_ensemble_gets_exchange_and_lifecycle(self):
-        """Bug-fix ensemble scenario needs both exchange and lifecycle."""
+    def test_bug_fix_ensemble_detected(self):
+        """Bug-fix ensemble scenario detected correctly."""
         configs = self._configs(
             ["bug-fixing"],
             ["bug-fixing"],
             ["bug-fixing-ensemble"],
         )
-        bf_ens, bfix_ens, exchange = self._compute_conditions(configs)
+        bf_ens, bfix_ens = self._compute_conditions(configs)
         assert bf_ens is False
         assert bfix_ens is True
-        assert exchange is True
