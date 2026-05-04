@@ -1,0 +1,6 @@
+name: crs-atlantis-ensemble
+type:
+  - seed-filter
+source:
+  url: https://github.com/Team-Atlanta/crs-atlantis-ensemble.git
+  ref: main
