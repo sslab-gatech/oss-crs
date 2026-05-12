@@ -7,6 +7,10 @@ stricter subset of Keep a Changelog).
 ## [Unreleased]
 
 ### Added
+- `bug-finding-triage` and `seed-filter` CRS types — post-processor CRS that read from the main exchange dir and write triaged/filtered results to a separate processed exchange dir, which non-processor CRS mount as `FETCH_DIR`
+- `oss-crs-processed-exchange` sidecar — automatically injected when the compose includes a triage or seed-filter CRS; collects post-processor submit dirs into `PROCESSED_EXCHANGE_DIR`
+- crs-atlantis-triage, crs-clusterfuzz-triage, and crs-roboduck-triage to registry/ and example/ (bug-finding-triage)
+- crs-atlantis-ensemble to registry/ and example/ (seed-filter)
 - `--incremental-build` flag for `oss-crs build-target` and `oss-crs run` — creates Docker snapshots of compiled builder images for faster rebuilds across runs
 - Framework-injected builder and runner sidecars during run phase — CRS developers no longer declare them in `crs.yaml`
 - `libCRS apply-patch-test` command — applies a patch and runs the project's `test.sh` in a fresh ephemeral container
@@ -52,6 +56,7 @@ stricter subset of Keep a Changelog).
   future minor release.
 
 ### Removed
+- `builder` CRS type — replaced by framework-injected builder sidecars
 - `crs.yaml`: `snapshot` field from `target_build_phase`, `run_snapshot` field from `crs_run_phase` — snapshot behavior is now operator-controlled via `--incremental-build`
 - `libCRS run-test` — replaced by `libCRS apply-patch-test`
 - `OSS_CRS_SNAPSHOT_IMAGE` environment variable
