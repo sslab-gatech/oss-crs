@@ -201,9 +201,7 @@ class TestSidecarDeploymentConditions:
     def _compute_conditions(configs):
         from oss_crs.src.config.crs import CRSType
 
-        bug_finding_count = sum(
-            1 for c in configs if CRSType.BUG_FINDING in c.type
-        )
+        bug_finding_count = sum(1 for c in configs if CRSType.BUG_FINDING in c.type)
         bug_finding_ensemble = bug_finding_count > 1
         bug_fix_ensemble = any(c.is_bug_fixing_ensemble for c in configs)
         return bug_finding_ensemble, bug_fix_ensemble
