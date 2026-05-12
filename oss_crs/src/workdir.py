@@ -284,7 +284,9 @@ class WorkDir:
 
         Structure: <sanitizer>/runs/<run_id>/PROCESSED_EXCHANGE_DIR/<target_key>/<harness>/
         """
-        assert target.target_harness, "target_harness must be set for processed exchange dir"
+        assert target.target_harness, (
+            "target_harness must be set for processed exchange dir"
+        )
         target_key = self._get_target_key(target)
         path = (
             self.get_run_dir(run_id, sanitizer)

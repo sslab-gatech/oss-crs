@@ -34,7 +34,9 @@ def _make_crs_compose(tmp_path: Path, crs_list: list) -> SimpleNamespace:
         crs_list=crs_list,
         work_dir=SimpleNamespace(
             get_exchange_dir=lambda *_a, **_k: tmp_path / "exchange",
-            get_processed_exchange_dir=lambda *_a, **_k: tmp_path / "processed-exchange",
+            get_processed_exchange_dir=lambda *_a, **_k: (
+                tmp_path / "processed-exchange"
+            ),
             get_build_output_dir=lambda *_a, **_k: tmp_path / "build",
             get_submit_dir=lambda *_a, **_k: tmp_path / "submit",
             get_shared_dir=lambda *_a, **_k: tmp_path / "shared",
@@ -266,6 +268,7 @@ def test_sidecar_emits_project_base_image_env_var(monkeypatch, tmp_path: Path) -
 def _make_triage_crs(tmp_path: Path, name: str) -> SimpleNamespace:
     """Build a minimal triage CRS SimpleNamespace (is_bug_fixing=False, is_triage=True)."""
     from oss_crs.src.config.crs import CRSType
+
     module_config = SimpleNamespace(
         dockerfile="triage.Dockerfile",
         additional_env={},
@@ -283,7 +286,9 @@ def _make_triage_crs(tmp_path: Path, name: str) -> SimpleNamespace:
     return SimpleNamespace(
         name=name,
         crs_path=tmp_path,
-        resource=SimpleNamespace(cpuset="2-7", memory="8G", additional_env={}, llm_budget=1),
+        resource=SimpleNamespace(
+            cpuset="2-7", memory="8G", additional_env={}, llm_budget=1
+        ),
         config=config,
     )
 
@@ -291,6 +296,7 @@ def _make_triage_crs(tmp_path: Path, name: str) -> SimpleNamespace:
 def _make_bug_finding_crs(tmp_path: Path, name: str) -> SimpleNamespace:
     """Build a minimal bug-finding CRS (is_bug_fixing=False, is_triage=False)."""
     from oss_crs.src.config.crs import CRSType
+
     module_config = SimpleNamespace(
         dockerfile="finder.Dockerfile",
         additional_env={},
@@ -308,7 +314,9 @@ def _make_bug_finding_crs(tmp_path: Path, name: str) -> SimpleNamespace:
     return SimpleNamespace(
         name=name,
         crs_path=tmp_path,
-        resource=SimpleNamespace(cpuset="2-7", memory="8G", additional_env={}, llm_budget=1),
+        resource=SimpleNamespace(
+            cpuset="2-7", memory="8G", additional_env={}, llm_budget=1
+        ),
         config=config,
     )
 
@@ -371,7 +379,7 @@ def test_compose03_triage_submit_dir_not_in_exchange_sidecar_mounts(
         "Exchange sidecar must be present for bug-finding ensemble"
     )
     exchange_volumes = services["oss-crs-exchange"].get("volumes", [])
-    triage_submit_pattern = f"/submit/crs-triage:"
+    triage_submit_pattern = "/submit/crs-triage:"
     assert not any(triage_submit_pattern in v for v in exchange_volumes), (
         f"Triage submit dir must not appear in exchange sidecar volumes; got: {exchange_volumes}"
     )
@@ -415,6 +423,7 @@ def test_route02_triage_submit_dir_excluded_from_watch_dirs(tmp_path: Path) -> N
     The watch_dirs list must contain only non-triage CRS submit dirs so that
     triage POV output does not trigger the early exit monitor prematurely.
     """
+
     def submit_dir(name: str) -> Path:
         return tmp_path / "submit" / name
 
@@ -435,8 +444,12 @@ def test_route02_triage_submit_dir_excluded_from_watch_dirs(tmp_path: Path) -> N
         if not crs.config.is_triage and not crs.config.is_seed_filter
     ]
 
-    assert submit_dir("crs-finder") in watch_dirs, "bug-finding submit dir must be watched"
-    assert submit_dir("crs-triage") not in watch_dirs, "triage submit dir must NOT be watched"
+    assert submit_dir("crs-finder") in watch_dirs, (
+        "bug-finding submit dir must be watched"
+    )
+    assert submit_dir("crs-triage") not in watch_dirs, (
+        "triage submit dir must NOT be watched"
+    )
     assert len(watch_dirs) == 1
 
 
@@ -445,9 +458,7 @@ def test_route02_triage_submit_dir_excluded_from_watch_dirs(tmp_path: Path) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_compose01_triage_crs_has_fetch_dir_mount(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_compose01_triage_crs_has_fetch_dir_mount(monkeypatch, tmp_path: Path) -> None:
     """COMPOSE-01: triage CRS container gets /OSS_CRS_FETCH_DIR:ro volume mount.
 
     The exchange dir (populated by bug-finding CRS output) is mounted as
@@ -473,9 +484,7 @@ def test_compose01_triage_crs_has_fetch_dir_mount(
 # ---------------------------------------------------------------------------
 
 
-def test_compose02_triage_crs_has_submit_dir_mount(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_compose02_triage_crs_has_submit_dir_mount(monkeypatch, tmp_path: Path) -> None:
     """COMPOSE-02: triage CRS container gets /OSS_CRS_SUBMIT_DIR:rw volume mount.
 
     Submit dir is mounted unconditionally for every CRS service, including triage,
