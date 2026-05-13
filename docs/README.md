@@ -1,37 +1,33 @@
 # OSS-CRS Documentation
 
-Welcome to the OSS-CRS documentation. This guide covers everything from getting started to building your own Cyber Reasoning System.
+Start with the [project landing page](../README.md) if you want the high-level story. This section is for setup, development, and reference material once you know where OSS-CRS fits.
 
-For a quick introduction and setup instructions, see the [project README](../README.md).
+## Start Here
 
----
-
-## Getting Started
-
-| Topic | Description |
+| Topic | Why you would read it |
 |---|---|
-| [Quick Start](../README.md#quick-start) | Install prerequisites and run your first CRS in minutes |
-| [Setup Command](setup.md) | Configure system for enhanced resource management (cgroup-parent support) |
-| [CRS Development Guide](crs-development-guide.md) | Build or integrate your own CRS into the OSS-CRS framework |
-| [CRS Registry](registry.md) | Browse available CRSs ready to use out of the box |
+| [Quick start](../README.md#quick-start) | Run a baseline CRS against an OSS-Fuzz-style target |
+| [Setup guide](setup.md) | Configure host-side cgroup support for better runtime isolation |
+| [Registry guide](registry.md) | See what CRSs are already available |
+| [CRS development guide](crs-development-guide.md) | Build and package your own CRS |
 
-## Configuration Reference
+## Reference
 
-| Config File | Description |
+| Topic | What it covers |
 |---|---|
-| [CRS Compose (`crs-compose.yaml`)](config/crs-compose.md) | Orchestration config — define CRS entries, resources, and ensemble campaigns |
-| [CRS (`crs.yaml`)](config/crs.md) | Per-CRS config — prepare, build, and run phases for a single CRS |
-| [Target Project (`project.yaml`)](config/target-project.md) | Target project setup — OSS-Fuzz format and `project.yaml` schema |
-| [LLM (`litellm_config.yaml`)](config/llm.md) | LiteLLM config file format for internal mode (provider routing, API keys, custom endpoints) |
+| [Compose config](config/crs-compose.md) | Top-level campaign orchestration in `crs-compose.yaml` |
+| [CRS config](config/crs.md) | Per-CRS definition in `oss-crs/crs.yaml` |
+| [Target project config](config/target-project.md) | Target expectations and OSS-Fuzz project metadata |
+| [LLM config](config/llm.md) | LiteLLM config used by internal mode |
 
-## Architecture & Design
+## Design Notes
 
-| Document | Description |
+| Topic | What it covers |
 |---|---|
-| [Architecture Overview](design/architecture.md) | System design, component diagram, and lifecycle walkthrough |
-| [Parallel Builds and Runs](design/parallel.md) | Build/run isolation with `--build-id` and `--run-id` |
-| [libCRS](design/libCRS.md) | CRS communication library — submit/fetch seeds, PoVs, and patches |
-| [LLM Providers](llm-providers.md) | LiteLLM proxy setup for local and remote models |
+| [Architecture](design/architecture.md) | Main components and lifecycle |
+| [Parallel builds and runs](design/parallel.md) | `run_id` and `build_id` isolation model |
+| [libCRS design notes](design/libCRS.md) | Library-level communication details |
+| [LiteLLM provider notes](llm-providers.md) | Routing to local and remote model backends |
 
 ## Key Concepts
 
@@ -39,25 +35,29 @@ For a quick introduction and setup instructions, see the [project README](../REA
 
 Every CRS campaign follows three phases managed by `oss-crs`:
 
-1. **Prepare** — Pull CRS source repositories and build Docker images (`oss-crs prepare`)
-2. **Build Target** — Compile the target project and run each CRS's target build pipeline (`oss-crs build-target`). Pass `--incremental-build` to create Docker snapshots for faster rebuilds.
-3. **Run** — Launch all CRSs and shared infrastructure via Docker Compose (`oss-crs run`). Pass `--incremental-build` to use snapshot images for ephemeral rebuild containers.
+1. **Prepare**: fetch CRS sources and build Docker images with `oss-crs prepare`
+2. **Build Target**: compile the target project and run each CRS's target build pipeline with `oss-crs build-target`
+3. **Run**: launch CRSs and shared infrastructure with `oss-crs run`
+
+Pass `--incremental-build` to `build-target` to create Docker snapshots for faster rebuilds, and pass it to `run` to use snapshot images for ephemeral rebuild containers.
 
 ### CRS Isolation
 
-Each CRS runs in its own containerized environment with strict resource boundaries:
+Each CRS runs in its own containerized environment with resource boundaries:
 
-- **CPU** — Pinned to specific cores via `cpuset`
-- **Memory** — Hard memory cap via `mem_limit`
-- **LLM Budget** — Per-CRS dollar-denominated limits enforced by LiteLLM
-- **Network** — Private Docker network per CRS; shared network for infrastructure access
+- **CPU**: pinned to specific cores through `cpuset`
+- **Memory**: capped through `mem_limit`
+- **LLM Budget**: enforced per CRS through LiteLLM when configured
+- **Network**: private Docker network per CRS, with shared infrastructure access where needed
 
 Run `oss-crs setup` to enable [cgroup-parent mode](setup.md) for flexible resource sharing within each CRS.
 
 ### Ensemble Campaigns
 
-Multiple CRSs can be composed in a single `crs-compose.yaml` to run simultaneously. Each CRS operates independently with its own resource allocation, and results are aggregated automatically.
+Multiple CRSs can be composed in a single `crs-compose.yaml` and run simultaneously. Each CRS keeps its own resource allocation, while shared infrastructure and result aggregation are handled by the framework.
 
-## Contributing
+## Project Docs
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on contributing to OSS-CRS.
+- [Contributing](../CONTRIBUTING.md)
+- [Changelog](../CHANGELOG.md)
+- [Plan / open TODOs](../PLAN.md)
