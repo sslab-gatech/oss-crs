@@ -1,0 +1,6 @@
+name: crs-atlantis-triage
+type:
+  - bug-finding-triage
+source:
+  url: https://github.com/Team-Atlanta/crs-atlantis-triage.git
+  ref: main

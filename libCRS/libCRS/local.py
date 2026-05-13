@@ -258,8 +258,14 @@ class LocalCRSUtils(CRSUtils):
             logger.error("Failed to submit job to %s: %s", endpoint, e)
             return None
 
-        job_id = resp.json()["id"]
+        submit_result = resp.json()
+        job_id = submit_result["id"]
         logger.info("Submitted job %s to %s", job_id, endpoint)
+
+        # Cache hits return status=done immediately; use the POST response
+        # directly so any rewritten fields (e.g. rebuild_id) are preserved.
+        if submit_result.get("status") == "done":
+            return submit_result
 
         start = time.monotonic()
         while time.monotonic() - start < timeout:
