@@ -210,6 +210,36 @@ function QuickStart() {
   );
 }
 
+function OpenSSFAttribution() {
+  return (
+    <section className="section section--openssf">
+      <div className="container openssf-attribution">
+        <a
+          href="https://openssf.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="openssf-attribution__logo"
+          aria-label="OpenSSF"
+        >
+          <img src="/img/openssf-horizontal-white.png" alt="OpenSSF" />
+        </a>
+        <a
+          href="https://openssf.org/projects/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="openssf-attribution__badge"
+          aria-label="OpenSSF Sandbox project"
+        >
+          <img src="/img/openssf-sandbox.png" alt="OpenSSF Sandbox project" />
+        </a>
+        <p className="openssf-attribution__text">
+          OSS-CRS is a sandbox project in the OpenSSF
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function NextSteps() {
   return (
     <section className="section">
@@ -244,6 +274,7 @@ export default function Home() {
       <Hero />
       <FeatureCards />
       <QuickStart />
+      <OpenSSFAttribution />
       <NextSteps />
     </Layout>
   );

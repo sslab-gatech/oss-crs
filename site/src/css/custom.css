@@ -167,6 +167,42 @@
   background: #11151c;
 }
 
+/* ----- OpenSSF attribution ----- */
+.section--openssf {
+  padding: 3.5rem 0;
+  background: linear-gradient(135deg, #0d1117 0%, #1f3a8a 100%);
+  color: #fff;
+}
+
+[data-theme='dark'] .section--openssf {
+  background: linear-gradient(135deg, #050912 0%, #0d2353 100%);
+}
+
+.openssf-attribution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem 2.5rem;
+}
+
+.openssf-attribution__logo img,
+.openssf-attribution__badge img {
+  height: 140px;
+  width: auto;
+  display: block;
+}
+
+.openssf-attribution__text {
+  font-size: 1.5rem;
+  font-weight: 500;
+  margin: 0;
+  max-width: 320px;
+  text-align: left;
+  line-height: 1.35;
+  color: #fff;
+}
+
 /* ----- Registry list ----- */
 .registry-controls {
   display: flex;
