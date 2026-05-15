@@ -1,3 +1,5 @@
+import json
+
 # SPDX-License-Identifier: MIT
 from typing import Optional
 
@@ -60,6 +62,69 @@ class RunLogs(BaseModel):
             compose_stderr_log=str(base_path / "docker-compose.stderr.log"),
             service_logs=str(base_path / "services"),
         )
+
+
+class MetaArtifactCounts(BaseModel):
+    povs: int = 0
+    seeds: int = 0
+    patches: int = 0
+    bug_candidates: int = 0
+
+
+class MetaLLMStats(BaseModel):
+    credits_used: float = 0.0
+
+
+class MetaSidecarStats(BaseModel):
+    patch_builds: int = 0
+    patch_tests: int = 0
+    pov_runs: int = 0
+
+
+class MetaCRSStats(BaseModel):
+    artifacts: MetaArtifactCounts = Field(default_factory=MetaArtifactCounts)
+    llm: MetaLLMStats = Field(default_factory=MetaLLMStats)
+    sidecar: MetaSidecarStats = Field(default_factory=MetaSidecarStats)
+
+
+class MetaTotals(BaseModel):
+    artifacts: MetaArtifactCounts = Field(default_factory=MetaArtifactCounts)
+    llm: MetaLLMStats = Field(default_factory=MetaLLMStats)
+    sidecar: MetaSidecarStats = Field(default_factory=MetaSidecarStats)
+
+
+class RunMeta(BaseModel):
+    """Run-level statistics from run metadata."""
+
+    path: Optional[str] = None
+    totals: MetaTotals = Field(default_factory=MetaTotals)
+    crs: dict[str, MetaCRSStats] = Field(default_factory=dict)
+
+    @classmethod
+    def from_work_dir(
+        cls,
+        work_dir: WorkDir,
+        run_id: str,
+        sanitizer: str,
+    ) -> "RunMeta":
+        meta_path = work_dir.get_run_meta_file(run_id, sanitizer)
+        out = cls(path=str(meta_path))
+        if not meta_path.exists():
+            return out
+        try:
+            raw = json.loads(meta_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return out
+        if not isinstance(raw, dict):
+            return out
+        out.totals = MetaTotals.model_validate(raw.get("totals") or {})
+        crs_raw = raw.get("crs")
+        if isinstance(crs_raw, dict):
+            out.crs = {
+                str(name): MetaCRSStats.model_validate(stats or {})
+                for name, stats in crs_raw.items()
+            }
+        return out
 
 
 class CRSArtifacts(BaseModel):
@@ -128,6 +193,7 @@ class ArtifactsOutput(BaseModel):
     build_id: Optional[str] = None
     run_id: str
     sanitizer: Optional[str] = None
+    meta: Optional[RunMeta] = None
     exchange_dir: Optional[ExchangeDir] = None
     run_logs: Optional[RunLogs] = None
     crs: dict[str, CRSArtifacts] = Field(default_factory=dict)

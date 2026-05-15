@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Tests for artifacts command pre-run path resolution behavior."""
 
+import json
 from types import SimpleNamespace
 
 from oss_crs.src.cli.artifacts import handle_artifacts
@@ -28,6 +29,9 @@ class _FakeWorkDir:
 
     def read_build_id_for_run(self, _run_id: str, _sanitizer: str) -> str | None:
         return None
+
+    def get_run_meta_file(self, run_id: str, sanitizer: str):
+        return self._tmp / sanitizer / "runs" / run_id / "meta.json"
 
     def get_exchange_dir(
         self, target, run_id: str, sanitizer: str, *, create: bool = False
@@ -206,3 +210,62 @@ def test_artifacts_resolves_default_sanitizer_from_compose(tmp_path, capsys) -> 
 
     out = capsys.readouterr().out
     assert '"sanitizer": "memory"' in out
+
+
+def test_artifacts_includes_meta_stats_when_meta_json_exists(tmp_path, capsys) -> None:
+    run_id = "existing-run-id"
+    sanitizer = "address"
+    meta_path = tmp_path / sanitizer / "runs" / run_id / "meta.json"
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text(
+        json.dumps(
+            {
+                "totals": {
+                    "artifacts": {
+                        "povs": 2,
+                        "seeds": 4,
+                        "patches": 1,
+                        "bug_candidates": 2,
+                    },
+                    "llm": {"credits_used": 1.65},
+                    "sidecar": {
+                        "patch_builds": 4,
+                        "patch_tests": 2,
+                        "pov_runs": 8,
+                    },
+                },
+                "crs": {
+                    "crs-a": {
+                        "artifacts": {
+                            "povs": 2,
+                            "seeds": 3,
+                            "patches": 1,
+                            "bug_candidates": 0,
+                        },
+                        "llm": {"credits_used": 1.25},
+                        "sidecar": {
+                            "patch_builds": 4,
+                            "patch_tests": 2,
+                            "pov_runs": 7,
+                        },
+                    }
+                },
+            }
+        )
+    )
+
+    compose = _make_compose(tmp_path, resolved_run_id=run_id)
+    args = _make_args(run_id, sanitizer=sanitizer)
+    target = _FakeTarget("fuzz_target")
+
+    ok = handle_artifacts(args, compose, target)
+    assert ok is True
+
+    out = capsys.readouterr().out
+    assert '"meta"' in out
+    assert '"totals"' in out
+    assert '"credits_used": 1.65' in out
+    assert '"patch_builds": 4' in out
+    assert '"patch_tests": 2' in out
+    assert '"pov_runs": 8' in out
+    assert '"bug_candidates": 2' in out

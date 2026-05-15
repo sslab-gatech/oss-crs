@@ -1,10 +1,11 @@
+import hashlib
+
 # SPDX-License-Identifier: MIT
-import shutil
-import subprocess
-import re
 import json
 import os
-import hashlib
+import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Optional
 from .config.crs_compose import CRSComposeConfig, CRSComposeEnv, RunEnv
@@ -1143,6 +1144,8 @@ class CRSCompose:
                     if not success:
                         log_dim(f"Note: Cgroup cleanup deferred: {msg}")
 
+                self._write_run_meta(target, actual_run_id, sanitizer)
+
                 if ret.success or ret.interrupted:
                     self.__show_result_local(target, actual_run_id, sanitizer, progress)
                     return ret.success
@@ -1321,6 +1324,134 @@ class CRSCompose:
                 dst.symlink_to(rel_src)
             except OSError:
                 shutil.copy2(src, dst)
+
+    @staticmethod
+    def _read_json_file(path: Path) -> dict:
+        try:
+            raw = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return raw if isinstance(raw, dict) else {}
+
+    def _read_litellm_spend_summary(self, run_id: str, sanitizer: str) -> dict:
+        path = self.work_dir.get_litellm_spend_report_file(
+            run_id, sanitizer, create_parent=False
+        )
+        raw = self._read_json_file(path)
+        totals_raw = raw.get("totals")
+        totals = totals_raw if isinstance(totals_raw, dict) else {}
+        crs_raw = raw.get("crs")
+        crs = crs_raw if isinstance(crs_raw, dict) else {}
+        return {
+            "totals": {"credits_used": float(totals.get("credits_used", 0.0) or 0.0)},
+            "crs": {
+                name: {"credits_used": float((entry or {}).get("credits_used", 0.0))}
+                for name, entry in crs.items()
+                if isinstance(name, str)
+            },
+        }
+
+    def _read_sidecar_counts_for_crs(
+        self, crs_name: str, target: Target, run_id: str, sanitizer: str
+    ) -> dict[str, int]:
+        path = self.work_dir.get_sidecar_metrics_file(
+            crs_name, target, run_id, sanitizer
+        )
+        counts = {
+            "patch_builds": 0,
+            "patch_tests": 0,
+            "pov_runs": 0,
+        }
+        if not path.exists() or not path.is_file():
+            return counts
+
+        event_to_field = {
+            "apply-patch-build": "patch_builds",
+            "apply-patch-test": "patch_tests",
+            "run-pov": "pov_runs",
+        }
+        try:
+            for line in path.read_text().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                event = row.get("event")
+                field = event_to_field.get(event)
+                if field:
+                    counts[field] += 1
+        except OSError:
+            return counts
+        return counts
+
+    def _collect_run_meta(self, target: Target, run_id: str, sanitizer: str) -> dict:
+        llm_summary = self._read_litellm_spend_summary(run_id, sanitizer)
+
+        totals = {
+            "artifacts": {
+                "povs": 0,
+                "seeds": 0,
+                "patches": 0,
+                "bug_candidates": 0,
+            },
+            "llm": {"credits_used": 0.0},
+            "sidecar": {
+                "patch_builds": 0,
+                "patch_tests": 0,
+                "pov_runs": 0,
+            },
+        }
+        crs_meta: dict[str, dict] = {}
+
+        for crs in self.crs_list:
+            artifacts = self.work_dir.get_submit_artifact_counts(
+                crs.name, target, run_id, sanitizer
+            )
+            sidecar = self._read_sidecar_counts_for_crs(
+                crs.name, target, run_id, sanitizer
+            )
+            llm = {
+                "credits_used": float(
+                    llm_summary.get("crs", {})
+                    .get(crs.name, {})
+                    .get("credits_used", 0.0)
+                )
+            }
+
+            crs_meta[crs.name] = {
+                "artifacts": artifacts,
+                "llm": llm,
+                "sidecar": sidecar,
+            }
+
+            for key in totals["artifacts"]:
+                totals["artifacts"][key] += artifacts.get(key, 0)
+            for key in totals["sidecar"]:
+                totals["sidecar"][key] += sidecar.get(key, 0)
+
+        llm_total = float(llm_summary.get("totals", {}).get("credits_used", 0.0))
+        if llm_total == 0.0:
+            llm_total = round(
+                sum(crs_meta[name]["llm"]["credits_used"] for name in crs_meta), 6
+            )
+        totals["llm"]["credits_used"] = llm_total
+
+        return {
+            "totals": totals,
+            "crs": crs_meta,
+        }
+
+    def _write_run_meta(self, target: Target, run_id: str, sanitizer: str) -> None:
+        try:
+            metadata = self._collect_run_meta(target, run_id, sanitizer)
+            self.work_dir.write_run_meta_for_run(run_id, sanitizer, metadata)
+        except Exception as exc:
+            log_dim(
+                "Note: Failed to write run metadata "
+                f"for run '{run_id}': {type(exc).__name__}: {exc}"
+            )
 
     def __show_result_local(
         self, target: Target, run_id: str, sanitizer: str, progress: MultiTaskProgress
