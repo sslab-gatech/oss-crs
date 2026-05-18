@@ -8,7 +8,6 @@ import pytest
 from oss_crs.src.config.crs_compose import LLMConfig
 from oss_crs.src.llm import (
     LLM,
-    LITELLM_PROVIDERS,
     override_litellm_proxy,
     validate_providers,
     _provider_for_model,
@@ -295,7 +294,9 @@ class TestOverrideLitellmProxy:
                 },
             ]
         }
-        result = override_litellm_proxy(config, key_env="PROXY_KEY", base_url_env="PROXY_BASE")
+        result = override_litellm_proxy(
+            config, key_env="PROXY_KEY", base_url_env="PROXY_BASE"
+        )
 
         # VLLM_KEY entry: untouched
         local = result["model_list"][0]

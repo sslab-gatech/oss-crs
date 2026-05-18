@@ -164,7 +164,10 @@ class TestGenComposeCommand:
             data = yaml.safe_load(f)
 
         assert data["llm_config"]["litellm"]["mode"] == "external"
-        assert data["llm_config"]["litellm"]["external"]["url_env"] == "AIXCC_LITELLM_HOSTNAME"
+        assert (
+            data["llm_config"]["litellm"]["external"]["url_env"]
+            == "AIXCC_LITELLM_HOSTNAME"
+        )
         assert data["llm_config"]["litellm"]["external"]["key_env"] == "LITELLM_KEY"
 
     def test_all_overrides_together(self, cli_runner, tmp_dir):

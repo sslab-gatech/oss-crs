@@ -53,8 +53,7 @@ def validate_providers(providers: list[str]) -> None:
     if unknown:
         valid = ", ".join(sorted(LITELLM_PROVIDERS))
         raise ValueError(
-            f"Unknown LLM provider(s): {', '.join(unknown)}. "
-            f"Valid providers: {valid}"
+            f"Unknown LLM provider(s): {', '.join(unknown)}. Valid providers: {valid}"
         )
 
 

@@ -395,9 +395,7 @@ class LocalCRSUtils(CRSUtils):
                 "cpuset": cpuset,
                 "mem_limit": mem_limit,
             }
-            result = self._submit_and_poll(
-                "/test", builder, files, data
-            )
+            result = self._submit_and_poll("/test", builder, files, data)
 
         response_dir.mkdir(parents=True, exist_ok=True)
         if result is None:

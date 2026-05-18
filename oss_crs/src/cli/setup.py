@@ -36,7 +36,9 @@ def _litellm_config_would_change(
     """Return True if applying the proxy override would modify *path*."""
     with open(path) as f:
         original = yaml.safe_load(f) or {}
-    return override_litellm_proxy(original, key_env, base_url_env, providers) != original
+    return (
+        override_litellm_proxy(original, key_env, base_url_env, providers) != original
+    )
 
 
 # =============================================================================
@@ -333,9 +335,7 @@ class SetupRunner:
             return False
 
         if self.all_ok():
-            self.console.print(
-                f"\n{green('Cgroup setup OK!', bold=True)}"
-            )
+            self.console.print(f"\n{green('Cgroup setup OK!', bold=True)}")
             return True
 
         if check_only:
@@ -379,9 +379,7 @@ class SetupRunner:
         self.run_checks()
 
         if self.all_ok():
-            self.console.print(
-                f"\n{green('Cgroup setup complete!', bold=True)}"
-            )
+            self.console.print(f"\n{green('Cgroup setup complete!', bold=True)}")
         else:
             self.console.print(
                 f"\n{yellow('Cgroup setup incomplete.')} Some checks are still failing."
@@ -403,9 +401,7 @@ class SetupRunner:
 
     def _run_llm_proxy_setup(self) -> None:
         """Interactively configure LLM proxy routing for all example configs."""
-        self.console.print(
-            "[bold]Phase 1: LLM proxy configuration[/bold]"
-        )
+        self.console.print("[bold]Phase 1: LLM proxy configuration[/bold]")
         self.console.print(
             "\nBy default, examples use standard provider API keys "
             "([bold]OPENAI_API_KEY[/bold], [bold]ANTHROPIC_API_KEY[/bold], "
@@ -420,9 +416,7 @@ class SetupRunner:
             auto_confirm=False,
         )
         if not want_proxy:
-            self.console.print(
-                green("Skipped") + " — using default provider API keys."
-            )
+            self.console.print(green("Skipped") + " — using default provider API keys.")
             return
 
         configs = self._find_example_litellm_configs()
@@ -475,21 +469,28 @@ class SetupRunner:
 
         # Pre-filter to configs that would actually change
         affected = [
-            c for c in configs
+            c
+            for c in configs
             if _litellm_config_would_change(c, key_env, base_url_env, selected)
         ]
 
         if not affected:
-            self.console.print(yellow("No example configs use the selected provider keys. Nothing to do."))
+            self.console.print(
+                yellow(
+                    "No example configs use the selected provider keys. Nothing to do."
+                )
+            )
             return
 
         # Show summary and confirm
-        self.console.print(f"\n[bold]Proxy configuration summary:[/bold]")
+        self.console.print("\n[bold]Proxy configuration summary:[/bold]")
         self.console.print(f"  Providers: {', '.join(selected)}")
         self.console.print(f"  API key env: [bold]{key_env}[/bold]")
         if base_url_env:
             self.console.print(f"  Base URL env: [bold]{base_url_env}[/bold]")
-        self.console.print(f"  Config files: [bold]{len(affected)}[/bold] example litellm configs")
+        self.console.print(
+            f"  Config files: [bold]{len(affected)}[/bold] example litellm configs"
+        )
         for c in affected:
             self.console.print(f"    [dim]{c.relative_to(c.parents[2])}[/dim]")
 

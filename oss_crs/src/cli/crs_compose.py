@@ -369,9 +369,7 @@ def _handle_gen_compose(args) -> bool:
         if has_cpusets:
             # Scale existing allocations proportionally
             allocations = {}
-            allocations["oss_crs_infra"] = len(
-                parse_cpuset(infra.get("cpuset", "0"))
-            )
+            allocations["oss_crs_infra"] = len(parse_cpuset(infra.get("cpuset", "0")))
             for name in crs_names:
                 entry = data.get(name, {})
                 allocations[name] = len(parse_cpuset(entry.get("cpuset", "0")))
@@ -435,7 +433,7 @@ def _handle_gen_compose(args) -> bool:
 
     # 5b. LiteLLM proxy override (rewrites env vars in litellm config)
     if args.litellm_proxy:
-        from ..llm import apply_litellm_proxy_to_file, validate_providers, LITELLM_PROVIDERS
+        from ..llm import apply_litellm_proxy_to_file, validate_providers
 
         proxy_args = args.litellm_proxy
         if len(proxy_args) < 2 or len(proxy_args) > 3:
@@ -457,7 +455,9 @@ def _handle_gen_compose(args) -> bool:
                 "The example has no llm_config with internal mode config_path."
             )
 
-        if apply_litellm_proxy_to_file(litellm_config_path, proxy_key_env, proxy_base_url_env, providers):
+        if apply_litellm_proxy_to_file(
+            litellm_config_path, proxy_key_env, proxy_base_url_env, providers
+        ):
             print(f"Updated litellm config: {litellm_config_path}")
         else:
             print(f"No changes needed: {litellm_config_path}")
@@ -469,9 +469,7 @@ def _handle_gen_compose(args) -> bool:
     return True
 
 
-def _resolve_litellm_config_path(
-    data: dict, example_dir: Path
-) -> "Path | None":
+def _resolve_litellm_config_path(data: dict, example_dir: Path) -> "Path | None":
     """Resolve the litellm config file path from compose data.
 
     Looks at llm_config.litellm.internal.config_path. If it's a relative path,
@@ -497,7 +495,11 @@ def _resolve_litellm_config_path(
     path = Path(config_path)
     if not path.is_absolute():
         # config_path in examples is relative to repo root (e.g. ./example/foo/litellm-config.yaml)
-        repo_root = example_dir.parents[0].parent if "example" in example_dir.parts else example_dir
+        repo_root = (
+            example_dir.parents[0].parent
+            if "example" in example_dir.parts
+            else example_dir
+        )
         # Walk up from example_dir to find repo root (directory containing "example/")
         repo_root = Path(__file__).resolve().parents[3]
         path = (repo_root / config_path).resolve()

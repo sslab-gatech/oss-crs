@@ -288,7 +288,9 @@ def default_cpu_allocation(
     result: dict[str, str] = {}
     offset = 0
 
-    result["oss_crs_infra"] = cpuset_to_str(set(pool_cpus[offset : offset + infra_count]))
+    result["oss_crs_infra"] = cpuset_to_str(
+        set(pool_cpus[offset : offset + infra_count])
+    )
     offset += infra_count
 
     for i, name in enumerate(crs_names):
