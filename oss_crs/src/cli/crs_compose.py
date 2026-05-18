@@ -9,6 +9,7 @@ from ..crs_compose import CRSCompose
 from ..config.crs_compose import CRSComposeConfig
 from ..target import Target
 from .artifacts import handle_artifacts
+from .archive import handle_archive
 from .clean import add_clean_command, handle_clean
 from .setup import add_setup_command, handle_setup
 
@@ -263,6 +264,60 @@ def add_artifacts_command(subparsers):
             "selection is used. If provided but not found yet, paths are still "
             "computed deterministically for pre-run resolution."
         ),
+    )
+    artifacts.add_argument(
+        "--latest",
+        action="store_true",
+        default=False,
+        help="Automatically select the most recent run instead of prompting interactively.",
+    )
+
+
+def add_archive_command(subparsers):
+    archive = subparsers.add_parser(
+        "archive",
+        help="Package submitted artifacts from a run into a tarball",
+    )
+    add_common_arguments(archive)
+    add_target_resolution_arguments(archive)
+    archive.add_argument(
+        "--target-harness",
+        type=str,
+        required=False,
+        default=None,
+        help="Target harness name",
+    )
+    archive.add_argument(
+        "--sanitizer",
+        type=str,
+        default=None,
+        help="Sanitizer used (default: resolved from compose/project.yaml, else 'address').",
+    )
+    archive.add_argument(
+        "--run-id",
+        type=str,
+        required=False,
+        default=None,
+        help="Run identifier to archive artifacts for. If omitted, interactive selection is used.",
+    )
+    archive.add_argument(
+        "--latest",
+        action="store_true",
+        default=False,
+        help="Automatically select the most recent run instead of prompting interactively.",
+    )
+    archive.add_argument(
+        "--out",
+        type=str,
+        required=True,
+        help="Output path for the tarball (e.g. results.tar.gz).",
+    )
+    archive.add_argument(
+        "--all",
+        dest="include_all",
+        action="store_true",
+        default=False,
+        help="Include all artifacts (exchange dir, logs, shared dirs) in addition to submitted artifacts.",
     )
 
 
@@ -537,6 +592,7 @@ def cli() -> bool | int:
     add_build_target_command(subparsers)
     add_run_command(subparsers)
     add_artifacts_command(subparsers)
+    add_archive_command(subparsers)
     add_check_command(subparsers)
     add_gen_compose_command(subparsers)
     add_clean_command(subparsers, add_common_arguments, add_target_arguments)
@@ -544,7 +600,11 @@ def cli() -> bool | int:
 
     argv = sys.argv[1:]
     _warn_deprecated_cli_aliases(argv)
-    args = parser.parse_args(argv)
+    args, unknown_args = parser.parse_known_args(argv)
+    # Only the artifacts command is designed to be called with extra args
+    # (e.g. forwarding all run args). Other commands treat unknowns as errors.
+    if unknown_args and args.command not in ("artifacts", "archive"):
+        parser.error(f"unrecognized arguments: {' '.join(unknown_args)}")
 
     # Handle setup command early - it doesn't need compose file
     if args.command == "setup":
@@ -572,7 +632,7 @@ def cli() -> bool | int:
         return handle_clean(args)
 
     # Skip CRS repo init for commands that don't need it
-    skip_crs_init = args.command == "artifacts"
+    skip_crs_init = args.command in ("artifacts", "archive")
     crs_compose = CRSCompose.from_yaml_file(
         args.compose_file, args.work_dir, skip_crs_init=skip_crs_init
     )
@@ -633,6 +693,9 @@ def cli() -> bool | int:
     elif args.command == "artifacts":
         target = init_target_from_args(args)
         return handle_artifacts(args, crs_compose, target)
+    elif args.command == "archive":
+        target = init_target_from_args(args)
+        return handle_archive(args, crs_compose, target)
     elif args.command == "check":
         pass
     return True
